@@ -1,439 +1,325 @@
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import bewosyLogo from "../assessts/images/bewosy.jpeg";
+import { User, Building2, ArrowRight, ArrowLeft, RefreshCw } from "lucide-react";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+/* ── helpers ─────────────────────────── */
+const ACCOUNT_TYPES = [
+  {
+    key: "personal",
+    label: "Personal",
+    sub: "Track income, expenses & budgets",
+    icon: User,
+    color: "border-navy-600 hover:border-orange-500",
+    activeColor: "border-orange-500 bg-orange-500/5",
+  },
+  {
+    key: "business",
+    label: "Business",
+    sub: "Sales, inventory, staff & reports",
+    icon: Building2,
+    color: "border-navy-600 hover:border-orange-500",
+    activeColor: "border-orange-500 bg-orange-500/5",
+  },
+];
 
-export default function Login() {
-  const navigate = useNavigate();
+function OTPInput({ value, onChange }) {
+  const inputs = useRef([]);
 
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("info");
-  const [resendTimer, setResendTimer] = useState(0);
-
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    code: "",
-  });
-
-
-const token = localStorage.getItem("accessToken");
-
-if (token) {
-  return <Navigate to="/dashboard" replace />;
-}
-
-  useEffect(() => {
-    if (resendTimer <= 0) return;
-
-    const timer = setInterval(() => {
-      setResendTimer((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [resendTimer]);
-
-  const showMessage = (text, type = "info") => {
-    setMessage(text);
-    setMessageType(type);
+  const handleKey = (e, i) => {
+    if (e.key === "Backspace" && !e.target.value && i > 0) {
+      inputs.current[i - 1]?.focus();
+    }
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+  const handleChange = (e, i) => {
+    const v = e.target.value.replace(/\D/g, "").slice(-1);
+    const arr = value.split("");
+    arr[i] = v;
+    const next = arr.join("").padEnd(6, "").slice(0, 6);
+    onChange(next);
+    if (v && i < 5) inputs.current[i + 1]?.focus();
   };
 
-  const handleRequestOtp = async (e) => {
+  const handlePaste = (e) => {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    onChange(pasted.padEnd(6, "").slice(0, 6));
+    inputs.current[Math.min(pasted.length, 5)]?.focus();
     e.preventDefault();
-    setLoading(true);
-    setMessage("");
-
-    try {
-      if (!form.name.trim()) {
-        showMessage("Please enter your name.", "error");
-        return;
-      }
-
-      if (!form.phone.trim()) {
-        showMessage("Please enter your mobile number.", "error");
-        return;
-      }
-
-      const res = await axios.post(
-        `${API}/auth/request-otp`,
-        {
-          phone: form.phone.trim(),
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          withCredentials: true,
-        }
-      );
-
-      showMessage(res.data?.message || "OTP sent successfully", "success");
-      setStep(2);
-      setResendTimer(60);
-    } catch (error) {
-      console.log("REQUEST OTP ERROR:", error.response?.data || error.message);
-      showMessage(
-        error?.response?.data?.message || "Failed to send OTP.",
-        "error"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage("");
-
-    try {
-      if (!form.name.trim()) {
-        showMessage("Please enter your name.", "error");
-        return;
-      }
-
-      if (!form.phone.trim()) {
-        showMessage("Please enter your mobile number.", "error");
-        return;
-      }
-
-      if (!form.code.trim()) {
-        showMessage("Please enter OTP code.", "error");
-        return;
-      }
-
-      const payload = {
-        name: String(form.name ?? "").trim() || "Business Owner",
-        phone: form.phone.trim(),
-        code: form.code.trim(),
-      };
-
-      console.log("VERIFY PAYLOAD:", payload);
-
-      const res = await axios.post(`${API}/auth/verify-otp`, payload, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        withCredentials: true,
-      });
-
-      const { accessToken, user, message } = res.data;
-
-      localStorage.setItem("accessToken", accessToken);
-      localStorage.setItem("user", JSON.stringify(user));
-
-      showMessage(message || "Login successful", "success");
-
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 500);
-    } catch (error) {
-      console.log("VERIFY OTP ERROR:", error.response?.data || error.message);
-      showMessage(
-        error?.response?.data?.message || "OTP verification failed.",
-        "error"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    if (resendTimer > 0) return;
-
-    setLoading(true);
-    setMessage("");
-
-    try {
-      if (!form.phone.trim()) {
-        showMessage("Please enter your mobile number.", "error");
-        return;
-      }
-
-      const res = await axios.post(
-        `${API}/auth/request-otp`,
-        {
-          phone: form.phone.trim(),
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          withCredentials: true,
-        }
-      );
-
-      showMessage(res.data?.message || "OTP resent successfully", "success");
-      setResendTimer(60);
-    } catch (error) {
-      console.log("RESEND OTP ERROR:", error.response?.data || error.message);
-      showMessage(
-        error?.response?.data?.message || "Failed to resend OTP.",
-        "error"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getMessageClasses = () => {
-    if (messageType === "success") {
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
-    }
-    if (messageType === "error") {
-      return "border-red-500/30 bg-red-500/10 text-red-300";
-    }
-    return "border-slate-700 bg-slate-800/70 text-slate-300";
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <div className="grid min-h-screen lg:grid-cols-2">
-        <div className="relative hidden overflow-hidden lg:flex">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/20 via-slate-950 to-slate-950" />
-          <div className="absolute left-0 top-10 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
-          <div className="absolute bottom-10 right-10 h-80 w-80 rounded-full bg-green-400/10 blur-3xl" />
+    <div className="flex gap-2 justify-center">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <input
+          key={i}
+          ref={(el) => (inputs.current[i] = el)}
+          maxLength={1}
+          value={value[i] || ""}
+          onChange={(e) => handleChange(e, i)}
+          onKeyDown={(e) => handleKey(e, i)}
+          onPaste={handlePaste}
+          inputMode="numeric"
+          className="h-13 w-11 rounded-xl border border-navy-700 bg-navy-950 text-center text-xl font-bold text-white outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+        />
+      ))}
+    </div>
+  );
+}
 
-          <div className="relative z-10 flex w-full flex-col justify-between p-12">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Secure OTP Login
-              </div>
+/* ── main component ───────────────────── */
+export default function LoginPage() {
+  const { sendOtp, verifyOtp, loading, isLoggedIn, user } = useAuth();
+  const navigate = useNavigate();
 
-              <h1 className="mt-8 max-w-xl text-5xl font-bold leading-tight">
-                Manage your business with one secure login.
-              </h1>
+  const [step, setStep] = useState(1); // 1=type, 2=email, 3=otp
+  const [accountType, setAccountType] = useState("");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [remember, setRemember] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [devOtp, setDevOtp] = useState(""); // shown in dev mode
 
-              <p className="mt-5 max-w-lg text-lg leading-8 text-slate-300">
-                Parties, items, sales, purchases, payments, expenses, reports,
-                recycle bin, and staff access — all connected to your backend.
-              </p>
+  // Already logged in?
+  useEffect(() => {
+    if (isLoggedIn) {
+      navigate(user?.account_type === "personal" ? "/personal/dashboard" : "/dashboard");
+    }
+  }, [isLoggedIn]);
 
-              <div className="mt-10 grid max-w-xl grid-cols-2 gap-4">
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-                  <div className="text-2xl font-bold text-emerald-400">OTP</div>
-                  <div className="mt-1 text-sm text-slate-300">
-                    Login with Nepal mobile number
-                  </div>
-                </div>
+  // Resend countdown
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const t = setInterval(() => setResendTimer((p) => (p > 0 ? p - 1 : 0)), 1000);
+    return () => clearInterval(t);
+  }, [resendTimer]);
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-                  <div className="text-2xl font-bold text-emerald-400">Fast</div>
-                  <div className="mt-1 text-sm text-slate-300">
-                    Request and verify in 2 steps
-                  </div>
-                </div>
+  const clearMessages = () => { setError(""); setInfo(""); };
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-                  <div className="text-2xl font-bold text-emerald-400">Safe</div>
-                  <div className="mt-1 text-sm text-slate-300">
-                    Refresh cookie supported by backend
-                  </div>
-                </div>
+  /* STEP 2 → send OTP */
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    clearMessages();
+    if (!email.trim()) { setError("Please enter your email address."); return; }
+    const result = await sendOtp(email.trim().toLowerCase(), accountType);
+    if (result.ok) {
+      setStep(3);
+      setResendTimer(60);
+      setInfo(`OTP sent to ${email}`);
+      if (result.otp) setDevOtp(result.otp); // dev mode
+    } else {
+      setError(result.error);
+    }
+  };
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-                  <div className="text-2xl font-bold text-emerald-400">Ready</div>
-                  <div className="mt-1 text-sm text-slate-300">
-                    Redirect to dashboard after login
-                  </div>
-                </div>
-              </div>
+  /* STEP 3 → verify OTP */
+  const handleVerify = async (e) => {
+    e.preventDefault();
+    clearMessages();
+    if (otp.replace(/\D/g, "").length < 6) { setError("Please enter the complete 6-digit OTP."); return; }
+    const result = await verifyOtp(email, otp, accountType, remember);
+    if (result.ok) {
+      const dest =
+        result.accountType === "personal"
+          ? "/personal/dashboard"
+          : result.isNew
+          ? "/create-business"
+          : result.businesses?.length > 1
+          ? "/select-business"
+          : "/dashboard";
+      navigate(dest);
+    } else {
+      setError(result.error);
+      setOtp("");
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendTimer > 0) return;
+    clearMessages();
+    const result = await sendOtp(email, accountType);
+    if (result.ok) {
+      setResendTimer(60);
+      setInfo("New OTP sent.");
+      if (result.otp) setDevOtp(result.otp);
+    } else {
+      setError(result.error);
+    }
+  };
+
+  /* ── render ─── */
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-navy-950 px-4 py-10">
+      <div className="w-full max-w-sm">
+        {/* Logo */}
+        <div className="mb-8 flex flex-col items-center gap-3 text-center">
+          <img src={bewosyLogo} alt="Bewosy" className="h-16 w-16 rounded-2xl object-cover shadow-lg shadow-orange-500/20" />
+          <div>
+            <h1 className="text-2xl font-extrabold text-white">Bewosy</h1>
+            <p className="text-sm text-navy-400">Smart business management</p>
+          </div>
+        </div>
+
+        {/* Card */}
+        <div className="rounded-3xl border border-navy-800 bg-navy-900/80 p-7 shadow-2xl">
+          {/* Progress dots */}
+          <div className="mb-6 flex items-center justify-center gap-2">
+            {[1, 2, 3].map((s) => (
+              <div
+                key={s}
+                className={`rounded-full transition-all ${
+                  s === step ? "h-2.5 w-8 bg-orange-500" : s < step ? "h-2.5 w-2.5 bg-orange-500/60" : "h-2.5 w-2.5 bg-navy-700"
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Error / info */}
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
+              {error}
             </div>
+          )}
+          {info && !error && (
+            <div className="mb-4 rounded-xl border border-orange-500/30 bg-orange-500/10 px-4 py-2.5 text-sm text-orange-300">
+              {info}
+            </div>
+          )}
+          {devOtp && (
+            <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-center text-sm text-yellow-300">
+              Dev OTP: <span className="font-bold tracking-widest">{devOtp}</span>
+            </div>
+          )}
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <p className="text-sm uppercase tracking-[0.2em] text-slate-400">
-                Connected Backend Modules
-              </p>
-              <div className="mt-4 flex flex-wrap gap-3">
-                {[
-                  "Dashboard",
-                  "Parties",
-                  "Items",
-                  "Sales",
-                  "Purchases",
-                  "Payments",
-                  "Expenses",
-                  "Reports",
-                ].map((item) => (
-                  <span
-                    key={item}
-                    className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
+          {/* ── STEP 1: Choose account type ── */}
+          {step === 1 && (
+            <div>
+              <h2 className="mb-1 text-center text-lg font-bold text-white">Welcome</h2>
+              <p className="mb-6 text-center text-sm text-navy-400">Choose your account type to get started</p>
+              <div className="space-y-3">
+                {ACCOUNT_TYPES.map(({ key, label, sub, icon: Icon, color, activeColor }) => (
+                  <button
+                    key={key}
+                    onClick={() => { setAccountType(key); setStep(2); clearMessages(); }}
+                    className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition ${
+                      accountType === key ? activeColor : color
+                    } bg-navy-950/60`}
                   >
-                    {item}
-                  </span>
+                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
+                      key === "personal" ? "bg-blue-500/15" : "bg-orange-500/15"
+                    }`}>
+                      <Icon className={`h-6 w-6 ${key === "personal" ? "text-blue-400" : "text-orange-400"}`} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-white">{label}</p>
+                      <p className="text-xs text-navy-400">{sub}</p>
+                    </div>
+                    <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-navy-500" />
+                  </button>
                 ))}
               </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        <div className="flex items-center justify-center px-5 py-10 sm:px-8 lg:px-12">
-          <div className="w-full max-w-md">
-            <div className="mb-8">
-              <h2 className="text-3xl font-bold tracking-tight">Bepar Login</h2>
-              <p className="mt-2 text-sm text-slate-400">
-                Sign in using OTP verification
+          {/* ── STEP 2: Enter email ── */}
+          {step === 2 && (
+            <form onSubmit={handleSendOtp}>
+              <div className="mb-1 flex items-center gap-2">
+                <button type="button" onClick={() => { setStep(1); clearMessages(); }} className="text-navy-400 hover:text-white">
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <h2 className="text-lg font-bold text-white">Enter your email</h2>
+              </div>
+              <p className="mb-5 ml-6 text-sm text-navy-400">
+                We'll send a verification code to your email.
               </p>
-            </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-2xl shadow-black/30 sm:p-8">
-              <div className="mb-6 flex items-center gap-3">
-                <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${
-                    step >= 1
-                      ? "bg-emerald-500 text-slate-950"
-                      : "bg-slate-800 text-slate-400"
-                  }`}
-                >
-                  1
-                </div>
-                <div className="h-px flex-1 bg-slate-800" />
-                <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${
-                    step >= 2
-                      ? "bg-emerald-500 text-slate-950"
-                      : "bg-slate-800 text-slate-400"
-                  }`}
-                >
-                  2
-                </div>
+              <div className="mb-2 flex items-center gap-2 rounded-xl border border-navy-700 bg-navy-900/60 px-3 py-1.5">
+                {accountType === "personal"
+                  ? <User className="h-4 w-4 text-blue-400" />
+                  : <Building2 className="h-4 w-4 text-orange-400" />}
+                <span className="text-xs font-medium capitalize text-navy-300">{accountType}</span>
               </div>
 
-              {message && (
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="example@gmail.com"
+                autoFocus
+                className="w-full rounded-2xl border border-navy-700 bg-navy-950 px-4 py-3.5 text-white outline-none transition placeholder:text-navy-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+              />
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 py-3.5 font-bold text-white transition hover:bg-orange-400 disabled:opacity-60"
+              >
+                {loading ? "Sending…" : <>Send OTP <ArrowRight className="h-4 w-4" /></>}
+              </button>
+            </form>
+          )}
+
+          {/* ── STEP 3: OTP + Remember ── */}
+          {step === 3 && (
+            <form onSubmit={handleVerify}>
+              <div className="mb-1 flex items-center gap-2">
+                <button type="button" onClick={() => { setStep(2); setOtp(""); clearMessages(); setDevOtp(""); }} className="text-navy-400 hover:text-white">
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <h2 className="text-lg font-bold text-white">Enter OTP</h2>
+              </div>
+              <p className="mb-6 ml-6 text-sm text-navy-400">
+                6-digit code sent to <span className="text-white">{email}</span>
+              </p>
+
+              <OTPInput value={otp} onChange={setOtp} />
+
+              {/* Remember device */}
+              <label className="mt-5 flex cursor-pointer items-center gap-3 rounded-xl border border-navy-700 bg-navy-950/60 px-4 py-3">
                 <div
-                  className={`mb-5 rounded-2xl border px-4 py-3 text-sm ${getMessageClasses()}`}
+                  onClick={() => setRemember(!remember)}
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition ${
+                    remember ? "border-orange-500 bg-orange-500" : "border-navy-600 bg-transparent"
+                  }`}
                 >
-                  {message}
+                  {remember && (
+                    <svg viewBox="0 0 10 8" className="h-3 w-3 fill-white"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/></svg>
+                  )}
                 </div>
-              )}
+                <div>
+                  <p className="text-sm font-medium text-white">Keep me signed in for 30 days</p>
+                  <p className="text-xs text-navy-400">Skip OTP on this device next time</p>
+                </div>
+              </label>
 
-              {step === 1 ? (
-                <form onSubmit={handleRequestOtp} className="space-y-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={form.name}
-                      onChange={handleChange}
-                      placeholder="Enter your name"
-                      className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
+              <button
+                type="submit"
+                disabled={loading || otp.replace(/\D/g, "").length < 6}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 py-3.5 font-bold text-white transition hover:bg-orange-400 disabled:opacity-60"
+              >
+                {loading ? "Verifying…" : <>Verify & Sign In <ArrowRight className="h-4 w-4" /></>}
+              </button>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                      Mobile Number
-                    </label>
-                    <input
-                      type="text"
-                      name="phone"
-                      value={form.phone}
-                      onChange={handleChange}
-                      placeholder="98XXXXXXXX"
-                      className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full rounded-2xl bg-emerald-500 px-4 py-3.5 font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {loading ? "Sending OTP..." : "Send OTP"}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleVerifyOtp} className="space-y-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={form.name}
-                      onChange={handleChange}
-                      placeholder="Enter your name"
-                      className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                      Mobile Number
-                    </label>
-                    <input
-                      type="text"
-                      name="phone"
-                      value={form.phone}
-                      onChange={handleChange}
-                      className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                      OTP Code
-                    </label>
-                    <input
-                      type="text"
-                      name="code"
-                      value={form.code}
-                      onChange={handleChange}
-                      placeholder="Enter OTP"
-                      maxLength={6}
-                      className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-center text-xl tracking-[0.35em] text-white outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full rounded-2xl bg-emerald-500 px-4 py-3.5 font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {loading ? "Verifying..." : "Verify & Login"}
-                  </button>
-
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <button
-                      type="button"
-                      onClick={() => setStep(1)}
-                      className="flex-1 rounded-2xl border border-slate-700 px-4 py-3 text-slate-200 transition hover:bg-slate-800"
-                    >
-                      Change Number
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleResendOtp}
-                      disabled={resendTimer > 0 || loading}
-                      className="flex-1 rounded-2xl border border-emerald-500/30 px-4 py-3 text-emerald-300 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {resendTimer > 0
-                        ? `Resend in ${resendTimer}s`
-                        : "Resend OTP"}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          </div>
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendTimer > 0 || loading}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 text-sm text-navy-400 transition hover:text-orange-400 disabled:opacity-40"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : "Resend OTP"}
+              </button>
+            </form>
+          )}
         </div>
+
+        <p className="mt-4 text-center text-xs text-navy-500">
+          By continuing you agree to Bewosy's Terms of Service
+        </p>
       </div>
     </div>
   );

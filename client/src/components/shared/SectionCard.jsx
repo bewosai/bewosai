@@ -1,11 +1,13 @@
-export default function SectionCard({ title, children, right }) {
+export default function SectionCard({ title, children, right, action }) {
   return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg shadow-black/20">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
-        {right}
-      </div>
-      {children}
+    <div className="rounded-2xl border border-navy-800 bg-navy-900">
+      {title && (
+        <div className="flex items-center justify-between border-b border-navy-800 px-5 py-4">
+          <h2 className="text-sm font-semibold text-white">{title}</h2>
+          {(right || action) && <div>{right || action}</div>}
+        </div>
+      )}
+      <div className="p-5">{children}</div>
     </div>
   );
 }

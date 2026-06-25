@@ -1,7 +1,50 @@
 @import "tailwindcss";
 
+@theme {
+  /* Navy Blue palette */
+  --color-navy-950: #000c24;
+  --color-navy-900: #001040;
+  --color-navy-800: #001858;
+  --color-navy-700: #002070;
+  --color-navy-600: #002888;
+  --color-navy-500: #002060;
+  --color-navy-400: #1a3a9a;
+  --color-navy-300: #4060b0;
+  --color-navy-200: #6080c8;
+  --color-navy-100: #a0b4e0;
+  --color-navy-50: #dde6f5;
+
+  /* Orange accent palette */
+  --color-orange-600: #cc5200;
+  --color-orange-500: #ff6600;
+  --color-orange-400: #ff8533;
+  --color-orange-300: #ffa366;
+  --color-orange-200: #ffc299;
+  --color-orange-100: #ffe0cc;
+  --color-orange-50: #fff5ee;
+}
+
 html,
 body,
 #root {
   height: 100%;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #ff6600 #001040;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #001040;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #ff6600;
+  border-radius: 3px;
 }
