@@ -49,6 +49,14 @@ class PartyPaymentListCreateView(generics.ListCreateAPIView):
         serializer.save(created_by=self.request.user)
 
 
+class PartyPaymentDetailView(generics.RetrieveDestroyAPIView):
+    serializer_class = PartyPaymentSerializer
+
+    def get_queryset(self):
+        bid = self.request.query_params.get("business")
+        return PartyPayment.objects.filter(party__business_id=bid)
+
+
 class PartyLedgerView(APIView):
     """Returns a combined ledger for a party: sales, purchases, and direct payments."""
 

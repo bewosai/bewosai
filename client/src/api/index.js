@@ -78,8 +78,10 @@ export const parties = {
   create: (d) => api.post("/parties/", d),
   update: (id, d) => api.patch(`/parties/${id}/`, d),
   delete: (id) => api.delete(`/parties/${id}/`),
+  ledger: (id, p) => api.get(`/parties/${id}/ledger/`, { params: p }),
   payments: (p) => api.get("/parties/payments/", { params: p }),
   addPayment: (d) => api.post("/parties/payments/", d),
+  deletePayment: (id) => api.delete(`/parties/payments/${id}/`),
 };
 
 export const sales = {
