@@ -142,7 +142,37 @@ class LoginActivity(models.Model):
     user_agent = models.TextField(blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     success = models.BooleanField(default=True)
+    logout_time = models.DateTimeField(null=True, blank=True)
+    session_duration = models.DurationField(null=True, blank=True)
 
     class Meta:
         ordering = ["-timestamp"]
         verbose_name_plural = "login activities"
+
+
+class StaffActivity(models.Model):
+    ACTION_LOGIN = "LOGIN"
+    ACTION_LOGOUT = "LOGOUT"
+    ACTION_CREATE = "CREATE"
+    ACTION_UPDATE = "UPDATE"
+    ACTION_DELETE = "DELETE"
+    ACTION_VIEW = "VIEW"
+    ACTION_CHOICES = [
+        (ACTION_LOGIN, "Login"),
+        (ACTION_LOGOUT, "Logout"),
+        (ACTION_CREATE, "Create"),
+        (ACTION_UPDATE, "Update"),
+        (ACTION_DELETE, "Delete"),
+        (ACTION_VIEW, "View"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="activities")
+    business = models.ForeignKey("Business", on_delete=models.CASCADE, related_name="staff_activities", null=True, blank=True)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    module = models.CharField(max_length=50, blank=True)
+    description = models.TextField(blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-timestamp"]

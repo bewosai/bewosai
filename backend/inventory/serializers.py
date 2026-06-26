@@ -10,10 +10,16 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class UnitSerializer(serializers.ModelSerializer):
+    display = serializers.CharField(read_only=True)
+
     class Meta:
         model = Unit
-        fields = ("id", "name", "abbreviation")
-        read_only_fields = ("id",)
+        fields = (
+            "id", "name", "abbreviation",
+            "secondary_unit", "secondary_abbreviation", "conversion_factor",
+            "display",
+        )
+        read_only_fields = ("id", "display")
 
 
 class ProductSerializer(serializers.ModelSerializer):

@@ -28,7 +28,7 @@ class SaleListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         bid = self.request.query_params.get("business")
-        qs = Sale.objects.filter(business_id=bid, business__staff__user=self.request.user)
+        qs = Sale.objects.filter(business_id=bid, business__staff__user=self.request.user, is_deleted=False)
         date_from = self.request.query_params.get("date_from")
         date_to = self.request.query_params.get("date_to")
         if date_from:

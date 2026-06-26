@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 
-// Auth pages (no layout)
+// Auth pages
 import LoginPage from "./pages/Login";
 import LandingPage from "./pages/LandingPage";
 import CreateBusinessPage from "./pages/CreateBusiness";
@@ -21,12 +21,10 @@ import ReportsPage from "./pages/ReportsPage";
 import BankingPage from "./pages/BankingPage";
 import StaffPage from "./pages/StaffPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
-
-// Sales sub-pages
-import SalesInvoicePage from "./sales/sales_Invoice";
-import PaymentInPage from "./sales/payment_in";
-import QuotationPage from "./sales/Quotation";
-import SalesReturnPage from "./sales/sales_return";
+import SettingsPage from "./pages/SettingsPage";
+import RecycleBinPage from "./pages/RecycleBinPage";
+import QuotationPage from "./pages/QuotationPage";
+import SalesReturnPage from "./pages/SalesReturnPage";
 
 // Personal layout + pages
 import PersonalLayout from "./components/layout/PersonalLayout";
@@ -45,7 +43,7 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
 
-      {/* Post-login setup (no business required yet) */}
+      {/* Post-login setup */}
       <Route path="/create-business" element={<CreateBusinessPage />} />
       <Route path="/select-business" element={<SelectBusinessPage />} />
 
@@ -60,7 +58,7 @@ export default function App() {
         <Route path="/personal/dashboard" element={<PersonalDashboard />} />
         <Route path="/personal/expenses" element={<ExpensesPage />} />
         <Route path="/personal/reports" element={<ReportsPage />} />
-        <Route path="/personal/settings" element={<PersonalDashboard />} />
+        <Route path="/personal/settings" element={<SettingsPage />} />
       </Route>
 
       {/* ── BUSINESS routes ── */}
@@ -81,8 +79,6 @@ export default function App() {
         <Route path="/inventory/low-stock" element={<InventoryPage />} />
 
         <Route path="/sales" element={<SalesPage />} />
-        <Route path="/sales/invoice" element={<SalesInvoicePage />} />
-        <Route path="/sales/payment-in" element={<PaymentInPage />} />
         <Route path="/sales/quotation" element={<QuotationPage />} />
         <Route path="/sales/return" element={<SalesReturnPage />} />
 
@@ -97,6 +93,8 @@ export default function App() {
 
         <Route path="/staff" element={<StaffPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/recycle-bin" element={<RecycleBinPage />} />
         <Route path="/superadmin" element={<SuperAdminPage />} />
       </Route>
 

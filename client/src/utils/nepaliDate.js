@@ -1,0 +1,141 @@
+/**
+ * AD ↔ BS (Bikram Sambat) date conversion.
+ * Reference: BS 2081 Baishakh 1 = AD 2024 April 13
+ */
+
+// Days in each BS month per year [Baishakh … Chaitra]
+const BS_MONTH_DAYS = {
+  2077: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2078: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2079: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2080: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2081: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 29, 31],
+  2082: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2083: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2084: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2085: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2086: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2087: [31, 32, 31, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2088: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2089: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 30, 30],
+  2090: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+};
+
+// Reference point: 2081/1/1 BS = April 13, 2024 AD
+const REF_BS = { year: 2081, month: 1, day: 1 };
+const REF_AD = new Date(2024, 3, 13); // month is 0-indexed
+
+export const BS_MONTH_NAMES_EN = [
+  "Baishakh", "Jestha", "Ashadh", "Shrawan", "Bhadra", "Ashwin",
+  "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra",
+];
+
+export const BS_MONTH_NAMES_NE = [
+  "बैशाख", "जेठ", "असार", "साउन", "भदौ", "असोज",
+  "कार्तिक", "मंसिर", "पुष", "माघ", "फागुन", "चैत",
+];
+
+function daysInBSMonth(year, month) {
+  return BS_MONTH_DAYS[year]?.[month - 1] ?? 30;
+}
+
+/** Convert AD Date → BS { year, month, day } */
+export function adToBS(adDate) {
+  const input = new Date(adDate.getFullYear(), adDate.getMonth(), adDate.getDate());
+  const diffMs = input - REF_AD;
+  let diffDays = Math.round(diffMs / 86400000);
+
+  let { year, month, day } = REF_BS;
+
+  if (diffDays >= 0) {
+    while (diffDays > 0) {
+      const daysInMonth = daysInBSMonth(year, month);
+      const remaining = daysInMonth - day;
+      if (diffDays <= remaining) {
+        day += diffDays;
+        diffDays = 0;
+      } else {
+        diffDays -= remaining + 1;
+        day = 1;
+        month++;
+        if (month > 12) { month = 1; year++; }
+      }
+    }
+  } else {
+    diffDays = -diffDays;
+    while (diffDays > 0) {
+      if (diffDays < day) {
+        day -= diffDays;
+        diffDays = 0;
+      } else {
+        diffDays -= day;
+        month--;
+        if (month < 1) { month = 12; year--; }
+        day = daysInBSMonth(year, month);
+      }
+    }
+  }
+
+  return { year, month, day };
+}
+
+/** Convert BS { year, month, day } → AD Date */
+export function bsToAD(bsYear, bsMonth, bsDay) {
+  const { year: ry, month: rm, day: rd } = REF_BS;
+  let diffDays = 0;
+
+  // Count days from REF_BS to target BS date
+  let y = ry, m = rm, d = rd;
+
+  if (bsYear > ry || (bsYear === ry && bsMonth > rm) || (bsYear === ry && bsMonth === rm && bsDay >= rd)) {
+    // Forward
+    while (!(y === bsYear && m === bsMonth && d === bsDay)) {
+      diffDays++;
+      d++;
+      if (d > daysInBSMonth(y, m)) { d = 1; m++; }
+      if (m > 12) { m = 1; y++; }
+    }
+  } else {
+    // Backward
+    while (!(y === bsYear && m === bsMonth && d === bsDay)) {
+      diffDays--;
+      d--;
+      if (d < 1) { m--; if (m < 1) { m = 12; y--; } d = daysInBSMonth(y, m); }
+    }
+  }
+
+  const result = new Date(REF_AD);
+  result.setDate(result.getDate() + diffDays);
+  return result;
+}
+
+/** Format BS date as string */
+export function formatBS(bsDate, lang = "en") {
+  const names = lang === "ne" ? BS_MONTH_NAMES_NE : BS_MONTH_NAMES_EN;
+  return `${bsDate.year} ${names[bsDate.month - 1]} ${bsDate.day}`;
+}
+
+/** Get all BS dates in a BS month as AD dates (for calendar rendering) */
+export function getBSMonthADDates(bsYear, bsMonth) {
+  const days = daysInBSMonth(bsYear, bsMonth);
+  const dates = [];
+  for (let d = 1; d <= days; d++) {
+    dates.push({ bsDay: d, adDate: bsToAD(bsYear, bsMonth, d) });
+  }
+  return dates;
+}
+
+/** BS week day of the first day of a BS month (0=Sun) */
+export function bsMonthStartWeekday(bsYear, bsMonth) {
+  const firstAD = bsToAD(bsYear, bsMonth, 1);
+  return firstAD.getDay();
+}
+
+export const NEPALI_DIGITS = ["०", "१", "२", "३", "४", "५", "६", "७", "८", "९"];
+
+export function toNepaliDigits(num) {
+  return String(num)
+    .split("")
+    .map((c) => (c >= "0" && c <= "9" ? NEPALI_DIGITS[parseInt(c)] : c))
+    .join("");
+}

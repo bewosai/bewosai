@@ -15,12 +15,15 @@ class Party(models.Model):
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="parties")
     name = models.CharField(max_length=200)
     party_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_CUSTOMER)
+    customer_type = models.CharField(max_length=20, choices=[('RETAIL', 'Retail'), ('WHOLESALE', 'Wholesale'), ('DISTRIBUTOR', 'Distributor'), ('RESELLER', 'Reseller')], blank=True)
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
     opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -50,10 +53,18 @@ class PartyPayment(models.Model):
     METHOD_CASH = "CASH"
     METHOD_BANK = "BANK"
     METHOD_CHEQUE = "CHEQUE"
+    METHOD_ESEWA = "ESEWA"
+    METHOD_KHALTI = "KHALTI"
+    METHOD_IME = "IME_PAY"
+    METHOD_MOBILE = "MOBILE"
     METHOD_CHOICES = [
         (METHOD_CASH, "Cash"),
         (METHOD_BANK, "Bank Transfer"),
         (METHOD_CHEQUE, "Cheque"),
+        (METHOD_ESEWA, "eSewa"),
+        (METHOD_KHALTI, "Khalti"),
+        (METHOD_IME, "IME Pay"),
+        (METHOD_MOBILE, "Mobile Banking"),
     ]
 
     party = models.ForeignKey(Party, on_delete=models.CASCADE, related_name="payments")

@@ -4,8 +4,9 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from django.conf import settings
+from django.core.mail import send_mail
 from datetime import timedelta
-from .models import User, Business, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
+from .models import User, Business, StaffMember, OTPCode, LoginActivity, StaffActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import UserSerializer, BusinessSerializer, StaffMemberSerializer, InviteStaffSerializer
 
 
@@ -14,20 +15,35 @@ class SendOTPView(APIView):
 
     def post(self, request):
         email = request.data.get("email", "").strip().lower()
-        account_type = request.data.get("account_type", ACCOUNT_BUSINESS)
-
         if not email:
             return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
-        if account_type not in (ACCOUNT_PERSONAL, ACCOUNT_BUSINESS):
-            return Response({"error": "Invalid account type."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Use existing user's account_type if they exist; default to business for new
+        existing = User.objects.filter(email=email).first()
+        account_type = existing.account_type if existing else ACCOUNT_BUSINESS
 
         otp = OTPCode.generate(email, account_type)
 
-        # Log OTP to console for development
-        print(f"\n[BEWOSY OTP] Email: {email}  Code: {otp.code}  Type: {account_type}\n")
+        try:
+            send_mail(
+                subject="Your Bewosy Verification Code",
+                message=(
+                    f"Your Bewosy OTP: {otp.code}\n\n"
+                    "Valid for 10 minutes. Never share this code.\n\n— Bewosy Team"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+        print(f"\n[BEWOSY OTP] Email: {email}  Code: {otp.code}\n")
 
-        response_data = {"message": f"OTP sent to {email}. Valid for 10 minutes."}
-        # In DEBUG mode, include OTP so developers can test without email setup
+        response_data = {
+            "message": f"OTP sent to {email}. Valid for 10 minutes.",
+            # Tell frontend whether this email already has an account
+            "user_exists": existing is not None,
+        }
         if settings.DEBUG:
             response_data["otp"] = otp.code
 
@@ -57,21 +73,19 @@ class VerifyOTPView(APIView):
         otp.is_used = True
         otp.save()
 
-        # Get or create user
+        # Get or create user — existing users always keep their stored account_type
         try:
             user = User.objects.get(email=email)
             is_new = False
         except User.DoesNotExist:
+            # New user: create with a placeholder account_type; they will choose in next step
+            # account_type from request is ignored for new users here (chosen in set-account-type step)
             user = User.objects.create_user(
                 email=email,
                 name=name or email.split("@")[0].capitalize(),
-                account_type=account_type,
+                account_type=ACCOUNT_BUSINESS,  # placeholder; overwritten by set-account-type
                 is_verified=True,
             )
-            # Auto-create Personal Finance profile for personal users
-            if account_type == ACCOUNT_PERSONAL:
-                biz = Business.objects.create(owner=user, name="Personal Finance", business_type="personal")
-                StaffMember.objects.create(user=user, business=biz, role=StaffMember.ROLE_OWNER)
             is_new = True
 
         user.last_login_at = timezone.now()
@@ -97,6 +111,8 @@ class VerifyOTPView(APIView):
             "refresh": str(refresh),
             "user": UserSerializer(user).data,
             "is_new_user": is_new,
+            # New user needs to select their profile type (personal vs business)
+            "needs_profile_setup": is_new,
             "businesses": BusinessSerializer(businesses, many=True).data,
         })
 
@@ -107,7 +123,51 @@ class LogoutView(APIView):
             RefreshToken(request.data.get("refresh")).blacklist()
         except Exception:
             pass
+        # Record logout
+        last_login = LoginActivity.objects.filter(user=request.user, logout_time__isnull=True).first()
+        if last_login:
+            now = timezone.now()
+            last_login.logout_time = now
+            last_login.session_duration = now - last_login.timestamp
+            last_login.save(update_fields=["logout_time", "session_duration"])
         return Response({"message": "Logged out successfully."})
+
+
+class SetAccountTypeView(APIView):
+    """
+    New users call this after OTP verification to choose Personal vs Business.
+    One-time: once a business/personal profile exists, this endpoint rejects changes.
+    """
+
+    def post(self, request):
+        account_type = request.data.get("account_type", "").strip()
+        if account_type not in (ACCOUNT_PERSONAL, ACCOUNT_BUSINESS):
+            return Response({"error": "Invalid account type. Must be 'personal' or 'business'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        has_workspace = Business.objects.filter(staff__user=user, staff__is_active=True).exists()
+
+        if has_workspace:
+            # Already set up — just return current state (idempotent)
+            businesses = Business.objects.filter(staff__user=user, staff__is_active=True)
+            return Response({
+                "user": UserSerializer(user).data,
+                "businesses": BusinessSerializer(businesses, many=True).data,
+            })
+
+        # Set the account type
+        user.account_type = account_type
+        user.save(update_fields=["account_type"])
+
+        if account_type == ACCOUNT_PERSONAL:
+            biz = Business.objects.create(owner=user, name="Personal Finance", business_type="personal")
+            StaffMember.objects.create(user=user, business=biz, role=StaffMember.ROLE_OWNER)
+
+        businesses = Business.objects.filter(staff__user=user, staff__is_active=True)
+        return Response({
+            "user": UserSerializer(user).data,
+            "businesses": BusinessSerializer(businesses, many=True).data,
+        })
 
 
 class MeView(generics.RetrieveUpdateAPIView):
@@ -176,3 +236,24 @@ class StaffDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         bid = self.kwargs["business_id"]
         return StaffMember.objects.filter(business_id=bid, business__owner=self.request.user)
+
+
+class StaffActivityView(APIView):
+    def get(self, request):
+        user_id = request.query_params.get("user_id")
+
+        login_qs = LoginActivity.objects.filter(user=request.user)
+        if user_id and request.user.is_platform_admin:
+            login_qs = LoginActivity.objects.filter(user_id=user_id)
+
+        data = []
+        for la in login_qs[:50]:
+            data.append({
+                "id": la.id,
+                "timestamp": la.timestamp,
+                "logout_time": getattr(la, "logout_time", None),
+                "session_duration": str(la.session_duration) if getattr(la, "session_duration", None) else None,
+                "ip_address": la.ip_address,
+                "success": la.success,
+            })
+        return Response(data)

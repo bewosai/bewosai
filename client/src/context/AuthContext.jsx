@@ -15,12 +15,16 @@ export function AuthProvider({ children }) {
 
   const isLoggedIn = !!user && !!localStorage.getItem("access");
 
-  /* send OTP */
-  const sendOtp = useCallback(async (email, accountType) => {
+  /** Step 1: send OTP — no account type needed */
+  const sendOtp = useCallback(async (email) => {
     setLoading(true);
     try {
-      const { data } = await authApi.sendOtp(email, accountType);
-      return { ok: true, otp: data.otp }; // otp only in dev mode
+      const { data } = await authApi.sendOtp(email);
+      return {
+        ok: true,
+        otp: data.otp,           // dev mode only
+        userExists: data.user_exists,
+      };
     } catch (err) {
       return { ok: false, error: err.response?.data?.error || "Failed to send OTP." };
     } finally {
@@ -28,11 +32,11 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  /* verify OTP → login */
-  const verifyOtp = useCallback(async (email, code, accountType, remember) => {
+  /** Step 2: verify OTP — returns is_new_user + needs_profile_setup */
+  const verifyOtp = useCallback(async (email, code, remember) => {
     setLoading(true);
     try {
-      const { data } = await authApi.verifyOtp(email, code, accountType, remember);
+      const { data } = await authApi.verifyOtp(email, code, remember);
 
       localStorage.setItem("access", data.access);
       localStorage.setItem("refresh", data.refresh);
@@ -42,27 +46,19 @@ export function AuthProvider({ children }) {
       setUser(data.user);
       setBusinesses(data.businesses);
 
-      // Auto-select business
+      // Auto-select the one business if available
       if (data.businesses.length === 1) {
         const biz = data.businesses[0];
         localStorage.setItem("current_business", JSON.stringify(biz));
-        localStorage.setItem("business_id", biz.id);
+        localStorage.setItem("business_id", String(biz.id));
         setCurrentBusiness(biz);
-      } else if (data.businesses.length === 0 && accountType === "personal") {
-        // personal users get auto-business from backend; refresh
-        const { data: bData } = await authApi.businesses();
-        const bizList = bData.results ?? bData;
-        if (bizList.length > 0) {
-          localStorage.setItem("current_business", JSON.stringify(bizList[0]));
-          localStorage.setItem("business_id", bizList[0].id);
-          setCurrentBusiness(bizList[0]);
-        }
       }
 
       return {
         ok: true,
-        accountType: data.user.account_type,
         isNew: data.is_new_user,
+        needsProfileSetup: data.needs_profile_setup,
+        accountType: data.user.account_type,
         businesses: data.businesses,
       };
     } catch (err) {
@@ -72,9 +68,37 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  /** Step 3 (new users): choose Personal or Business profile */
+  const setAccountType = useCallback(async (accountType) => {
+    setLoading(true);
+    try {
+      const { data } = await authApi.setAccountType(accountType);
+
+      // Update stored user with new account_type
+      const updatedUser = { ...stored("user"), account_type: data.user.account_type };
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      localStorage.setItem("businesses", JSON.stringify(data.businesses));
+      setUser(updatedUser);
+      setBusinesses(data.businesses);
+
+      if (data.businesses.length === 1) {
+        const biz = data.businesses[0];
+        localStorage.setItem("current_business", JSON.stringify(biz));
+        localStorage.setItem("business_id", String(biz.id));
+        setCurrentBusiness(biz);
+      }
+
+      return { ok: true, accountType: data.user.account_type, businesses: data.businesses };
+    } catch (err) {
+      return { ok: false, error: err.response?.data?.error || "Failed to set account type." };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const selectBusiness = useCallback((biz) => {
     localStorage.setItem("current_business", JSON.stringify(biz));
-    localStorage.setItem("business_id", biz.id);
+    localStorage.setItem("business_id", String(biz.id));
     setCurrentBusiness(biz);
   }, []);
 
@@ -91,7 +115,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user, businesses, currentBusiness,
       loading, isLoggedIn,
-      sendOtp, verifyOtp, logout, selectBusiness,
+      sendOtp, verifyOtp, setAccountType, logout, selectBusiness,
     }}>
       {children}
     </AuthContext.Provider>

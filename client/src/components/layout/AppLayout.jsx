@@ -7,12 +7,18 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-navy-950 text-white">
+    <div className="flex h-screen overflow-hidden bg-navy-950 text-white">
       <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
-      <div className="flex min-h-screen flex-1 flex-col overflow-hidden">
+
+      {/* Main column */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-          <Outlet />
+
+        {/* Scrollable content */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-7xl px-3 py-4 sm:px-5 sm:py-6">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

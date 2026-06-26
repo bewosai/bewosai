@@ -1,50 +1,75 @@
 @import "tailwindcss";
 
 @theme {
-  /* Navy Blue palette */
+  /* ── Light Mode (DEFAULT) ──
+     White bg · Deep Navy text · Gold Orange accent        */
+  --color-navy-950: #f0f4fb;
+  --color-navy-900: #ffffff;
+  --color-navy-800: #dde8f5;
+  --color-navy-700: #c0d2e8;
+  --color-navy-600: #90b0d0;
+  --color-navy-500: #607898;
+  --color-navy-400: #3a5a80;
+  --color-navy-300: #1a3a60;
+  --color-navy-200: #0d2548;
+  --color-navy-100: #082040;
+  --color-navy-50:  #041830;
+  /* text-white → deep navy so text stays readable on white bg */
+  --color-white: #0a2540;
+
+  /* Gold Orange accent */
+  --color-orange-700: #b45309;
+  --color-orange-600: #d97706;
+  --color-orange-500: #f59e0b;
+  --color-orange-400: #fbbf24;
+  --color-orange-300: #fcd34d;
+  --color-orange-200: #fde68a;
+  --color-orange-100: #fef3c7;
+  --color-orange-50:  #fffbeb;
+
+  /* Semantic colors */
+  --color-green-500: #16a34a;
+  --color-green-400: #4ade80;
+  --color-green-100: #dcfce7;
+  --color-red-500: #dc2626;
+  --color-red-400: #f87171;
+  --color-red-100: #fee2e2;
+  --color-blue-500: #2563eb;
+  --color-blue-100: #dbeafe;
+}
+
+/* ── Dark Mode ── */
+[data-theme="dark"] {
   --color-navy-950: #000c24;
   --color-navy-900: #001040;
   --color-navy-800: #001858;
   --color-navy-700: #002070;
   --color-navy-600: #002888;
-  --color-navy-500: #002060;
-  --color-navy-400: #1a3a9a;
-  --color-navy-300: #4060b0;
-  --color-navy-200: #6080c8;
-  --color-navy-100: #a0b4e0;
-  --color-navy-50: #dde6f5;
-
-  /* Orange accent palette */
-  --color-orange-600: #cc5200;
-  --color-orange-500: #ff6600;
-  --color-orange-400: #ff8533;
-  --color-orange-300: #ffa366;
-  --color-orange-200: #ffc299;
-  --color-orange-100: #ffe0cc;
-  --color-orange-50: #fff5ee;
+  --color-navy-500: #6080b8;
+  --color-navy-400: #90aad4;
+  --color-navy-300: #b0c4e8;
+  --color-navy-200: #ccd8f0;
+  --color-navy-100: #dde6f8;
+  --color-navy-50:  #eef2fb;
+  --color-white: #ffffff;
+  scrollbar-color: #f59e0b #001040;
 }
 
-html,
-body,
-#root {
-  height: 100%;
+[data-theme="dark"] *::-webkit-scrollbar-track { background: #001040; }
+
+html, body, #root { height: 100%; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white !important; color: #0a2540 !important; }
+  .print-only { display: block !important; }
 }
+.print-only { display: none; }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #ff6600 #001040;
+  scrollbar-color: #f59e0b #dde8f5;
 }
-
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-*::-webkit-scrollbar-track {
-  background: #001040;
-}
-
-*::-webkit-scrollbar-thumb {
-  background: #ff6600;
-  border-radius: 3px;
-}
+*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar-track { background: #dde8f5; }
+*::-webkit-scrollbar-thumb { background: #f59e0b; border-radius: 3px; }

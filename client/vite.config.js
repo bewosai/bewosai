@@ -1,7 +1,53 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["favicon.ico", "robots.txt"],
+      manifest: {
+        name: "Bewosy – Business Management",
+        short_name: "Bewosy",
+        description: "Sales, inventory, expenses, staff and reports for small businesses",
+        theme_color: "#f59e0b",
+        background_color: "#ffffff",
+        display: "standalone",
+        orientation: "any",
+        start_url: "/",
+        scope: "/",
+        lang: "ne",
+        dir: "ltr",
+        categories: ["business", "finance", "productivity"],
+        icons: [
+          { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+        ],
+        shortcuts: [
+          { name: "New Invoice", short_name: "Invoice", description: "Create a new sales invoice", url: "/sales", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+          { name: "Add Expense", short_name: "Expense", description: "Record an expense", url: "/expenses", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+        ],
+      },
+      workbox: {
+        // Cache all JS/CSS/HTML assets
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // Network-first for API calls (so fresh data when online)
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api-cache",
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
+              networkTimeoutSeconds: 5,
+            },
+          },
+        ],
+      },
+    }),
+  ],
 });

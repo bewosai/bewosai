@@ -94,11 +94,16 @@ class LoginActivityView(APIView):
     permission_classes = [IsPlatformAdmin]
 
     def get(self, request):
-        logs = LoginActivity.objects.order_by("-timestamp")[:200]
+        qs = LoginActivity.objects.order_by("-timestamp")
+        user_id = request.query_params.get("user_id")
+        if user_id:
+            qs = qs.filter(user_id=user_id)
+        logs = qs[:500]
         data = [
             {
                 "id": l.id,
                 "user": l.user.email,
+                "user_id": l.user_id,
                 "ip": l.ip_address,
                 "success": l.success,
                 "timestamp": l.timestamp,

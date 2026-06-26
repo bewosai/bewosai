@@ -1,4 +1,5 @@
 import axios from "axios";
+import { wrapWithOfflineQueue } from "../utils/offlineQueue";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
@@ -7,12 +8,17 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// Wrap so offline mutations are queued and re-synced automatically
+wrapWithOfflineQueue(api);
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("access");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   const bid = localStorage.getItem("business_id");
-  if (bid && config.method === "get") {
+  if (bid) {
+    // Always send business_id as query param AND header
     config.params = { ...config.params, business: bid };
+    config.headers["X-Business-ID"] = bid;
   }
   return config;
 });
@@ -39,9 +45,10 @@ api.interceptors.response.use(
 );
 
 export const auth = {
-  sendOtp: (email, accountType) => api.post("/auth/send-otp/", { email, account_type: accountType }),
-  verifyOtp: (email, code, accountType, remember) =>
-    api.post("/auth/verify-otp/", { email, code, account_type: accountType, remember }),
+  sendOtp: (email) => api.post("/auth/send-otp/", { email }),
+  verifyOtp: (email, code, remember) =>
+    api.post("/auth/verify-otp/", { email, code, remember }),
+  setAccountType: (accountType) => api.post("/auth/set-account-type/", { account_type: accountType }),
   logout: (refresh) => api.post("/auth/logout/", { refresh }),
   me: () => api.get("/auth/me/"),
   updateMe: (d) => api.patch("/auth/me/", d),
@@ -79,11 +86,29 @@ export const sales = {
   list: (p) => api.get("/sales/", { params: p }),
   create: (d) => api.post("/sales/", d),
   update: (id, d) => api.patch(`/sales/${id}/`, d),
+  delete: (id) => api.delete(`/sales/${id}/`),
   get: (id) => api.get(`/sales/${id}/`),
+  nextNumber: () => api.get("/sales/next-number/"),
   returns: (p) => api.get("/sales/returns/", { params: p }),
   createReturn: (d) => api.post("/sales/returns/", d),
   quotations: (p) => api.get("/sales/quotations/", { params: p }),
   createQuotation: (d) => api.post("/sales/quotations/", d),
+};
+
+const bid = () => localStorage.getItem("business_id") || "";
+const bid_headers = () => ({ "X-Business-ID": bid() });
+
+export const purchases = {
+  list: (params) => api.get("/purchases/", { params, headers: bid_headers() }),
+  create: (data) => api.post("/purchases/", data, { headers: bid_headers() }),
+  update: (id, data) => api.patch(`/purchases/${id}/`, data, { headers: bid_headers() }),
+  delete: (id) => api.delete(`/purchases/${id}/`, { headers: bid_headers() }),
+};
+
+export const recycleBin = {
+  list: (params) => api.get("/purchases/recycle-bin/", { params, headers: bid_headers() }),
+  restore: (type, id) => api.post(`/purchases/recycle-bin/restore/${type}/${id}/`, {}, { headers: bid_headers() }),
+  permanentDelete: (type, id) => api.delete(`/purchases/recycle-bin/delete/${type}/${id}/`, { headers: bid_headers() }),
 };
 
 export const expenses = {
@@ -109,6 +134,8 @@ export const reports = {
   expenses: (p) => api.get("/reports/expenses/", { params: p }),
   inventory: () => api.get("/reports/inventory/"),
   profit: (p) => api.get("/reports/profit/", { params: p }),
+  monthly: (p) => api.get("/reports/monthly/", { params: p }),
+  staffActivity: (p) => api.get("/auth/staff-activity/", { params: p }),
 };
 
 export const superadmin = {
@@ -117,6 +144,7 @@ export const superadmin = {
   businessAction: (id, action) => api.patch(`/superadmin/businesses/${id}/action/`, { action }),
   users: () => api.get("/superadmin/users/"),
   loginActivity: () => api.get("/superadmin/login-activity/"),
+  userLoginActivity: (userId) => api.get("/superadmin/login-activity/", { params: { user_id: userId } }),
   tickets: () => api.get("/superadmin/tickets/"),
   updateTicket: (id, d) => api.patch(`/superadmin/tickets/${id}/`, d),
   announcements: () => api.get("/superadmin/announcements/"),

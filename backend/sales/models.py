@@ -17,10 +17,20 @@ class Sale(models.Model):
     METHOD_CASH = "CASH"
     METHOD_BANK = "BANK"
     METHOD_CREDIT = "CREDIT"
+    METHOD_CHEQUE = "CHEQUE"
+    METHOD_ESEWA = "ESEWA"
+    METHOD_KHALTI = "KHALTI"
+    METHOD_IME = "IME_PAY"
+    METHOD_MOBILE = "MOBILE"
     METHOD_CHOICES = [
         (METHOD_CASH, "Cash"),
-        (METHOD_BANK, "Bank"),
+        (METHOD_BANK, "Bank Transfer"),
         (METHOD_CREDIT, "Credit"),
+        (METHOD_CHEQUE, "Cheque"),
+        (METHOD_ESEWA, "eSewa"),
+        (METHOD_KHALTI, "Khalti"),
+        (METHOD_IME, "IME Pay"),
+        (METHOD_MOBILE, "Mobile Banking"),
     ]
 
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="sales")
@@ -36,6 +46,9 @@ class Sale(models.Model):
     payment_method = models.CharField(max_length=10, choices=METHOD_CHOICES, default=METHOD_CASH)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default=STATUS_CONFIRMED)
     notes = models.TextField(blank=True)
+    sale_type = models.CharField(max_length=10, choices=[('SALE', 'Sale'), ('QUOTATION', 'Quotation')], default='SALE')
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
