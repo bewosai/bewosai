@@ -47,12 +47,9 @@ class BewosyApp extends StatelessWidget {
           update: (_, api, __) => BusinessRepositoryImpl(api),
         ),
         // Presentation layer: Auth state, uses domain use cases via repository
-        ChangeNotifierProxyProvider2<ApiService, AuthRepositoryImpl, AuthProvider>(
-          create: (ctx) => AuthProvider(
-            ctx.read<AuthRepositoryImpl>(),
-            ctx.read<ApiService>(),
-          )..loadFromStorage(),
-          update: (_, api, repo, prev) => prev ?? AuthProvider(repo, api),
+        ChangeNotifierProxyProvider<AuthRepositoryImpl, AuthProvider>(
+          create: (ctx) => AuthProvider(ctx.read<AuthRepositoryImpl>())..loadFromStorage(),
+          update: (_, repo, prev) => prev ?? AuthProvider(repo),
         ),
         // Presentation layer: Business operations via domain use cases
         ProxyProvider<BusinessRepository, BusinessProvider>(

@@ -48,6 +48,15 @@ dependencies:
   # Toast
   fluttertoast: ^8.2.0
 
+  # Share files / PDFs
+  share_plus: ^10.0.0
+
+  # Local database for offline support
+  sqflite: ^2.3.0
+
+  # Path provider
+  path_provider: ^2.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

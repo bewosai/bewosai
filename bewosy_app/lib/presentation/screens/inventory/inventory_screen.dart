@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_settings.dart';
+import '../../../data/services/api_service.dart';
 import '../../providers/business_provider.dart';
 import '../../widgets/app_widgets.dart';
 
@@ -264,7 +265,9 @@ class _InventoryScreenState extends State<InventoryScreen>
                                           Text(
                                             settings.formatAmount(
                                                 double.tryParse(
-                                                        p['sell_price']
+                                                        p['selling_price']
+                                                                ?.toString() ??
+                                                            p['sell_price']
                                                                 ?.toString() ??
                                                             '0') ??
                                                     0),
@@ -283,6 +286,30 @@ class _InventoryScreenState extends State<InventoryScreen>
                                               fontWeight: isLowStock
                                                   ? FontWeight.w700
                                                   : FontWeight.normal,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          GestureDetector(
+                                            onTap: () => _showStockAdjust(
+                                                context,
+                                                Map<String, dynamic>.from(p as Map)),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.info.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                                                Icon(Icons.tune_rounded,
+                                                    size: 12, color: AppColors.info),
+                                                SizedBox(width: 4),
+                                                Text('Adjust',
+                                                    style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: AppColors.info,
+                                                        fontWeight: FontWeight.w600)),
+                                              ]),
                                             ),
                                           ),
                                         ],
@@ -551,6 +578,185 @@ class _InventoryScreenState extends State<InventoryScreen>
                           ss(() => saving = false);
                         },
                   icon: Icons.check_rounded,
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showStockAdjust(BuildContext ctx2, Map<String, dynamic> product) {
+    final api = context.read<ApiService>();
+    final qtyCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+    String movementType = 'ADJUSTMENT';
+    bool saving = false;
+
+    final currentStock = product['current_stock']?.toString() ?? '0';
+
+    const types = [
+      ('IN', 'Stock In', Icons.add_circle_outline_rounded, AppColors.success),
+      ('OPENING', 'Opening', Icons.inventory_rounded, AppColors.info),
+      ('ADJUSTMENT', 'Adjust', Icons.tune_rounded, AppColors.warning),
+      ('DAMAGE', 'Damage', Icons.broken_image_rounded, AppColors.error),
+      ('LOST', 'Lost', Icons.help_outline_rounded, AppColors.error),
+      ('OUT', 'Manual Out', Icons.remove_circle_outline_rounded, AppColors.navy500),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx3, ss) => Padding(
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx3).viewInsets.bottom),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    height: 4,
+                    width: 40,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                Row(children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Stock Adjustment',
+                            style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.w800)),
+                        Text(product['name']?.toString() ?? '',
+                            style: const TextStyle(
+                                color: AppColors.navy500, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text('Stock: $currentStock',
+                        style: const TextStyle(
+                            color: AppColors.orange,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13)),
+                  ),
+                ]),
+                const SizedBox(height: 16),
+                // Type grid
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: types.map((t) {
+                    final selected = movementType == t.$1;
+                    return GestureDetector(
+                      onTap: () => ss(() => movementType = t.$1),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? t.$4
+                              : t.$4.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selected
+                                ? t.$4
+                                : t.$4.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(t.$3,
+                              size: 14,
+                              color: selected ? Colors.white : t.$4),
+                          const SizedBox(width: 6),
+                          Text(t.$2,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: selected ? Colors.white : t.$4,
+                              )),
+                        ]),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: qtyCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Quantity',
+                    hintText: 'Enter quantity',
+                    prefixIcon: Icon(Icons.numbers_rounded),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesCtrl,
+                  decoration:
+                      const InputDecoration(labelText: 'Reason / Notes'),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 20),
+                PrimaryButton(
+                  label: saving ? 'Saving...' : 'Apply Adjustment',
+                  loading: saving,
+                  icon: Icons.check_rounded,
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final qty = double.tryParse(qtyCtrl.text.trim());
+                          if (qty == null || qty <= 0) return;
+                          ss(() => saving = true);
+                          try {
+                            await api.post(
+                              '/inventory/stock-movements/',
+                              data: {
+                                'product': product['id'],
+                                'movement_type': movementType,
+                                'quantity': qty,
+                                'notes': notesCtrl.text.trim(),
+                              },
+                            );
+                            if (context.mounted) {
+                              Navigator.pop(ctx);
+                              _fetch();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Stock updated!'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: $e')));
+                            }
+                          }
+                          ss(() => saving = false);
+                        },
                 ),
                 const SizedBox(height: 16),
               ],

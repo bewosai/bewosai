@@ -16,12 +16,13 @@ class _PaymentsScreenState extends State<PaymentsScreen>
   late TabController _tabs;
   List _receivable = [];
   List _payable = [];
+  List _recentPayments = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _fetch();
   }
 
@@ -35,10 +36,19 @@ class _PaymentsScreenState extends State<PaymentsScreen>
     setState(() => _loading = true);
     final api = context.read<ApiService>();
     try {
-      final r1 = await api.get('/sales/', params: {'has_balance': true});
-      final r2 = await api.get('/purchases/', params: {'has_balance': true});
+      final r1 = await api
+          .get('/sales/', params: {'has_balance': true})
+          .then((r) => r)
+          .onError((_, __) => throw '');
       _receivable = (r1.data as List?) ?? [];
+    } catch (_) {}
+    try {
+      final r2 = await api.get('/purchases/', params: {'has_balance': true});
       _payable = (r2.data as List?) ?? [];
+    } catch (_) {}
+    try {
+      final r3 = await api.get('/parties/payments/');
+      _recentPayments = (r3.data as List?) ?? [];
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
   }
@@ -69,6 +79,13 @@ class _PaymentsScreenState extends State<PaymentsScreen>
           IconButton(
               icon: const Icon(Icons.refresh_rounded), onPressed: _fetch),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppColors.orange,
+        foregroundColor: Colors.white,
+        onPressed: () => _showRecordPaymentSheet(context, settings),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Record Payment'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -106,6 +123,7 @@ class _PaymentsScreenState extends State<PaymentsScreen>
                   labelColor: AppColors.orange,
                   unselectedLabelColor: AppColors.navy500,
                   indicatorColor: AppColors.orange,
+                  isScrollable: true,
                   tabs: [
                     Tab(
                       child: Row(
@@ -113,7 +131,7 @@ class _PaymentsScreenState extends State<PaymentsScreen>
                         children: [
                           const Icon(Icons.arrow_downward_rounded, size: 16),
                           const SizedBox(width: 4),
-                          Text('${settings.t('receivable')} (${_receivable.length})'),
+                          Text('Receivable (${_receivable.length})'),
                         ],
                       ),
                     ),
@@ -123,7 +141,17 @@ class _PaymentsScreenState extends State<PaymentsScreen>
                         children: [
                           const Icon(Icons.arrow_upward_rounded, size: 16),
                           const SizedBox(width: 4),
-                          Text('${settings.t('payable')} (${_payable.length})'),
+                          Text('Payable (${_payable.length})'),
+                        ],
+                      ),
+                    ),
+                    Tab(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.history_rounded, size: 16),
+                          const SizedBox(width: 4),
+                          Text('History (${_recentPayments.length})'),
                         ],
                       ),
                     ),
@@ -145,11 +173,227 @@ class _PaymentsScreenState extends State<PaymentsScreen>
                         type: 'payable',
                         onRefresh: _fetch,
                       ),
+                      _PaymentHistoryList(
+                        items: _recentPayments,
+                        settings: settings,
+                        onRefresh: _fetch,
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
+    );
+  }
+
+  void _showRecordPaymentSheet(BuildContext context, AppSettings settings) {
+    final amountCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+    String direction = 'IN';
+    String paymentMethod = 'CASH';
+    Map<String, dynamic>? selectedParty;
+    List<Map<String, dynamic>> parties = [];
+    bool saving = false;
+    bool loadingParties = true;
+
+    const methods = [
+      {'key': 'CASH', 'label': 'Cash'},
+      {'key': 'BANK', 'label': 'Bank'},
+      {'key': 'ESEWA', 'label': 'eSewa'},
+      {'key': 'KHALTI', 'label': 'Khalti'},
+      {'key': 'IME_PAY', 'label': 'IME Pay'},
+      {'key': 'MOBILE', 'label': 'Mobile'},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx2, ss) {
+          // Load parties once
+          if (loadingParties) {
+            loadingParties = false;
+            context.read<ApiService>().get('/parties/').then((res) {
+              if (ctx2.mounted) {
+                ss(() => parties = List<Map<String, dynamic>>.from(
+                    (res.data as List? ?? [])
+                        .map((e) => Map<String, dynamic>.from(e as Map))));
+              }
+            }).catchError((_) {});
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx2).viewInsets.bottom),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      height: 4,
+                      width: 40,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  const Text('Record Payment',
+                      style: TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 16),
+                  // Direction toggle
+                  Row(children: [
+                    for (final d in [
+                      ('IN', 'Payment In', Icons.arrow_downward_rounded, AppColors.success),
+                      ('OUT', 'Payment Out', Icons.arrow_upward_rounded, AppColors.error),
+                    ])
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => ss(() => direction = d.$1),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            margin: EdgeInsets.only(
+                                right: d.$1 == 'IN' ? 8 : 0),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 12),
+                            decoration: BoxDecoration(
+                              color: direction == d.$1
+                                  ? d.$4
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: direction == d.$1
+                                    ? d.$4
+                                    : AppColors.lightBorder,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(d.$3,
+                                    size: 16,
+                                    color: direction == d.$1
+                                        ? Colors.white
+                                        : d.$4),
+                                const SizedBox(width: 6),
+                                Text(d.$2,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: direction == d.$1
+                                          ? Colors.white
+                                          : d.$4,
+                                    )),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ]),
+                  const SizedBox(height: 16),
+                  // Party selector
+                  DropdownButtonFormField<Map<String, dynamic>>(
+                    value: selectedParty,
+                    decoration: InputDecoration(
+                      labelText: direction == 'IN'
+                          ? 'From Customer'
+                          : 'To Supplier',
+                      prefixIcon:
+                          const Icon(Icons.person_rounded),
+                    ),
+                    items: parties.map((p) {
+                      return DropdownMenuItem(
+                        value: p,
+                        child: Text(p['name']?.toString() ?? ''),
+                      );
+                    }).toList(),
+                    onChanged: (v) => ss(() => selectedParty = v),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Amount',
+                      prefixText: '${settings.currency} ',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: paymentMethod,
+                    decoration:
+                        const InputDecoration(labelText: 'Payment Method'),
+                    items: methods
+                        .map((m) => DropdownMenuItem(
+                              value: m['key'],
+                              child: Text(m['label']!),
+                            ))
+                        .toList(),
+                    onChanged: (v) => ss(() => paymentMethod = v!),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesCtrl,
+                    decoration:
+                        const InputDecoration(labelText: 'Notes (optional)'),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 20),
+                  PrimaryButton(
+                    label: saving ? 'Saving...' : 'Record Payment',
+                    loading: saving,
+                    icon: Icons.check_rounded,
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final amount =
+                                double.tryParse(amountCtrl.text.trim());
+                            if (amount == null || amount <= 0) return;
+                            ss(() => saving = true);
+                            try {
+                              await context.read<ApiService>().post(
+                                '/parties/payments/',
+                                data: {
+                                  'party': selectedParty?['id'],
+                                  'amount': amount,
+                                  'payment_method': paymentMethod,
+                                  'payment_type': direction,
+                                  'notes': notesCtrl.text.trim(),
+                                },
+                              );
+                              if (context.mounted) {
+                                Navigator.pop(ctx2);
+                                _fetch();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Payment recorded!'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error: $e')));
+                              }
+                            }
+                            ss(() => saving = false);
+                          },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -332,6 +576,115 @@ class _DueBillList extends StatelessWidget {
                               color: AppColors.error)),
                     ),
                 ],
+              ),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PaymentHistoryList extends StatelessWidget {
+  final List items;
+  final AppSettings settings;
+  final VoidCallback onRefresh;
+
+  const _PaymentHistoryList({
+    required this.items,
+    required this.settings,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return EmptyState(
+        icon: Icons.history_rounded,
+        message: 'No payment history yet.\nTap + to record a payment.',
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async => onRefresh(),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: items.length,
+        itemBuilder: (ctx, i) {
+          final item = items[i];
+          final amount =
+              double.tryParse(item['amount']?.toString() ?? '0') ?? 0;
+          final isIn = (item['payment_type']?.toString() ?? 'IN') == 'IN';
+          final method = item['payment_method']?.toString() ?? '';
+          final partyName = item['party_name']?.toString() ??
+              item['party']?.toString() ?? '';
+          final date = item['created_at']?.toString() ??
+              item['date']?.toString() ?? '';
+
+          return AppCard(
+            padding: const EdgeInsets.all(14),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isIn ? AppColors.successLight : AppColors.errorLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isIn
+                      ? Icons.arrow_downward_rounded
+                      : Icons.arrow_upward_rounded,
+                  color: isIn ? AppColors.success : AppColors.error,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isIn ? 'Payment In' : 'Payment Out',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                    if (partyName.isNotEmpty)
+                      Text(partyName,
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.navy500)),
+                    Row(children: [
+                      if (method.isNotEmpty) ...[
+                        Container(
+                          margin: const EdgeInsets.only(top: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.navy50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(method,
+                              style: const TextStyle(
+                                  fontSize: 10, color: AppColors.navy500)),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      if (date.isNotEmpty)
+                        Text(
+                          date.length > 10 ? date.substring(0, 10) : date,
+                          style: const TextStyle(
+                              fontSize: 10, color: AppColors.navy500),
+                        ),
+                    ]),
+                  ],
+                ),
+              ),
+              Text(
+                '${isIn ? '+' : '-'}${settings.formatAmount(amount)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  color: isIn ? AppColors.success : AppColors.error,
+                ),
               ),
             ]),
           );

@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_settings.dart';
 import '../../providers/business_provider.dart';
 import '../../widgets/app_widgets.dart';
+import 'invoice_detail_screen.dart';
 
 class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
@@ -177,7 +178,10 @@ class _SalesList extends StatelessWidget {
           final balance = amount - paid;
 
           return AppCard(
-            onTap: () => _showSaleDetail(ctx, s, settings),
+            onTap: () => Navigator.of(ctx).push(MaterialPageRoute(
+              builder: (_) => InvoiceDetailScreen(
+                  sale: Map<String, dynamic>.from(s as Map)),
+            )),
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,25 +246,6 @@ class _SalesList extends StatelessWidget {
     );
   }
 
-  void _showSaleDetail(BuildContext context, Map s, AppSettings settings) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        maxChildSize: 0.95,
-        builder: (_, ctrl) => _SaleDetailSheet(
-          sale: s,
-          settings: settings,
-          controller: ctrl,
-          onRefresh: onRefresh,
-        ),
-      ),
-    );
-  }
 }
 
 class _ReturnsList extends StatelessWidget {
@@ -353,140 +338,6 @@ class _InfoChip extends StatelessWidget {
                   color: color)),
         ],
       ),
-    );
-  }
-}
-
-class _SaleDetailSheet extends StatelessWidget {
-  final Map sale;
-  final AppSettings settings;
-  final ScrollController controller;
-  final VoidCallback onRefresh;
-  const _SaleDetailSheet(
-      {required this.sale,
-      required this.settings,
-      required this.controller,
-      required this.onRefresh});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = (sale['items'] as List?) ?? [];
-    final amount =
-        double.tryParse(sale['total_amount']?.toString() ?? '0') ?? 0;
-    final paid =
-        double.tryParse(sale['paid_amount']?.toString() ?? '0') ?? 0;
-
-    return ListView(
-      controller: controller,
-      padding: const EdgeInsets.all(20),
-      children: [
-        // Handle
-        Center(
-          child: Container(
-            height: 4,
-            width: 40,
-            decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2)),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(sale['bill_number'] ?? '—',
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text(sale['party_name'] ?? '',
-                  style: const TextStyle(
-                      fontSize: 14, color: AppColors.navy500)),
-            ]),
-          ),
-          StatusBadge(status: sale['status'] ?? 'DRAFT'),
-        ]),
-        const Divider(height: 24),
-        // Items
-        ...items.map((item) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(children: [
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(item['product_name'] ?? '',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 13)),
-                        Text(
-                            '${item['quantity']} × ${settings.formatAmount(double.tryParse(item['unit_price']?.toString() ?? '0') ?? 0)}',
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.navy500)),
-                      ]),
-                ),
-                Text(
-                  settings.formatAmount(
-                      double.tryParse(item['total']?.toString() ?? '0') ?? 0),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 13),
-                ),
-              ]),
-            )),
-        const Divider(height: 20),
-        Row(children: [
-          Expanded(
-              child: Text(settings.t('total'),
-                  style: const TextStyle(fontWeight: FontWeight.w700))),
-          Text(settings.formatAmount(amount),
-              style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w800)),
-        ]),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(
-              child: Text(settings.t('paid'),
-                  style: const TextStyle(
-                      color: AppColors.navy500, fontSize: 13))),
-          Text(settings.formatAmount(paid),
-              style: const TextStyle(
-                  color: AppColors.success, fontWeight: FontWeight.w700)),
-        ]),
-        const SizedBox(height: 4),
-        Row(children: [
-          Expanded(
-              child: Text(settings.t('balance'),
-                  style: const TextStyle(
-                      color: AppColors.navy500, fontSize: 13))),
-          Text(settings.formatAmount(amount - paid),
-              style: TextStyle(
-                  color: amount - paid > 0
-                      ? AppColors.error
-                      : AppColors.success,
-                  fontWeight: FontWeight.w700)),
-        ]),
-        const SizedBox(height: 20),
-        // Actions
-        Row(children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.print_rounded, size: 18),
-              label: Text(settings.t('print_invoice')),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF25D366),
-                  foregroundColor: Colors.white),
-              onPressed: () {},
-              icon: const Icon(Icons.share_rounded, size: 18),
-              label: Text(settings.t('share_whatsapp')),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 8),
-      ],
     );
   }
 }

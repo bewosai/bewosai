@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_settings.dart';
 import '../../../data/services/api_service.dart';
 import '../../widgets/app_widgets.dart';
+import 'party_ledger_screen.dart';
 
 class PartiesScreen extends StatefulWidget {
   const PartiesScreen({super.key});
@@ -398,7 +399,9 @@ class _PartyList extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    balance > 0 ? 'Receivable' : (balance < 0 ? 'Payable' : 'Settled'),
+                    balance > 0
+                        ? 'Receivable'
+                        : (balance < 0 ? 'Payable' : 'Settled'),
                     style: TextStyle(
                       fontSize: 10,
                       color: balance > 0
@@ -406,6 +409,32 @@ class _PartyList extends StatelessWidget {
                           : (balance < 0
                               ? AppColors.warning
                               : AppColors.success),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () => Navigator.of(ctx).push(
+                      MaterialPageRoute(
+                        builder: (_) => PartyLedgerScreen(party: Map<String, dynamic>.from(p as Map)),
+                      ),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.orange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(children: [
+                        Icon(Icons.book_rounded,
+                            size: 12, color: AppColors.orange),
+                        SizedBox(width: 4),
+                        Text('Ledger',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: AppColors.orange,
+                                fontWeight: FontWeight.w600)),
+                      ]),
                     ),
                   ),
                 ],

@@ -15,6 +15,7 @@ import '../presentation/screens/settings/settings_screen.dart';
 import '../presentation/screens/staff/staff_screen.dart';
 import '../presentation/screens/payments/payments_screen.dart';
 import '../presentation/screens/recycle_bin/recycle_bin_screen.dart';
+import '../presentation/screens/banking/banking_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 final _shellKey = GlobalKey<NavigatorState>();
@@ -93,7 +94,10 @@ GoRouter createRouter(AuthProvider auth) {
             path: '/payments',
             builder: (_, __) => const PaymentsScreen(),
           ),
-          // Personal dashboard (same as main dashboard for now)
+          GoRoute(
+            path: '/banking',
+            builder: (_, __) => const BankingScreen(),
+          ),
           GoRoute(
             path: '/personal-dashboard',
             builder: (_, __) => const DashboardScreen(),

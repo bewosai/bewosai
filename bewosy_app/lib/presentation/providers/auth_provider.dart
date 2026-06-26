@@ -5,13 +5,11 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/constants/app_constants.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/business_model.dart';
-import '../../data/services/api_service.dart';
 import '../../domain/usecases/auth_usecases.dart';
 import '../../domain/repositories/auth_repository.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _repo;
-  final ApiService _api;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   // Use-cases
@@ -26,7 +24,7 @@ class AuthProvider extends ChangeNotifier {
   bool _loading = false;
   String? _error;
 
-  AuthProvider(this._repo, this._api) {
+  AuthProvider(this._repo) {
     _sendOtpUc = SendOtpUseCase(_repo);
     _verifyOtpUc = VerifyOtpUseCase(_repo);
     _setAccountTypeUc = SetAccountTypeUseCase(_repo);
