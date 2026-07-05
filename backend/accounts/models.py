@@ -97,6 +97,11 @@ class Business(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     logo = models.ImageField(upload_to="business_logos/", null=True, blank=True)
+    # Nepal tax registration
+    pan_number = models.CharField(max_length=20, blank=True)
+    vat_number = models.CharField(max_length=20, blank=True)
+    currency = models.CharField(max_length=5, default="NPR")
+    fiscal_year_start = models.CharField(max_length=5, default="07-16", help_text="MM-DD, Nepal fiscal year starts mid-July")
     plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default=PLAN_FREE)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
     subscription_expires = models.DateField(null=True, blank=True)

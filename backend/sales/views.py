@@ -1,22 +1,34 @@
+import re
+from datetime import date
+
 from rest_framework import generics, filters, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Sum
-from .models import Sale, SaleReturn, Quotation
+
+from bewosy.utils import get_bid
+from .models import Sale, SaleItem, SaleReturn, Quotation
 from .serializers import SaleSerializer, SaleReturnSerializer, QuotationSerializer
-import re
-from datetime import date
 
 
-def next_invoice_number(business_id):
-    last = Sale.objects.filter(business_id=business_id).order_by("-created_at").first()
+def _next_invoice_number(business_id):
+    last = Sale.objects.filter(business_id=business_id).order_by("-id").first()
     if last:
-        match = re.search(r"(\d+)$", last.invoice_number)
-        num = int(match.group(1)) + 1 if match else 1
+        m = re.search(r"(\d+)$", last.invoice_number)
+        num = int(m.group(1)) + 1 if m else 1
     else:
         num = 1
     return f"INV-{num:04d}"
+
+
+def _next_quotation_number(business_id):
+    last = Quotation.objects.filter(business_id=business_id).order_by("-id").first()
+    if last:
+        m = re.search(r"(\d+)$", last.quotation_number)
+        num = int(m.group(1)) + 1 if m else 1
+    else:
+        num = 1
+    return f"QUO-{num:04d}"
 
 
 class SaleListCreateView(generics.ListCreateAPIView):
@@ -27,8 +39,13 @@ class SaleListCreateView(generics.ListCreateAPIView):
     ordering_fields = ["sale_date", "total", "created_at"]
 
     def get_queryset(self):
-        bid = self.request.query_params.get("business")
-        qs = Sale.objects.filter(business_id=bid, business__staff__user=self.request.user, is_deleted=False)
+        bid = get_bid(self.request)
+        qs = Sale.objects.filter(
+            business_id=bid,
+            business__staff__user=self.request.user,
+            business__staff__is_active=True,
+            is_deleted=False,
+        ).select_related("customer", "created_by")
         date_from = self.request.query_params.get("date_from")
         date_to = self.request.query_params.get("date_to")
         if date_from:
@@ -38,28 +55,46 @@ class SaleListCreateView(generics.ListCreateAPIView):
         return qs
 
     def perform_create(self, serializer):
-        bid = self.request.data.get("business")
-        inv = self.request.data.get("invoice_number") or next_invoice_number(bid)
-        serializer.save(business_id=bid, invoice_number=inv, created_by=self.request.user)
+        bid = get_bid(self.request)
+        inv = self.request.data.get("invoice_number") or _next_invoice_number(bid)
+        serializer.save(
+            business_id=bid,
+            invoice_number=inv,
+            created_by=self.request.user,
+        )
 
 
 class SaleDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = SaleSerializer
 
     def get_queryset(self):
-        bid = self.request.query_params.get("business")
-        return Sale.objects.filter(business_id=bid, business__staff__user=self.request.user)
+        bid = get_bid(self.request)
+        return Sale.objects.filter(
+            business_id=bid,
+            business__staff__user=self.request.user,
+            business__staff__is_active=True,
+        ).select_related("customer")
+
+    def perform_destroy(self, instance):
+        from django.utils import timezone
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=["is_deleted", "deleted_at"])
 
 
 class SaleReturnListCreateView(generics.ListCreateAPIView):
     serializer_class = SaleReturnSerializer
 
     def get_queryset(self):
-        bid = self.request.query_params.get("business")
-        return SaleReturn.objects.filter(business_id=bid, business__staff__user=self.request.user)
+        bid = get_bid(self.request)
+        return SaleReturn.objects.filter(
+            business_id=bid,
+            business__staff__user=self.request.user,
+            business__staff__is_active=True,
+        )
 
     def perform_create(self, serializer):
-        bid = self.request.data.get("business")
+        bid = get_bid(self.request)
         serializer.save(business_id=bid, created_by=self.request.user)
 
 
@@ -70,13 +105,16 @@ class QuotationListCreateView(generics.ListCreateAPIView):
     search_fields = ["quotation_number", "customer__name"]
 
     def get_queryset(self):
-        bid = self.request.query_params.get("business")
-        return Quotation.objects.filter(business_id=bid, business__staff__user=self.request.user)
+        bid = get_bid(self.request)
+        return Quotation.objects.filter(
+            business_id=bid,
+            business__staff__user=self.request.user,
+            business__staff__is_active=True,
+        ).select_related("customer")
 
     def perform_create(self, serializer):
-        bid = self.request.data.get("business")
-        last = Quotation.objects.filter(business_id=bid).count() + 1
-        qnum = f"QUO-{last:04d}"
+        bid = get_bid(self.request)
+        qnum = _next_quotation_number(bid)
         serializer.save(business_id=bid, quotation_number=qnum, created_by=self.request.user)
 
 
@@ -84,5 +122,9 @@ class QuotationDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = QuotationSerializer
 
     def get_queryset(self):
-        bid = self.request.query_params.get("business")
-        return Quotation.objects.filter(business_id=bid, business__staff__user=self.request.user)
+        bid = get_bid(self.request)
+        return Quotation.objects.filter(
+            business_id=bid,
+            business__staff__user=self.request.user,
+            business__staff__is_active=True,
+        )

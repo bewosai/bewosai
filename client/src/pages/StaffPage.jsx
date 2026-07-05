@@ -5,7 +5,8 @@ import PageHeader from "../components/shared/PageHeader";
 import SectionCard from "../components/shared/SectionCard";
 import PrimaryButton from "../components/shared/PrimaryButton";
 import { auth as authApi } from "../api";
-import { UserCheck, Plus, Shield, Eye, X, Crown, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { UserCheck, Plus, Shield, Eye, X, Crown, ChevronDown, ChevronUp, Check, Edit2, Trash2 } from "lucide-react";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 
 const ROLE_META = {
   OWNER:   { label: "Owner",   icon: Crown,      color: "text-orange-400 bg-orange-500/10" },
@@ -248,6 +249,89 @@ function InviteModal({ businessId, onClose, onSaved }) {
   );
 }
 
+function EditRoleModal({ businessId, member, onClose, onSaved }) {
+  const { t } = useTranslation();
+  const [role, setRole] = useState(member.role);
+  const [permissions, setPermissions] = useState(
+    member.permissions && Object.keys(member.permissions).length
+      ? member.permissions
+      : DEFAULT_PERMISSIONS[member.role] || DEFAULT_PERMISSIONS.CASHIER
+  );
+  const [showPerms, setShowPerms] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const handleRoleChange = (r) => {
+    setRole(r);
+    setPermissions(DEFAULT_PERMISSIONS[r] || DEFAULT_PERMISSIONS.CASHIER);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await authApi.updateStaff(businessId, member.id, { role, permissions });
+      onSaved();
+    } catch (er) {
+      setErr(er.response?.data?.detail || "Failed to update role.");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-2xl rounded-2xl border border-navy-700 bg-navy-900 p-6 max-h-[90vh] overflow-y-auto">
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-white">Edit Role: {member.user_name}</h2>
+            <p className="text-xs text-navy-400 mt-0.5">{member.user_email}</p>
+          </div>
+          <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
+        </div>
+        {err && <p className="mb-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <p className="mb-2 text-xs font-medium text-navy-400">{t("role")}</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {Object.entries(ROLE_META).filter(([k]) => k !== "OWNER").map(([key, meta]) => {
+                const Icon = meta.icon;
+                const selected = role === key;
+                return (
+                  <button key={key} type="button" onClick={() => handleRoleChange(key)}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition ${
+                      selected ? "border-orange-500 bg-orange-500/10" : "border-navy-700 bg-navy-950 hover:border-navy-600"
+                    }`}
+                  >
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${meta.color}`}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <p className="text-xs font-semibold text-white">{t(key.toLowerCase())}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <button type="button" onClick={() => setShowPerms(s => !s)}
+              className="flex w-full items-center justify-between rounded-xl border border-navy-700 bg-navy-950 px-4 py-2.5 text-sm text-white hover:border-orange-500/50">
+              <span className="font-medium">{t("permissionMatrix")}</span>
+              {showPerms ? <ChevronUp className="h-4 w-4 text-navy-400" /> : <ChevronDown className="h-4 w-4 text-navy-400" />}
+            </button>
+            {showPerms && (
+              <div className="mt-2">
+                <PermissionMatrix permissions={permissions} onChange={setPermissions} readonly={false} />
+              </div>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <PrimaryButton type="submit" className="flex-1" disabled={saving}>{saving ? "Saving…" : "Save Changes"}</PrimaryButton>
+            <PrimaryButton type="button" variant="outline" onClick={onClose}>{t("cancel")}</PrimaryButton>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function ViewPermissionsModal({ member, onClose }) {
   const { t } = useTranslation();
   const meta = ROLE_META[member.role] || ROLE_META.VIEWER;
@@ -290,6 +374,8 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [viewingPerms, setViewingPerms] = useState(null);
+  const [editingMember, setEditingMember] = useState(null);
+  const [removingMember, setRemovingMember] = useState(null);
 
   const load = () => {
     if (!currentBusiness?.id) return;
@@ -352,19 +438,31 @@ export default function StaffPage() {
                       <p className="text-xs text-navy-400">{member.user_email}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
                     <span className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${meta.color}`}>
                       <Icon className="h-3 w-3" /> {meta.label}
                     </span>
                     <span className={`rounded-lg px-2 py-1 text-xs ${member.is_active ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
                       {member.is_active ? t("active") : t("inactive")}
                     </span>
-                    <button
-                      onClick={() => setViewingPerms(member)}
-                      className="rounded-lg border border-navy-700 px-2.5 py-1 text-xs text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400"
-                    >
+                    <button onClick={() => setViewingPerms(member)}
+                      className="rounded-lg border border-navy-700 px-2.5 py-1 text-xs text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400">
                       {t("permissions")}
                     </button>
+                    {member.role !== "OWNER" && (
+                      <>
+                        <button onClick={() => setEditingMember(member)}
+                          className="rounded-lg border border-navy-700 p-1.5 text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400"
+                          title="Edit role">
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => setRemovingMember(member)}
+                          className="rounded-lg border border-navy-700 p-1.5 text-navy-300 transition hover:border-red-500/50 hover:text-red-400"
+                          title="Remove staff">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -389,6 +487,25 @@ export default function StaffPage() {
 
       {viewingPerms && (
         <ViewPermissionsModal member={viewingPerms} onClose={() => setViewingPerms(null)} />
+      )}
+      {editingMember && (
+        <EditRoleModal
+          businessId={currentBusiness?.id}
+          member={editingMember}
+          onClose={() => setEditingMember(null)}
+          onSaved={() => { setEditingMember(null); load(); }}
+        />
+      )}
+      {removingMember && (
+        <ConfirmDialog
+          message={`Remove ${removingMember.user_name} from this business? They will lose access immediately.`}
+          onConfirm={async () => {
+            try { await authApi.removeStaff(currentBusiness?.id, removingMember.id); } catch {}
+            setRemovingMember(null);
+            load();
+          }}
+          onCancel={() => setRemovingMember(null)}
+        />
       )}
     </div>
   );

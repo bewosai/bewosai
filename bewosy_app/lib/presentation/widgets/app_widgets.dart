@@ -117,15 +117,22 @@ class PrimaryButton extends StatelessWidget {
                 child: CircularProgressIndicator(
                     color: Colors.white, strokeWidth: 2),
               )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (icon != null) ...[
-                    Icon(icon, size: 18),
-                    const SizedBox(width: 8),
+            : ClipRect(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (icon != null) ...[
+                      Icon(icon, size: 18),
+                      const SizedBox(width: 8),
+                    ],
+                    Flexible(
+                      child: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
-                  Text(label),
-                ],
+                ),
               ),
       ),
     );

@@ -5,7 +5,8 @@ class SendOtpUseCase {
   final AuthRepository _repo;
   SendOtpUseCase(this._repo);
 
-  Future<Map<String, dynamic>> call(String email) => _repo.sendOtp(email);
+  Future<Map<String, dynamic>> call(String email, {bool isSignup = false}) =>
+      _repo.sendOtp(email, isSignup: isSignup);
 }
 
 class VerifyOtpUseCase {

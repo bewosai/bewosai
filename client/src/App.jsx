@@ -25,6 +25,7 @@ import SettingsPage from "./pages/SettingsPage";
 import RecycleBinPage from "./pages/RecycleBinPage";
 import QuotationPage from "./pages/QuotationPage";
 import SalesReturnPage from "./pages/SalesReturnPage";
+import ImportPage from "./pages/ImportPage";
 
 // Personal layout + pages
 import PersonalLayout from "./components/layout/PersonalLayout";
@@ -95,6 +96,7 @@ export default function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/recycle-bin" element={<RecycleBinPage />} />
+        <Route path="/import" element={<ImportPage />} />
         <Route path="/superadmin" element={<SuperAdminPage />} />
       </Route>
 

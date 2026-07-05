@@ -3,21 +3,30 @@ from accounts.models import Business, User
 
 
 class BankAccount(models.Model):
-    TYPE_SAVINGS = "SAVINGS"
-    TYPE_CURRENT = "CURRENT"
-    TYPE_CASH = "CASH"
+    TYPE_CASH           = "CASH"
+    TYPE_BANK           = "BANK"
+    TYPE_ESEWA          = "ESEWA"
+    TYPE_KHALTI         = "KHALTI"
+    TYPE_IME_PAY        = "IME_PAY"
+    TYPE_MOBILE_BANKING = "MOBILE_BANKING"
+    TYPE_OTHER          = "OTHER"
     TYPE_CHOICES = [
-        (TYPE_SAVINGS, "Savings"),
-        (TYPE_CURRENT, "Current"),
-        (TYPE_CASH, "Cash"),
+        (TYPE_CASH,           "Cash"),
+        (TYPE_BANK,           "Bank"),
+        (TYPE_ESEWA,          "eSewa"),
+        (TYPE_KHALTI,         "Khalti"),
+        (TYPE_IME_PAY,        "IME Pay"),
+        (TYPE_MOBILE_BANKING, "Mobile Banking"),
+        (TYPE_OTHER,          "Other"),
     ]
 
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="bank_accounts")
     account_name = models.CharField(max_length=150)
     bank_name = models.CharField(max_length=150, blank=True)
     account_number = models.CharField(max_length=50, blank=True)
-    account_type = models.CharField(max_length=15, choices=TYPE_CHOICES, default=TYPE_CURRENT)
+    account_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_CASH)
     opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    qr_code = models.ImageField(upload_to="banking/qr/", null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

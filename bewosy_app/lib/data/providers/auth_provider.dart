@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user_model.dart';
@@ -44,13 +45,15 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<Map<String, dynamic>> sendOtp(String email) async {
+  Future<Map<String, dynamic>> sendOtp(String email, {bool isSignup = false}) async {
     _loading = true;
     _error = null;
     notifyListeners();
     try {
-      final res =
-          await _api.post('/auth/send-otp/', data: {'email': email});
+      final res = await _api.post('/auth/send-otp/', data: {
+        'email': email,
+        'is_signup': isSignup,
+      });
       return {
         'ok': true,
         'user_exists': res.data['user_exists'] ?? false,
@@ -58,7 +61,11 @@ class AuthProvider extends ChangeNotifier {
       };
     } catch (e) {
       _error = _parseError(e);
-      return {'ok': false, 'error': _error};
+      bool userExists = false;
+      if (e is DioException && e.response?.data is Map) {
+        userExists = (e.response!.data['user_exists'] ?? false) == true;
+      }
+      return {'ok': false, 'error': _error, 'user_exists': userExists};
     } finally {
       _loading = false;
       notifyListeners();
@@ -160,12 +167,5 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _parseError(dynamic e) {
-    try {
-      if (e is Exception) return e.toString().replaceAll('Exception: ', '');
-      return 'An error occurred. Please try again.';
-    } catch (_) {
-      return 'An error occurred.';
-    }
-  }
+  String _parseError(dynamic e) => ApiService.errorMessage(e);
 }

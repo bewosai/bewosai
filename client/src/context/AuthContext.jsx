@@ -16,17 +16,21 @@ export function AuthProvider({ children }) {
   const isLoggedIn = !!user && !!localStorage.getItem("access");
 
   /** Step 1: send OTP — no account type needed */
-  const sendOtp = useCallback(async (email) => {
+  const sendOtp = useCallback(async (email, isSignup = false) => {
     setLoading(true);
     try {
-      const { data } = await authApi.sendOtp(email);
+      const { data } = await authApi.sendOtp(email, isSignup);
       return {
         ok: true,
         otp: data.otp,           // dev mode only
         userExists: data.user_exists,
       };
     } catch (err) {
-      return { ok: false, error: err.response?.data?.error || "Failed to send OTP." };
+      return {
+        ok: false,
+        error: err.response?.data?.error || "Failed to send OTP.",
+        userExists: err.response?.data?.user_exists || false,
+      };
     } finally {
       setLoading(false);
     }

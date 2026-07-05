@@ -7,8 +7,9 @@ import { usePrivateAmount } from "../context/AppSettingsContext";
 import { inventory as inventoryApi } from "../api";
 import {
   Package, Plus, Search, AlertTriangle, X, Tag,
-  Layers, Ruler, ChevronDown, ChevronUp, Edit2, ArrowUpDown,
+  Layers, Ruler, ChevronDown, ChevronUp, Edit2, ArrowUpDown, Trash2,
 } from "lucide-react";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 
 /* ── Field style ── */
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500";
@@ -106,12 +107,60 @@ function UnitModal({ onClose, onSaved, units }) {
   );
 }
 
+/* ── Add category modal ── */
+function CategoryModal({ onClose, onSaved, categories }) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const bid = localStorage.getItem("business_id");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) { setErr("Category name is required."); return; }
+    setSaving(true);
+    try {
+      await inventoryApi.createCategory({ name: name.trim(), business: bid });
+      onSaved();
+    } catch (er) {
+      setErr(er.response?.data?.name?.[0] || "Failed to save category.");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-navy-700 bg-navy-900 p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-bold text-white">Add Category</h2>
+          <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
+        </div>
+        {err && <p className="mb-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
+        {categories.length > 0 && (
+          <div className="mb-4">
+            <p className="mb-2 text-xs text-navy-400">Existing categories</p>
+            <div className="flex flex-wrap gap-1.5">
+              {categories.map(c => (
+                <span key={c.id} className="rounded-lg border border-navy-700 bg-navy-950 px-2.5 py-1 text-xs text-white">{c.name}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        <form onSubmit={submit} className="space-y-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Category name *" className={F} />
+          <div className="flex gap-3">
+            <PrimaryButton type="submit" className="flex-1" disabled={saving}>{saving ? "Saving…" : "Add Category"}</PrimaryButton>
+            <PrimaryButton type="button" variant="outline" onClick={onClose}>Cancel</PrimaryButton>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ── Add/Edit product modal ── */
 function ProductModal({ onClose, onSaved, categories, units, initial }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({
-    name: "", category: "", unit: "",
-    purchase_price: "", sale_price: "",
+    name: "", purchase_price: "", sale_price: "",
     stock_quantity: "", low_stock_threshold: "5",
     barcode: "", description: "",
     ...initial,
@@ -221,8 +270,114 @@ function ProductModal({ onClose, onSaved, categories, units, initial }) {
   );
 }
 
+/* ── Stock Adjustment Modal ── */
+function StockAdjustModal({ product, onClose, onSaved }) {
+  const bid = localStorage.getItem("business_id");
+  const [form, setForm] = useState({ movement_type: "IN", quantity: "", note: "" });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const TYPES = [
+    { value: "IN",          label: "Stock In",      color: "bg-green-500/10 text-green-400" },
+    { value: "OPENING",     label: "Opening Stock", color: "bg-orange-500/10 text-orange-400" },
+    { value: "ADJUSTMENT",  label: "Adjustment",    color: "bg-blue-500/10 text-blue-400" },
+    { value: "DAMAGE",      label: "Damage",        color: "bg-red-500/10 text-red-400" },
+    { value: "LOST",        label: "Lost",          color: "bg-red-500/10 text-red-400" },
+    { value: "OUT",         label: "Manual Out",    color: "bg-navy-700/50 text-navy-300" },
+    { value: "TRANSFER",    label: "Transfer Out",  color: "bg-purple-500/10 text-purple-400" },
+  ];
+
+  const isNegative = ["OUT", "DAMAGE", "LOST", "TRANSFER"].includes(form.movement_type);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.quantity || parseFloat(form.quantity) <= 0) { setErr("Enter a valid quantity."); return; }
+    setSaving(true);
+    try {
+      const qty = isNegative ? -Math.abs(parseFloat(form.quantity)) : Math.abs(parseFloat(form.quantity));
+      await inventoryApi.addStockMovement({
+        product: product.id,
+        movement_type: form.movement_type,
+        quantity: qty,
+        note: form.note,
+        business: bid,
+      });
+      onSaved();
+    } catch (e) {
+      setErr(e.response?.data?.detail || "Failed to save adjustment.");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-navy-700 bg-navy-900 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-navy-800 px-5 py-4">
+          <div>
+            <h2 className="font-bold text-white">Stock Adjustment</h2>
+            <p className="text-xs text-navy-400 mt-0.5">{product.name} · Current: {product.stock_quantity} {product.unit_name || "units"}</p>
+          </div>
+          <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
+        </div>
+        <form onSubmit={submit} className="p-5 space-y-4">
+          {err && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
+
+          {/* Type selector grid */}
+          <div>
+            <p className="mb-2 text-xs font-semibold text-navy-400">Adjustment Type</p>
+            <div className="grid grid-cols-2 gap-2">
+              {TYPES.map(t => (
+                <button
+                  key={t.value} type="button"
+                  onClick={() => setForm(f => ({ ...f, movement_type: t.value }))}
+                  className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                    form.movement_type === t.value
+                      ? `${t.color} border-current`
+                      : "border-navy-700 text-navy-400 hover:border-navy-600"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-semibold text-navy-400">
+              Quantity {isNegative ? "(to subtract)" : "(to add)"} *
+            </p>
+            <input
+              type="number" min="0.001" step="0.001"
+              className={F}
+              placeholder="0"
+              value={form.quantity}
+              onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-semibold text-navy-400">Note / Reason</p>
+            <textarea
+              rows={2} className={`${F} resize-none`}
+              placeholder="Reason for adjustment…"
+              value={form.note}
+              onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <PrimaryButton type="submit" className="flex-1" disabled={saving}>
+              {saving ? "Saving…" : "Save Adjustment"}
+            </PrimaryButton>
+            <PrimaryButton type="button" variant="outline" onClick={onClose}>Cancel</PrimaryButton>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ── Responsive product row / card ── */
-function ProductCard({ product, onEdit }) {
+function ProductCard({ product, onEdit, onAdjust, onDelete }) {
   const maskAmount = usePrivateAmount();
   const lowStock = product.is_low_stock;
   const unit = product.unit_name || "";
@@ -258,7 +413,7 @@ function ProductCard({ product, onEdit }) {
         </div>
       </div>
 
-      {/* Prices row (hidden on very small screens) */}
+      {/* Prices row */}
       <div className="mt-2 flex items-center justify-between">
         <div className="flex gap-3 text-xs">
           <span className="text-navy-400">
@@ -268,10 +423,20 @@ function ProductCard({ product, onEdit }) {
             Sell: {maskAmount(parseFloat(product.sale_price), (v) => `Rs. ${v.toLocaleString()}`)}
           </span>
         </div>
-        <button onClick={() => onEdit(product)}
-          className="flex items-center gap-1 rounded-lg border border-navy-700 px-2.5 py-1 text-xs text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400">
-          <Edit2 className="h-3 w-3" /> Edit
-        </button>
+        <div className="flex gap-1.5">
+          <button onClick={() => onAdjust(product)}
+            className="flex items-center gap-1 rounded-lg border border-navy-700 px-2.5 py-1 text-xs text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400">
+            <Layers className="h-3 w-3" /> Adjust
+          </button>
+          <button onClick={() => onEdit(product)}
+            className="flex items-center gap-1 rounded-lg border border-navy-700 px-2.5 py-1 text-xs text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400">
+            <Edit2 className="h-3 w-3" /> Edit
+          </button>
+          <button onClick={() => onDelete(product)}
+            className="flex items-center gap-1 rounded-lg border border-navy-700 px-2.5 py-1 text-xs text-navy-300 transition hover:border-red-500/50 hover:text-red-400">
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -288,7 +453,10 @@ export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState("products"); // products | units | categories
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showAddUnit, setShowAddUnit] = useState(false);
+  const [showAddCategory, setShowAddCategory] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [adjustingProduct, setAdjustingProduct] = useState(null);
+  const [deletingProduct, setDeletingProduct] = useState(null);
 
   const load = () => {
     const bid = localStorage.getItem("business_id");
@@ -320,6 +488,9 @@ export default function InventoryPage() {
         subtitle="Manage products, categories, units, and stock levels."
         action={
           <div className="flex gap-2">
+            <PrimaryButton variant="outline" onClick={() => setShowAddCategory(true)}>
+              <Tag className="h-4 w-4" /> Category
+            </PrimaryButton>
             <PrimaryButton variant="outline" onClick={() => setShowAddUnit(true)}>
               <Ruler className="h-4 w-4" /> Unit
             </PrimaryButton>
@@ -389,7 +560,10 @@ export default function InventoryPage() {
             <div className="space-y-2">
               {filtered.map((p) => (
                 <ProductCard key={p.id} product={p}
-                  onEdit={(prod) => { setEditingProduct(prod); setShowAddProduct(true); }} />
+                  onEdit={(prod) => { setEditingProduct(prod); setShowAddProduct(true); }}
+                  onAdjust={(prod) => setAdjustingProduct(prod)}
+                  onDelete={(prod) => setDeletingProduct(prod)}
+                />
               ))}
             </div>
           ) : (
@@ -460,9 +634,19 @@ export default function InventoryPage() {
 
       {/* Categories tab */}
       {activeTab === "categories" && (
-        <SectionCard title={`Categories (${categories.length})`}>
+        <SectionCard title={`Categories (${categories.length})`}
+          action={
+            <PrimaryButton onClick={() => setShowAddCategory(true)}>
+              <Plus className="h-4 w-4" /> Add Category
+            </PrimaryButton>
+          }
+        >
           {categories.length === 0 ? (
-            <p className="py-6 text-center text-sm text-navy-400">No categories yet.</p>
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <Tag className="h-12 w-12 text-navy-700" />
+              <p className="text-sm text-navy-400">No categories yet.</p>
+              <PrimaryButton onClick={() => setShowAddCategory(true)}><Plus className="h-4 w-4" /> Add Category</PrimaryButton>
+            </div>
           ) : (
             <div className="flex flex-wrap gap-2 py-2">
               {categories.map((c) => (
@@ -490,6 +674,31 @@ export default function InventoryPage() {
           units={units}
           onClose={() => setShowAddUnit(false)}
           onSaved={() => { setShowAddUnit(false); load(); }}
+        />
+      )}
+      {showAddCategory && (
+        <CategoryModal
+          categories={categories}
+          onClose={() => setShowAddCategory(false)}
+          onSaved={() => { setShowAddCategory(false); load(); }}
+        />
+      )}
+      {adjustingProduct && (
+        <StockAdjustModal
+          product={adjustingProduct}
+          onClose={() => setAdjustingProduct(null)}
+          onSaved={() => { setAdjustingProduct(null); load(); }}
+        />
+      )}
+      {deletingProduct && (
+        <ConfirmDialog
+          message={`Delete product "${deletingProduct.name}"? It will be moved to Recycle Bin.`}
+          onConfirm={async () => {
+            try { await inventoryApi.deleteProduct(deletingProduct.id); } catch {}
+            setDeletingProduct(null);
+            load();
+          }}
+          onCancel={() => setDeletingProduct(null)}
         />
       )}
     </div>

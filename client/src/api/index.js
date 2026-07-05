@@ -45,7 +45,7 @@ api.interceptors.response.use(
 );
 
 export const auth = {
-  sendOtp: (email) => api.post("/auth/send-otp/", { email }),
+  sendOtp: (email, isSignup = false) => api.post("/auth/send-otp/", { email, is_signup: isSignup }),
   verifyOtp: (email, code, remember) =>
     api.post("/auth/verify-otp/", { email, code, remember }),
   setAccountType: (accountType) => api.post("/auth/set-account-type/", { account_type: accountType }),
@@ -65,6 +65,7 @@ export const inventory = {
   createProduct: (d) => api.post("/inventory/products/", d),
   updateProduct: (id, d) => api.patch(`/inventory/products/${id}/`, d),
   deleteProduct: (id) => api.delete(`/inventory/products/${id}/`),
+  bulkImportProducts: (products) => api.post("/inventory/products/bulk-import/", { products }),
   categories: (p) => api.get("/inventory/categories/", { params: p }),
   createCategory: (d) => api.post("/inventory/categories/", d),
   units: (p) => api.get("/inventory/units/", { params: p }),
@@ -78,6 +79,7 @@ export const parties = {
   create: (d) => api.post("/parties/", d),
   update: (id, d) => api.patch(`/parties/${id}/`, d),
   delete: (id) => api.delete(`/parties/${id}/`),
+  bulkImport: (parties) => api.post("/parties/bulk-import/", { parties }),
   ledger: (id, p) => api.get(`/parties/${id}/ledger/`, { params: p }),
   payments: (p) => api.get("/parties/payments/", { params: p }),
   addPayment: (d) => api.post("/parties/payments/", d),
@@ -95,6 +97,8 @@ export const sales = {
   createReturn: (d) => api.post("/sales/returns/", d),
   quotations: (p) => api.get("/sales/quotations/", { params: p }),
   createQuotation: (d) => api.post("/sales/quotations/", d),
+  updateQuotation: (id, d) => api.patch(`/sales/quotations/${id}/`, d),
+  deleteQuotation: (id) => api.delete(`/sales/quotations/${id}/`),
 };
 
 const bid = () => localStorage.getItem("business_id") || "";
@@ -102,8 +106,14 @@ const bid_headers = () => ({ "X-Business-ID": bid() });
 
 export const purchases = {
   list: (params) => api.get("/purchases/", { params, headers: bid_headers() }),
-  create: (data) => api.post("/purchases/", data, { headers: bid_headers() }),
-  update: (id, data) => api.patch(`/purchases/${id}/`, data, { headers: bid_headers() }),
+  create: (data) => {
+    const isFormData = data instanceof FormData;
+    return api.post("/purchases/", data, { headers: { ...bid_headers(), ...(isFormData ? { "Content-Type": "multipart/form-data" } : {}) } });
+  },
+  update: (id, data) => {
+    const isFormData = data instanceof FormData;
+    return api.patch(`/purchases/${id}/`, data, { headers: { ...bid_headers(), ...(isFormData ? { "Content-Type": "multipart/form-data" } : {}) } });
+  },
   delete: (id) => api.delete(`/purchases/${id}/`, { headers: bid_headers() }),
 };
 
@@ -115,8 +125,14 @@ export const recycleBin = {
 
 export const expenses = {
   list: (p) => api.get("/expenses/", { params: p }),
-  create: (d) => api.post("/expenses/", d),
-  update: (id, d) => api.patch(`/expenses/${id}/`, d),
+  create: (d) => {
+    const isFormData = d instanceof FormData;
+    return api.post("/expenses/", d, isFormData ? { headers: { "Content-Type": "multipart/form-data" } } : {});
+  },
+  update: (id, d) => {
+    const isFormData = d instanceof FormData;
+    return api.patch(`/expenses/${id}/`, d, isFormData ? { headers: { "Content-Type": "multipart/form-data" } } : {});
+  },
   delete: (id) => api.delete(`/expenses/${id}/`),
   categories: (p) => api.get("/expenses/categories/", { params: p }),
   createCategory: (d) => api.post("/expenses/categories/", d),
@@ -124,10 +140,18 @@ export const expenses = {
 
 export const banking = {
   accounts: (p) => api.get("/banking/accounts/", { params: p }),
-  createAccount: (d) => api.post("/banking/accounts/", d),
-  updateAccount: (id, d) => api.patch(`/banking/accounts/${id}/`, d),
+  createAccount: (d) => {
+    const isFormData = d instanceof FormData;
+    return api.post("/banking/accounts/", d, isFormData ? { headers: { "Content-Type": "multipart/form-data" } } : {});
+  },
+  updateAccount: (id, d) => {
+    const isFormData = d instanceof FormData;
+    return api.patch(`/banking/accounts/${id}/`, d, isFormData ? { headers: { "Content-Type": "multipart/form-data" } } : {});
+  },
+  deleteAccount: (id) => api.delete(`/banking/accounts/${id}/`),
   transactions: (p) => api.get("/banking/transactions/", { params: p }),
   addTransaction: (d) => api.post("/banking/transactions/", d),
+  deleteTransaction: (id) => api.delete(`/banking/transactions/${id}/`),
 };
 
 export const reports = {
@@ -142,15 +166,27 @@ export const reports = {
 
 export const superadmin = {
   stats: () => api.get("/superadmin/stats/"),
+
   businesses: (p) => api.get("/superadmin/businesses/", { params: p }),
   businessAction: (id, action) => api.patch(`/superadmin/businesses/${id}/action/`, { action }),
-  users: () => api.get("/superadmin/users/"),
+  editBusiness: (id, d) => api.patch(`/superadmin/businesses/${id}/`, d),
+  deleteBusiness: (id) => api.delete(`/superadmin/businesses/${id}/`),
+  businessData: (id) => api.get(`/superadmin/businesses/${id}/data/`),
+
+  users: (p) => api.get("/superadmin/users/", { params: p }),
+  userAction: (id, action) => api.patch(`/superadmin/users/${id}/action/`, { action }),
+  createUser: (d) => api.post("/superadmin/users/create/", d),
+  deleteUser: (id) => api.delete(`/superadmin/users/${id}/delete/`),
   loginActivity: () => api.get("/superadmin/login-activity/"),
   userLoginActivity: (userId) => api.get("/superadmin/login-activity/", { params: { user_id: userId } }),
-  tickets: () => api.get("/superadmin/tickets/"),
+
+  tickets: (p) => api.get("/superadmin/tickets/", { params: p }),
   updateTicket: (id, d) => api.patch(`/superadmin/tickets/${id}/`, d),
+
   announcements: () => api.get("/superadmin/announcements/"),
   createAnnouncement: (d) => api.post("/superadmin/announcements/", d),
+  updateAnnouncement: (id, d) => api.patch(`/superadmin/announcements/${id}/`, d),
+  deleteAnnouncement: (id) => api.delete(`/superadmin/announcements/${id}/`),
 };
 
 export default api;

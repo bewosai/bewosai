@@ -3,6 +3,9 @@ abstract class BusinessRepository {
   Future<Map<String, dynamic>> getDashboardSummary();
   Future<List<Map<String, dynamic>>> getMonthlyReport();
   Future<Map<String, dynamic>> getReportSummary();
+  Future<Map<String, dynamic>> getProfitReport({String? dateFrom, String? dateTo});
+  Future<Map<String, dynamic>> getInventoryReport();
+  Future<Map<String, dynamic>> getReceivableAging();
 
   // Sales
   Future<List<Map<String, dynamic>>> getSales({Map<String, dynamic>? params});
@@ -12,6 +15,8 @@ abstract class BusinessRepository {
   // Purchases
   Future<List<Map<String, dynamic>>> getPurchases({Map<String, dynamic>? params});
   Future<Map<String, dynamic>> createPurchase(Map<String, dynamic> data);
+  Future<List<Map<String, dynamic>>> getPurchaseReturns();
+  Future<Map<String, dynamic>> createPurchaseReturn(Map<String, dynamic> data);
 
   // Expenses
   Future<List<Map<String, dynamic>>> getExpenses();
@@ -19,6 +24,7 @@ abstract class BusinessRepository {
 
   // Inventory
   Future<List<Map<String, dynamic>>> getProducts();
+  Future<List<Map<String, dynamic>>> getLowStockProducts();
   Future<List<Map<String, dynamic>>> getCategories();
   Future<List<Map<String, dynamic>>> getUnits();
   Future<Map<String, dynamic>> createProduct(Map<String, dynamic> data);
@@ -40,4 +46,12 @@ abstract class BusinessRepository {
   Future<List<Map<String, dynamic>>> getRecycleBin({String? type});
   Future<void> restoreFromBin(String type, int id);
   Future<void> permanentDelete(String type, int id);
+
+  // Nepal-specific reports
+  Future<Map<String, dynamic>> getDayBook({String? date});
+  Future<Map<String, dynamic>> getCashFlow({String? dateFrom, String? dateTo});
+
+  // Business profile
+  Future<Map<String, dynamic>> getBusinessProfile();
+  Future<Map<String, dynamic>> updateBusinessProfile(Map<String, dynamic> data);
 }

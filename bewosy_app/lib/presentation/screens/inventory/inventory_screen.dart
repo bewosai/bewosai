@@ -63,7 +63,7 @@ class _InventoryScreenState extends State<InventoryScreen>
       list = list
           .where((p) =>
               (p['name'] ?? '').toString().toLowerCase().contains(q) ||
-              (p['sku'] ?? '').toString().toLowerCase().contains(q))
+              (p['barcode'] ?? '').toString().toLowerCase().contains(q))
           .toList();
     }
     return list;
@@ -95,6 +95,7 @@ class _InventoryScreenState extends State<InventoryScreen>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'inventory_fab',
         backgroundColor: AppColors.orange,
         foregroundColor: Colors.white,
         onPressed: () => _showAddProductSheet(context, settings),
@@ -173,12 +174,12 @@ class _InventoryScreenState extends State<InventoryScreen>
                                               '0') ??
                                       0;
                                   final minStock = double.tryParse(
-                                          p['min_stock_level']
+                                          p['low_stock_threshold']
                                                   ?.toString() ??
                                               '0') ??
                                       0;
                                   final isLowStock =
-                                      minStock > 0 && stock <= minStock;
+                                      p['is_low_stock'] == true || (minStock > 0 && stock <= minStock);
 
                                   return AppCard(
                                     padding: const EdgeInsets.all(14),
@@ -462,7 +463,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                 TextField(
                   controller: skuCtrl,
                   decoration:
-                      const InputDecoration(labelText: 'SKU / Code'),
+                      const InputDecoration(labelText: 'Barcode / Code'),
                 ),
                 const SizedBox(height: 12),
                 Row(children: [
@@ -547,16 +548,16 @@ class _InventoryScreenState extends State<InventoryScreen>
                               '/inventory/products/',
                               data: {
                                 'name': nameCtrl.text.trim(),
-                                'sku': skuCtrl.text.trim(),
-                                'buy_price': double.tryParse(
+                                'barcode': skuCtrl.text.trim(),
+                                'purchase_price': double.tryParse(
                                         buyPriceCtrl.text) ??
                                     0,
-                                'sell_price': double.tryParse(
+                                'sale_price': double.tryParse(
                                         sellPriceCtrl.text) ??
                                     0,
                                 'stock_quantity':
                                     double.tryParse(stockCtrl.text) ?? 0,
-                                'min_stock_level':
+                                'low_stock_threshold':
                                     double.tryParse(minStockCtrl.text) ??
                                         0,
                                 if (selectedUnit != null)
@@ -572,7 +573,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')));
+                                  SnackBar(content: Text(ApiService.errorMessage(e))));
                             }
                           }
                           ss(() => saving = false);
@@ -595,7 +596,7 @@ class _InventoryScreenState extends State<InventoryScreen>
     String movementType = 'ADJUSTMENT';
     bool saving = false;
 
-    final currentStock = product['current_stock']?.toString() ?? '0';
+    final currentStock = product['stock_quantity']?.toString() ?? '0';
 
     const types = [
       ('IN', 'Stock In', Icons.add_circle_outline_rounded, AppColors.success),
@@ -736,7 +737,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                                 'product': product['id'],
                                 'movement_type': movementType,
                                 'quantity': qty,
-                                'notes': notesCtrl.text.trim(),
+                                'note': notesCtrl.text.trim(),
                               },
                             );
                             if (context.mounted) {
@@ -752,7 +753,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')));
+                                  SnackBar(content: Text(ApiService.errorMessage(e))));
                             }
                           }
                           ss(() => saving = false);

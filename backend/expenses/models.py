@@ -29,9 +29,16 @@ class ExpenseCategory(models.Model):
 
 
 class Expense(models.Model):
-    METHOD_CASH = "CASH"
-    METHOD_BANK = "BANK"
-    METHOD_CHOICES = [(METHOD_CASH, "Cash"), (METHOD_BANK, "Bank")]
+    METHOD_CASH   = "CASH"
+    METHOD_BANK   = "BANK"
+    METHOD_ESEWA  = "ESEWA"
+    METHOD_KHALTI = "KHALTI"
+    METHOD_CHOICES = [
+        (METHOD_CASH,   "Cash"),
+        (METHOD_BANK,   "Bank"),
+        (METHOD_ESEWA,  "eSewa"),
+        (METHOD_KHALTI, "Khalti"),
+    ]
 
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="expenses")
     category = models.ForeignKey(ExpenseCategory, on_delete=models.SET_NULL, null=True, blank=True)

@@ -19,6 +19,8 @@ class Party(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
+    pan_number = models.CharField(max_length=20, blank=True)
+    vat_number = models.CharField(max_length=20, blank=True)
     opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -50,21 +52,15 @@ class PartyPayment(models.Model):
     PAY_OUT = "OUT"
     TYPE_CHOICES = [(PAY_IN, "Received"), (PAY_OUT, "Paid")]
 
-    METHOD_CASH = "CASH"
-    METHOD_BANK = "BANK"
-    METHOD_CHEQUE = "CHEQUE"
-    METHOD_ESEWA = "ESEWA"
+    METHOD_CASH   = "CASH"
+    METHOD_BANK   = "BANK"
+    METHOD_ESEWA  = "ESEWA"
     METHOD_KHALTI = "KHALTI"
-    METHOD_IME = "IME_PAY"
-    METHOD_MOBILE = "MOBILE"
     METHOD_CHOICES = [
-        (METHOD_CASH, "Cash"),
-        (METHOD_BANK, "Bank Transfer"),
-        (METHOD_CHEQUE, "Cheque"),
-        (METHOD_ESEWA, "eSewa"),
+        (METHOD_CASH,   "Cash"),
+        (METHOD_BANK,   "Bank"),
+        (METHOD_ESEWA,  "eSewa"),
         (METHOD_KHALTI, "Khalti"),
-        (METHOD_IME, "IME Pay"),
-        (METHOD_MOBILE, "Mobile Banking"),
     ]
 
     party = models.ForeignKey(Party, on_delete=models.CASCADE, related_name="payments")

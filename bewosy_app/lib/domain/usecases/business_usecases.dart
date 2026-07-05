@@ -18,6 +18,31 @@ class GetReportSummaryUseCase {
   Future<Map<String, dynamic>> call() => _r.getReportSummary();
 }
 
+class GetProfitReportUseCase {
+  final BusinessRepository _r;
+  GetProfitReportUseCase(this._r);
+  Future<Map<String, dynamic>> call({String? dateFrom, String? dateTo}) =>
+      _r.getProfitReport(dateFrom: dateFrom, dateTo: dateTo);
+}
+
+class GetInventoryReportUseCase {
+  final BusinessRepository _r;
+  GetInventoryReportUseCase(this._r);
+  Future<Map<String, dynamic>> call() => _r.getInventoryReport();
+}
+
+class GetReceivableAgingUseCase {
+  final BusinessRepository _r;
+  GetReceivableAgingUseCase(this._r);
+  Future<Map<String, dynamic>> call() => _r.getReceivableAging();
+}
+
+class GetLowStockProductsUseCase {
+  final BusinessRepository _r;
+  GetLowStockProductsUseCase(this._r);
+  Future<List<Map<String, dynamic>>> call() => _r.getLowStockProducts();
+}
+
 class GetSalesUseCase {
   final BusinessRepository _r;
   GetSalesUseCase(this._r);
@@ -29,6 +54,19 @@ class GetSalesReturnsUseCase {
   final BusinessRepository _r;
   GetSalesReturnsUseCase(this._r);
   Future<List<Map<String, dynamic>>> call() => _r.getSalesReturns();
+}
+
+class GetPurchaseReturnsUseCase {
+  final BusinessRepository _r;
+  GetPurchaseReturnsUseCase(this._r);
+  Future<List<Map<String, dynamic>>> call() => _r.getPurchaseReturns();
+}
+
+class CreatePurchaseReturnUseCase {
+  final BusinessRepository _r;
+  CreatePurchaseReturnUseCase(this._r);
+  Future<Map<String, dynamic>> call(Map<String, dynamic> data) =>
+      _r.createPurchaseReturn(data);
 }
 
 class CreateSaleUseCase {
@@ -151,4 +189,30 @@ class PermanentDeleteUseCase {
   final BusinessRepository _r;
   PermanentDeleteUseCase(this._r);
   Future<void> call(String type, int id) => _r.permanentDelete(type, id);
+}
+
+class GetDayBookUseCase {
+  final BusinessRepository _r;
+  GetDayBookUseCase(this._r);
+  Future<Map<String, dynamic>> call({String? date}) => _r.getDayBook(date: date);
+}
+
+class GetCashFlowUseCase {
+  final BusinessRepository _r;
+  GetCashFlowUseCase(this._r);
+  Future<Map<String, dynamic>> call({String? dateFrom, String? dateTo}) =>
+      _r.getCashFlow(dateFrom: dateFrom, dateTo: dateTo);
+}
+
+class GetBusinessProfileUseCase {
+  final BusinessRepository _r;
+  GetBusinessProfileUseCase(this._r);
+  Future<Map<String, dynamic>> call() => _r.getBusinessProfile();
+}
+
+class UpdateBusinessProfileUseCase {
+  final BusinessRepository _r;
+  UpdateBusinessProfileUseCase(this._r);
+  Future<Map<String, dynamic>> call(Map<String, dynamic> data) =>
+      _r.updateBusinessProfile(data);
 }

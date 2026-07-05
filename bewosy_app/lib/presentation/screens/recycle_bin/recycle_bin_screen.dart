@@ -64,7 +64,7 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e')));
+            SnackBar(content: Text(ApiService.errorMessage(e))));
       }
     }
   }
@@ -88,7 +88,7 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e')));
+            SnackBar(content: Text(ApiService.errorMessage(e))));
       }
     }
   }

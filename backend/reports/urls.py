@@ -8,4 +8,7 @@ urlpatterns = [
     path("inventory/", views.InventoryReportView.as_view()),
     path("profit/", views.ProfitReportView.as_view()),
     path("monthly/", views.MonthlyReportView.as_view()),
+    path("receivable-aging/", views.ReceivableAgingView.as_view()),
+    path("day-book/", views.DayBookView.as_view()),
+    path("cash-flow/", views.CashFlowView.as_view()),
 ]

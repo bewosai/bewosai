@@ -286,7 +286,9 @@ export default function PaymentsPage() {
   });
 
   const handleDelete = async () => {
-    // Soft delete by removing from local state (API doesn't have delete for payments yet)
+    try {
+      await partiesApi.deletePayment(deleting.id);
+    } catch {}
     setPayments(prev => prev.filter(p => p.id !== deleting.id));
     setDeleting(null);
   };

@@ -8,7 +8,8 @@ class PartySerializer(serializers.ModelSerializer):
     class Meta:
         model = Party
         fields = (
-            "id", "name", "party_type", "phone", "email", "address",
+            "id", "name", "party_type", "customer_type", "phone", "email", "address",
+            "pan_number", "vat_number",
             "opening_balance", "balance", "notes", "is_active", "created_at",
         )
         read_only_fields = ("id", "balance", "created_at")

@@ -14,23 +14,15 @@ class Sale(models.Model):
         (STATUS_CANCELLED, "Cancelled"),
     ]
 
-    METHOD_CASH = "CASH"
-    METHOD_BANK = "BANK"
-    METHOD_CREDIT = "CREDIT"
-    METHOD_CHEQUE = "CHEQUE"
-    METHOD_ESEWA = "ESEWA"
+    METHOD_CASH   = "CASH"
+    METHOD_BANK   = "BANK"
+    METHOD_ESEWA  = "ESEWA"
     METHOD_KHALTI = "KHALTI"
-    METHOD_IME = "IME_PAY"
-    METHOD_MOBILE = "MOBILE"
     METHOD_CHOICES = [
-        (METHOD_CASH, "Cash"),
-        (METHOD_BANK, "Bank Transfer"),
-        (METHOD_CREDIT, "Credit"),
-        (METHOD_CHEQUE, "Cheque"),
-        (METHOD_ESEWA, "eSewa"),
+        (METHOD_CASH,   "Cash"),
+        (METHOD_BANK,   "Bank"),
+        (METHOD_ESEWA,  "eSewa"),
         (METHOD_KHALTI, "Khalti"),
-        (METHOD_IME, "IME Pay"),
-        (METHOD_MOBILE, "Mobile Banking"),
     ]
 
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="sales")
@@ -40,13 +32,15 @@ class Sale(models.Model):
     due_date = models.DateField(null=True, blank=True)
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="VAT % e.g. 13")
+    tax_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     due_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=10, choices=METHOD_CHOICES, default=METHOD_CASH)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default=STATUS_CONFIRMED)
     notes = models.TextField(blank=True)
-    sale_type = models.CharField(max_length=10, choices=[('SALE', 'Sale'), ('QUOTATION', 'Quotation')], default='SALE')
+    sale_type = models.CharField(max_length=10, choices=[('SALE', 'Sale'), ('CHALLAN', 'Delivery Challan'), ('QUOTATION', 'Quotation')], default='SALE')
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
@@ -61,6 +55,13 @@ class Sale(models.Model):
         return self.invoice_number
 
     def save(self, *args, **kwargs):
+        # tax_amount is computed from taxable amount (subtotal - discount)
+        taxable = self.subtotal - self.discount
+        if taxable < 0:
+            taxable = 0
+        from decimal import Decimal
+        self.tax_amount = (taxable * self.tax_rate / Decimal("100")).quantize(Decimal("0.01"))
+        self.total = taxable + self.tax_amount
         self.due_amount = self.total - self.paid_amount
         super().save(*args, **kwargs)
 

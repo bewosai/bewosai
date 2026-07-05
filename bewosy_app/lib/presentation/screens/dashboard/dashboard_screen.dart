@@ -107,6 +107,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       delegate: SliverChildListDelegate([
                         _buildKpiGrid(settings),
                         const SizedBox(height: 16),
+                        _buildAlerts(context, settings),
+                        const SizedBox(height: 16),
                         _buildProfitLossChart(settings),
                         const SizedBox(height: 16),
                         _buildQuickActions(context, settings),
@@ -120,6 +122,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'dashboard_fab',
         onPressed: () => context.go('/sales'),
         backgroundColor: AppColors.orange,
         foregroundColor: Colors.white,
@@ -437,6 +440,87 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAlerts(BuildContext context, AppSettings settings) {
+    final lowStock   = (_dashData?['low_stock_count'] as int?) ?? 0;
+    final receivable = (double.tryParse(_dashData?['total_receivable']?.toString() ?? '0') ?? 0);
+    final payable    = (double.tryParse(_dashData?['total_payable']?.toString() ?? '0') ?? 0);
+
+    if (lowStock == 0 && receivable == 0 && payable == 0) return const SizedBox();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Alerts & Reminders',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        if (lowStock > 0)
+          _alertTile(
+            context,
+            icon: Icons.warning_amber_rounded,
+            color: AppColors.warning,
+            title: '$lowStock product${lowStock != 1 ? 's' : ''} low on stock',
+            subtitle: 'Tap to view and restock',
+            route: '/inventory',
+          ),
+        if (receivable > 0)
+          _alertTile(
+            context,
+            icon: Icons.account_balance_wallet_rounded,
+            color: AppColors.info,
+            title: '${settings.formatAmount(receivable)} receivable',
+            subtitle: 'Customers owe you money',
+            route: '/payments',
+          ),
+        if (payable > 0)
+          _alertTile(
+            context,
+            icon: Icons.payment_rounded,
+            color: AppColors.error,
+            title: '${settings.formatAmount(payable)} payable',
+            subtitle: 'You owe suppliers',
+            route: '/payments',
+          ),
+      ],
+    );
+  }
+
+  Widget _alertTile(BuildContext context,
+      {required IconData icon, required Color color, required String title,
+       required String subtitle, required String route}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: () => context.go(route),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withOpacity(0.25)),
+          ),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title,
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: color)),
+              Text(subtitle,
+                  style: const TextStyle(fontSize: 11, color: AppColors.navy500)),
+            ])),
+            Icon(Icons.chevron_right_rounded, color: color, size: 20),
+          ]),
+        ),
       ),
     );
   }

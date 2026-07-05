@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_settings.dart';
+import '../../../data/services/api_service.dart';
 import '../../providers/business_provider.dart';
 import '../../widgets/app_widgets.dart';
 import 'invoice_detail_screen.dart';
@@ -80,6 +81,7 @@ class _SalesScreenState extends State<SalesScreen>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'sales_fab',
         backgroundColor: AppColors.orange,
         foregroundColor: Colors.white,
         onPressed: () => _showCreateSaleSheet(context, settings),
@@ -149,7 +151,7 @@ class _SalesList extends StatelessWidget {
         ? items
         : items
             .where((s) =>
-                (s['bill_number'] ?? '').toString().toLowerCase().contains(search.toLowerCase()) ||
+                (s['invoice_number'] ?? '').toString().toLowerCase().contains(search.toLowerCase()) ||
                 (s['party_name'] ?? '').toString().toLowerCase().contains(search.toLowerCase()))
             .toList();
 
@@ -173,7 +175,7 @@ class _SalesList extends StatelessWidget {
         itemBuilder: (ctx, i) {
           final s = filtered[i];
           final status = s['status'] ?? 'DRAFT';
-          final amount = double.tryParse(s['total_amount']?.toString() ?? '0') ?? 0;
+          final amount = double.tryParse(s['total']?.toString() ?? '0') ?? 0;
           final paid = double.tryParse(s['paid_amount']?.toString() ?? '0') ?? 0;
           final balance = amount - paid;
 
@@ -192,7 +194,7 @@ class _SalesList extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          s['bill_number'] ?? '—',
+                          s['invoice_number'] ?? '—',
                           style: const TextStyle(
                               fontWeight: FontWeight.w800, fontSize: 15),
                         ),
@@ -235,7 +237,7 @@ class _SalesList extends StatelessWidget {
                 ]),
                 const SizedBox(height: 8),
                 Text(
-                  s['date'] ?? '',
+                  s['sale_date'] ?? '',
                   style: TextStyle(fontSize: 11, color: AppColors.navy500),
                 ),
               ],
@@ -287,10 +289,10 @@ class _ReturnsList extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(r['return_number'] ?? '—',
+                  Text('Return for ${r['invoice_number'] ?? '#${r['id']}'}',
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 14)),
-                  Text(r['party_name'] ?? '',
+                  Text(r['return_date'] ?? '',
                       style: const TextStyle(
                           fontSize: 12, color: AppColors.navy500)),
                 ],
@@ -298,7 +300,7 @@ class _ReturnsList extends StatelessWidget {
             ),
             Text(
               settings.formatAmount(
-                  double.tryParse(r['total_amount']?.toString() ?? '0') ?? 0),
+                  double.tryParse(r['amount']?.toString() ?? '0') ?? 0),
               style: const TextStyle(
                   fontWeight: FontWeight.w700, color: AppColors.error),
             ),
@@ -354,10 +356,13 @@ class _CreateSaleSheet extends StatefulWidget {
 }
 
 class _CreateSaleSheetState extends State<_CreateSaleSheet> {
-  final _partyCtrl = TextEditingController();
-  final _notesCtrl = TextEditingController();
-  String _paymentMode = 'CASH';
+  final _partyCtrl    = TextEditingController();
+  final _notesCtrl    = TextEditingController();
+  final _discountCtrl = TextEditingController(text: '0');
+  final _paidCtrl     = TextEditingController(text: '0');
+  String _paymentMethod = 'CASH';
   String _status = 'CONFIRMED';
+  double _taxRate = 0;   // 0 or 13 (Nepal VAT)
   bool _saving = false;
   final List<Map<String, dynamic>> _items = [];
 
@@ -366,22 +371,41 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
           'product_name': '',
           'quantity': 1,
           'unit_price': 0.0,
+          'discount_amount': 0.0,
         }));
   }
 
-  double get _total =>
-      _items.fold(0, (s, i) => s + (i['quantity'] as int) * (i['unit_price'] as double));
+  double get _subtotal =>
+      _items.fold(0.0, (s, i) =>
+          s + ((i['quantity'] as num).toDouble() * (i['unit_price'] as num).toDouble())
+            - (i['discount_amount'] as num? ?? 0).toDouble());
+
+  double get _discount => double.tryParse(_discountCtrl.text) ?? 0;
+  double get _taxable  => (_subtotal - _discount).clamp(0, double.infinity);
+  double get _taxAmt   => _taxable * _taxRate / 100;
+  double get _total    => _taxable + _taxAmt;
 
   Future<void> _save() async {
     if (_items.isEmpty) return;
     setState(() => _saving = true);
     try {
+      final paid = double.tryParse(_paidCtrl.text) ?? 0;
       await widget.biz.createSale({
-        'party_name': _partyCtrl.text.trim(),
-        'payment_mode': _paymentMode,
+        'customer': null,
+        'sale_date': DateTime.now().toIso8601String().substring(0, 10),
+        'payment_method': _paymentMethod,
         'status': _status,
+        'subtotal': _subtotal,
+        'discount': _discount,
+        'tax_rate': _taxRate,
+        'paid_amount': paid > _total ? _total : paid,
         'notes': _notesCtrl.text.trim(),
-        'items': _items,
+        'items': _items.map((i) => {
+          'product_name': i['product_name'],
+          'quantity': i['quantity'],
+          'unit_price': i['unit_price'],
+          'discount_amount': i['discount_amount'] ?? 0,
+        }).toList(),
       });
       if (mounted) {
         Navigator.pop(context);
@@ -390,7 +414,7 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text(ApiService.errorMessage(e))),
         );
       }
     }
@@ -430,24 +454,65 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
             ),
           ),
           const SizedBox(height: 12),
-          // Payment mode
           DropdownButtonFormField<String>(
-            value: _paymentMode,
-            decoration: InputDecoration(labelText: 'Payment Mode'),
+            value: _paymentMethod,
+            decoration: const InputDecoration(labelText: 'Payment Method'),
             items: const [
-              DropdownMenuItem(value: 'CASH', child: Text('Cash')),
-              DropdownMenuItem(value: 'BANK', child: Text('Bank Transfer')),
-              DropdownMenuItem(value: 'CREDIT', child: Text('Credit')),
+              DropdownMenuItem(value: 'CASH',   child: Text('Cash')),
+              DropdownMenuItem(value: 'BANK',   child: Text('Bank')),
+              DropdownMenuItem(value: 'ESEWA',  child: Text('eSewa')),
+              DropdownMenuItem(value: 'KHALTI', child: Text('Khalti')),
             ],
-            onChanged: (v) => setState(() => _paymentMode = v!),
+            onChanged: (v) => setState(() => _paymentMethod = v!),
           ),
+          const SizedBox(height: 12),
+          // VAT toggle — Nepal 13%
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.lightBorder),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(children: [
+              const Icon(Icons.receipt_outlined, size: 18, color: AppColors.navy500),
+              const SizedBox(width: 10),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('VAT 13%', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text('Nepal VAT (${_taxRate == 13 ? "applied" : "not applied"})',
+                    style: const TextStyle(fontSize: 11, color: AppColors.navy500)),
+              ])),
+              Switch.adaptive(
+                value: _taxRate == 13,
+                activeColor: AppColors.orange,
+                onChanged: (v) => setState(() => _taxRate = v ? 13 : 0),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: TextField(
+              controller: _discountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'Discount (Rs.)', prefixIcon: Icon(Icons.discount_outlined)),
+              onChanged: (_) => setState(() {}),
+            )),
+            const SizedBox(width: 12),
+            Expanded(child: TextField(
+              controller: _paidCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'Paid Amount', prefixIcon: Icon(Icons.payments_outlined)),
+              onChanged: (_) => setState(() {}),
+            )),
+          ]),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: _status,
-            decoration: InputDecoration(labelText: 'Status'),
+            decoration: const InputDecoration(labelText: 'Status'),
             items: const [
               DropdownMenuItem(value: 'CONFIRMED', child: Text('Confirmed')),
-              DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+              DropdownMenuItem(value: 'DRAFT',     child: Text('Draft')),
             ],
             onChanged: (v) => setState(() => _status = v!),
           ),
@@ -455,8 +520,7 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
           Row(children: [
             const Expanded(
                 child: Text('Items',
-                    style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700))),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
             TextButton.icon(
               onPressed: _addItem,
               icon: const Icon(Icons.add_rounded, size: 16),
@@ -472,16 +536,14 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
               )),
           if (_items.isNotEmpty) ...[
             const Divider(height: 24),
-            Row(children: [
-              Expanded(
-                  child: Text(s.t('total'),
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700))),
-              Text(s.formatAmount(_total),
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800,
-                      color: AppColors.orange)),
-            ]),
+            if (_discount > 0)
+              _summaryRow('Subtotal', _subtotal, AppColors.navy500, s),
+            if (_discount > 0)
+              _summaryRow('Discount', -_discount, AppColors.error, s),
+            if (_taxRate > 0)
+              _summaryRow('VAT ${_taxRate.toInt()}%', _taxAmt, AppColors.warning, s),
+            const Divider(height: 12),
+            _summaryRow(s.t('total'), _total, AppColors.orange, s, large: true),
           ],
           const SizedBox(height: 16),
           TextField(
@@ -501,6 +563,22 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
       ),
     );
   }
+}
+
+Widget _summaryRow(String label, double value, Color color, AppSettings s,
+    {bool large = false}) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(children: [
+      Expanded(child: Text(label,
+          style: TextStyle(fontSize: large ? 15 : 13,
+              fontWeight: large ? FontWeight.w800 : FontWeight.w500,
+              color: large ? color : AppColors.navy500))),
+      Text(s.formatAmount(value.abs()),
+          style: TextStyle(fontSize: large ? 18 : 14,
+              fontWeight: FontWeight.w700, color: color)),
+    ]),
+  );
 }
 
 class _ItemRow extends StatelessWidget {

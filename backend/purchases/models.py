@@ -13,13 +13,15 @@ class Purchase(models.Model):
         (STATUS_CONFIRMED, "Confirmed"),
         (STATUS_CANCELLED, "Cancelled"),
     ]
-    METHOD_CASH = "CASH"
-    METHOD_BANK = "BANK"
-    METHOD_CREDIT = "CREDIT"
+    METHOD_CASH   = "CASH"
+    METHOD_BANK   = "BANK"
+    METHOD_ESEWA  = "ESEWA"
+    METHOD_KHALTI = "KHALTI"
     METHOD_CHOICES = [
-        (METHOD_CASH, "Cash"),
-        (METHOD_BANK, "Bank"),
-        (METHOD_CREDIT, "Credit"),
+        (METHOD_CASH,   "Cash"),
+        (METHOD_BANK,   "Bank"),
+        (METHOD_ESEWA,  "eSewa"),
+        (METHOD_KHALTI, "Khalti"),
     ]
 
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="purchases")
@@ -35,6 +37,7 @@ class Purchase(models.Model):
     payment_method = models.CharField(max_length=10, choices=METHOD_CHOICES, default=METHOD_CASH)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default=STATUS_CONFIRMED)
     notes = models.TextField(blank=True)
+    bill_image = models.ImageField(upload_to="purchases/bills/", null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)

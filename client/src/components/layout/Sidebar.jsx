@@ -1,16 +1,19 @@
 import { NavLink } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useTranslation } from "../../utils/translations";
-import bewosyLogo from "../../assessts/images/bewosy.jpeg";
+import { useOfflineSync } from "../../utils/offlineQueue";
+import api from "../../api/index";
+import bewosyLogo from "@assets/images/bewosy.jpeg";
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Truck,
   Wallet, Receipt, BarChart3, X, Building2, ChevronDown,
   Boxes, CreditCard, UserCheck, ShieldCheck, Settings,
-  Trash2, FileText, ArrowLeftRight,
+  Trash2, FileText, ArrowLeftRight, FileSpreadsheet,
+  Wifi, WifiOff, RefreshCw,
 } from "lucide-react";
 
-function buildNavItems(t) {
+function buildNavItems(t, language) {
   return [
     { name: t("dashboard"), path: "/dashboard", icon: LayoutDashboard },
     {
@@ -48,6 +51,7 @@ function buildNavItems(t) {
     { name: t("reports"), path: "/reports", icon: BarChart3 },
     { name: t("settings"), path: "/settings", icon: Settings },
     { name: t("recycleBin"), path: "/recycle-bin", icon: Trash2 },
+    { name: language === "ne" ? "Excel आयात" : "Import Excel", path: "/import", icon: FileSpreadsheet },
   ];
 }
 
@@ -112,8 +116,9 @@ function NavItem({ item, onClose }) {
 
 export default function Sidebar({ open, setOpen }) {
   const { currentBusiness, user } = useAuth();
-  const { t } = useTranslation();
-  const navItems = buildNavItems(t);
+  const { t, language } = useTranslation();
+  const { isOnline, pendingCount, isSyncing, flush } = useOfflineSync(api);
+  const navItems = buildNavItems(t, language);
 
   return (
     <>
@@ -196,13 +201,48 @@ export default function Sidebar({ open, setOpen }) {
           )}
         </nav>
 
+        {/* Offline indicator */}
+        {!isOnline && (
+          <div className="mx-3 mb-2 flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2">
+            <WifiOff className="h-3.5 w-3.5 shrink-0 text-red-400" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-red-400">Offline</p>
+              {pendingCount > 0 && (
+                <p className="text-[10px] text-navy-400">{pendingCount} action{pendingCount > 1 ? "s" : ""} queued</p>
+              )}
+            </div>
+          </div>
+        )}
+        {isOnline && pendingCount > 0 && (
+          <div className="mx-3 mb-2 flex items-center gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2">
+            {isSyncing ? (
+              <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin text-orange-400" />
+            ) : (
+              <Wifi className="h-3.5 w-3.5 shrink-0 text-orange-400" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-orange-400">
+                {isSyncing ? "Syncing…" : `${pendingCount} pending`}
+              </p>
+              {!isSyncing && (
+                <button onClick={flush} className="text-[10px] text-navy-400 hover:text-orange-300 underline">
+                  Sync now
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="border-t border-navy-800 px-3 py-3">
-          <div className="rounded-xl bg-orange-500/10 px-3 py-2.5">
-            <p className="text-xs font-bold text-orange-500">Bewosy</p>
-            <p className="mt-0.5 text-[10px] text-navy-500">
-              Sales · Inventory · Staff · Reports
-            </p>
+          <div className="flex items-center gap-2 rounded-xl bg-orange-500/10 px-3 py-2.5">
+            <div className={`h-2 w-2 shrink-0 rounded-full ${isOnline ? "bg-green-500" : "bg-red-500"}`} />
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-orange-500">Bewosy</p>
+              <p className="text-[10px] text-navy-500">
+                {isOnline ? "Online · " : "Offline · "}Sales · Reports
+              </p>
+            </div>
           </div>
         </div>
       </aside>

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_settings.dart';
 import '../../../data/services/api_service.dart';
@@ -270,7 +271,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           ...items.map((item) {
             final qty = double.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
             final price = double.tryParse(item['unit_price']?.toString() ?? '0') ?? 0;
-            final disc = double.tryParse(item['discount']?.toString() ?? '0') ?? 0;
+            final disc = double.tryParse(item['discount_amount']?.toString() ?? '0') ?? 0;
             final lineTotal = (qty * price) - disc;
             return Column(
               children: [
@@ -337,6 +338,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
   Widget _buildTotalsCard(double total, double paid, double balance,
       Map<String, dynamic> sale, AppSettings settings) {
+    final subtotal  = double.tryParse(sale['subtotal']?.toString()    ?? '0') ?? 0;
+    final discount  = double.tryParse(sale['discount']?.toString()    ?? '0') ?? 0;
+    final taxRate   = double.tryParse(sale['tax_rate']?.toString()    ?? '0') ?? 0;
+    final taxAmt    = double.tryParse(sale['tax_amount']?.toString()  ?? '0') ?? 0;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -346,16 +352,23 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       ),
       child: Column(
         children: [
-          _TotalRow(
-              label: 'Subtotal',
-              value: settings.formatAmount(total),
-              bold: false),
+          _TotalRow(label: 'Subtotal', value: settings.formatAmount(subtotal), bold: false),
+          if (discount > 0) ...[
+            const SizedBox(height: 6),
+            _TotalRow(label: 'Discount', value: '- ${settings.formatAmount(discount)}',
+                color: AppColors.error, bold: false),
+          ],
+          if (taxRate > 0) ...[
+            const SizedBox(height: 6),
+            _TotalRow(label: 'VAT ${taxRate.toInt()}%',
+                value: settings.formatAmount(taxAmt),
+                color: AppColors.warning, bold: false),
+          ],
+          const Divider(height: 16),
+          _TotalRow(label: 'Total', value: settings.formatAmount(total), bold: false),
           const SizedBox(height: 6),
-          _TotalRow(
-              label: 'Paid',
-              value: settings.formatAmount(paid),
-              color: AppColors.success,
-              bold: false),
+          _TotalRow(label: 'Paid',  value: settings.formatAmount(paid),
+              color: AppColors.success, bold: false),
           const Divider(height: 16),
           _TotalRow(
             label: balance > 0 ? 'Balance Due' : 'Overpaid',
@@ -370,38 +383,88 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   }
 
   Widget _buildActionButtons(AppSettings settings) {
-    return Row(children: [
-      Expanded(
-        child: OutlinedButton.icon(
-          onPressed: () => _printInvoice(settings),
-          icon: const Icon(Icons.print_rounded, size: 18),
-          label: const Text('Print'),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            side: const BorderSide(color: AppColors.orange),
-            foregroundColor: AppColors.orange,
+    return Column(children: [
+      Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _printInvoice(settings),
+            icon: const Icon(Icons.print_rounded, size: 18),
+            label: const Text('Print'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              side: const BorderSide(color: AppColors.orange),
+              foregroundColor: AppColors.orange,
+            ),
           ),
         ),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _sharePdf(settings),
+            icon: const Icon(Icons.share_rounded, size: 18),
+            label: const Text('Share PDF'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.orange,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 10),
+      SizedBox(
+        width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: () => _sharePdf(settings),
-          icon: const Icon(Icons.share_rounded, size: 18),
-          label: const Text('Share PDF'),
+          onPressed: () => _shareWhatsApp(settings),
+          icon: const Icon(Icons.chat_rounded, size: 18),
+          label: const Text('Send via WhatsApp'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.orange,
+            backgroundColor: const Color(0xFF25D366),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             elevation: 0,
           ),
         ),
       ),
     ]);
+  }
+
+  Future<void> _shareWhatsApp(AppSettings settings) async {
+    final sale = _fullSale ?? widget.sale;
+    final invoiceNum = sale['invoice_number']?.toString() ?? '';
+    final customer   = (sale['party_name'] ?? sale['customer_name'])?.toString() ?? 'Customer';
+    final total      = double.tryParse(sale['total']?.toString() ?? '0') ?? 0;
+    final paid       = double.tryParse(sale['paid_amount']?.toString() ?? '0') ?? 0;
+    final balance    = total - paid;
+    final phone      = sale['party_phone']?.toString() ?? '';
+    final date       = sale['sale_date']?.toString() ?? '';
+
+    final msg = '''*Invoice: $invoiceNum*
+Customer: $customer
+Date: $date
+
+Amount: ${settings.formatAmount(total)}
+Paid: ${settings.formatAmount(paid)}${balance > 0 ? '\n*Balance Due: ${settings.formatAmount(balance)}*' : ''}
+
+Thank you for your business! 🙏
+_Powered by Bewosy_''';
+
+    final encoded = Uri.encodeComponent(msg);
+    final url = phone.isNotEmpty
+        ? 'https://wa.me/$phone?text=$encoded'
+        : 'https://wa.me/?text=$encoded';
+
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('WhatsApp not available on this device')));
+    }
   }
 
   Future<pw.Document> _buildPdf(AppSettings settings) async {
@@ -510,7 +573,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               final price = double.tryParse(
                       item['unit_price']?.toString() ?? '0') ?? 0;
               final disc = double.tryParse(
-                      item['discount']?.toString() ?? '0') ?? 0;
+                      item['discount_amount']?.toString() ?? '0') ?? 0;
               final lineTotal = (qty * price) - disc;
               return pw.Container(
                 padding: const pw.EdgeInsets.symmetric(

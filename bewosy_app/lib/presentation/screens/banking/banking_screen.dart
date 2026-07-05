@@ -64,7 +64,7 @@ class _BankingScreenState extends State<BankingScreen> {
   double get _totalBalance => _accounts.fold(
       0,
       (s, a) =>
-          s + (double.tryParse(a['current_balance']?.toString() ?? '0') ?? 0));
+          s + (double.tryParse(a['balance']?.toString() ?? '0') ?? 0));
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +80,7 @@ class _BankingScreenState extends State<BankingScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'banking_fab',
         backgroundColor: AppColors.orange,
         foregroundColor: Colors.white,
         onPressed: () => _showAddAccount(context, settings),
@@ -204,7 +205,7 @@ class _BankingScreenState extends State<BankingScreen> {
         final color = _accountTypeColors[type] ?? AppColors.navy500;
         final icon = _accountTypeIcons[type] ?? Icons.wallet_rounded;
         final balance =
-            double.tryParse(acc['current_balance']?.toString() ?? '0') ?? 0;
+            double.tryParse(acc['balance']?.toString() ?? '0') ?? 0;
 
         return GestureDetector(
           onTap: () => _showAccountDetail(acc, settings),
@@ -236,7 +237,7 @@ class _BankingScreenState extends State<BankingScreen> {
                 ]),
                 const Spacer(),
                 Text(
-                  acc['name']?.toString() ?? 'Account',
+                  acc['account_name']?.toString() ?? 'Account',
                   style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -265,7 +266,7 @@ class _BankingScreenState extends State<BankingScreen> {
     final opening =
         double.tryParse(acc['opening_balance']?.toString() ?? '0') ?? 0;
     final current =
-        double.tryParse(acc['current_balance']?.toString() ?? '0') ?? 0;
+        double.tryParse(acc['balance']?.toString() ?? '0') ?? 0;
 
     showModalBottomSheet(
       context: context,
@@ -287,7 +288,7 @@ class _BankingScreenState extends State<BankingScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Text(acc['name']?.toString() ?? '',
+            Text(acc['account_name']?.toString() ?? '',
                 style: const TextStyle(
                     fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
@@ -320,7 +321,7 @@ class _BankingScreenState extends State<BankingScreen> {
   void _showAccountForm(BuildContext context, AppSettings settings,
       Map<String, dynamic>? existing) {
     final nameCtrl = TextEditingController(
-        text: existing?['name']?.toString() ?? '');
+        text: existing?['account_name']?.toString() ?? '');
     final openingCtrl = TextEditingController(
         text: existing?['opening_balance']?.toString() ?? '0');
     final notesCtrl = TextEditingController(
@@ -420,7 +421,7 @@ class _BankingScreenState extends State<BankingScreen> {
                           try {
                             final api = context.read<ApiService>();
                             final payload = {
-                              'name': nameCtrl.text.trim(),
+                              'account_name': nameCtrl.text.trim(),
                               'account_type': accType,
                               'opening_balance':
                                   double.tryParse(openingCtrl.text) ?? 0,
@@ -441,7 +442,7 @@ class _BankingScreenState extends State<BankingScreen> {
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')));
+                                  SnackBar(content: Text(ApiService.errorMessage(e))));
                             }
                           }
                           ss(() => saving = false);

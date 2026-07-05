@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_settings.dart';
 import '../../../data/services/api_service.dart';
+import '../../../data/services/api_service.dart';
 import '../../providers/business_provider.dart';
 
 class QuickPosScreen extends StatefulWidget {
@@ -43,12 +44,10 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   bool _saving = false;
 
   static const _paymentMethods = [
-    {'key': 'CASH', 'label': 'Cash', 'icon': Icons.payments_rounded},
-    {'key': 'ESEWA', 'label': 'eSewa', 'icon': Icons.phone_android_rounded},
+    {'key': 'CASH',   'label': 'Cash',   'icon': Icons.payments_rounded},
+    {'key': 'BANK',   'label': 'Bank',   'icon': Icons.account_balance_rounded},
+    {'key': 'ESEWA',  'label': 'eSewa',  'icon': Icons.phone_android_rounded},
     {'key': 'KHALTI', 'label': 'Khalti', 'icon': Icons.phone_android_rounded},
-    {'key': 'BANK', 'label': 'Bank', 'icon': Icons.account_balance_rounded},
-    {'key': 'IME_PAY', 'label': 'IME Pay', 'icon': Icons.mobile_friendly_rounded},
-    {'key': 'OTHER', 'label': 'Other', 'icon': Icons.more_horiz_rounded},
   ];
 
   @override
@@ -103,10 +102,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       setState(() => _cart.add(_CartItem(product: product, price: price)));
     }
     _searchCtrl.clear();
-    setState(() {
-      _filteredProducts = [];
-      _showSearch = false;
-    });
+    setState(() => _filteredProducts = []);
   }
 
   void _removeFromCart(int index) {
@@ -151,7 +147,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+        SnackBar(content: Text(ApiService.errorMessage(e)), backgroundColor: AppColors.error),
       );
     }
     if (mounted) setState(() => _saving = false);

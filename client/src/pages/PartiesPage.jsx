@@ -5,11 +5,18 @@ import { usePrivateAmount } from "../context/AppSettingsContext";
 import PageHeader from "../components/shared/PageHeader";
 import SectionCard from "../components/shared/SectionCard";
 import PrimaryButton from "../components/shared/PrimaryButton";
+import Modal from "../components/common/Modal";
+import ConfirmDialog from "../components/common/ConfirmDialog";
+import LoadingSpinner from "../components/common/LoadingSpinner";
+import SearchBar from "../components/common/SearchBar";
+import TabBar from "../components/common/TabBar";
 import { parties as partiesApi } from "../api";
+import { CURRENCY } from "../constants";
 import {
   Users, UserCheck, Truck, Plus, Search, X, ChevronRight,
   Phone, Mail, MapPin, TrendingUp, TrendingDown, DollarSign,
-  Edit2, Trash2,
+  Edit2, Trash2, BookOpen, ArrowDownLeft, ArrowUpRight,
+  ShoppingCart, Package, Loader,
 } from "lucide-react";
 
 /* ── helpers ── */
@@ -108,7 +115,7 @@ function PartyModal({ initial, onClose, onSaved }) {
 }
 
 /* ── Party card (responsive: full detail on desktop, compact on mobile) ── */
-function PartyCard({ party, onEdit, onDelete }) {
+function PartyCard({ party, onEdit, onDelete, onLedger }) {
   const maskAmount = usePrivateAmount();
   const meta = TYPE_META[party.party_type] || TYPE_META.CUSTOMER;
   const Icon = meta.icon;
@@ -160,9 +167,13 @@ function PartyCard({ party, onEdit, onDelete }) {
 
       {/* Actions */}
       <div className="mt-3 flex gap-2 border-t border-navy-800 pt-3">
-        <button onClick={() => onEdit(party)}
+        <button onClick={() => onLedger(party)}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-navy-700 py-1.5 text-xs text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400">
-          <Edit2 className="h-3 w-3" /> Edit
+          <BookOpen className="h-3 w-3" /> Ledger
+        </button>
+        <button onClick={() => onEdit(party)}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-navy-700 px-3 py-1.5 text-xs text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400">
+          <Edit2 className="h-3 w-3" />
         </button>
         <button onClick={() => onDelete(party)}
           className="flex items-center justify-center gap-1.5 rounded-xl border border-navy-700 px-3 py-1.5 text-xs text-navy-300 transition hover:border-red-500/50 hover:text-red-400">
@@ -170,6 +181,111 @@ function PartyCard({ party, onEdit, onDelete }) {
         </button>
       </div>
     </div>
+  );
+}
+
+/* ── Party Ledger Modal ── */
+const ENTRY_META = {
+  SALE:        { icon: ShoppingCart, label: "Invoice",       color: "text-blue-400",   bg: "bg-blue-500/10" },
+  RECEIPT:     { icon: ArrowDownLeft, label: "Receipt",      color: "text-green-400",  bg: "bg-green-500/10" },
+  PURCHASE:    { icon: Package,       label: "Purchase",     color: "text-purple-400", bg: "bg-purple-500/10" },
+  PAYMENT:     { icon: ArrowUpRight,  label: "Payment",      color: "text-orange-400", bg: "bg-orange-500/10" },
+  PAYMENT_IN:  { icon: ArrowDownLeft, label: "Payment In",   color: "text-green-400",  bg: "bg-green-500/10" },
+  PAYMENT_OUT: { icon: ArrowUpRight,  label: "Payment Out",  color: "text-red-400",    bg: "bg-red-500/10" },
+};
+
+function LedgerModal({ party, onClose }) {
+  const maskAmount = usePrivateAmount();
+  const bid = localStorage.getItem("business_id");
+  const [ledger, setLedger] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    partiesApi.ledger(party.id, { business: bid })
+      .then(r => setLedger(r.data))
+      .catch(() => setLedger(null))
+      .finally(() => setLoading(false));
+  }, [party.id]);
+
+  const fmt = (v) => maskAmount(Math.abs(v), n => `${CURRENCY} ${n.toLocaleString("en-IN")}`);
+  const balance = ledger?.closing_balance ?? 0;
+
+  return (
+    <Modal
+      title={`Ledger — ${party.name}`}
+      onClose={onClose}
+      size="lg"
+    >
+      {loading ? (
+        <LoadingSpinner />
+      ) : !ledger ? (
+        <p className="py-10 text-center text-sm text-navy-400">Failed to load ledger.</p>
+      ) : (
+        <div className="space-y-4">
+          {/* Summary strip */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-navy-700 bg-navy-950 p-3 text-center">
+              <p className="text-xs text-navy-400">Total Debit</p>
+              <p className="mt-1 font-bold text-white">{fmt(ledger.total_debit)}</p>
+            </div>
+            <div className="rounded-xl border border-navy-700 bg-navy-950 p-3 text-center">
+              <p className="text-xs text-navy-400">Total Credit</p>
+              <p className="mt-1 font-bold text-white">{fmt(ledger.total_credit)}</p>
+            </div>
+            <div className={`rounded-xl border p-3 text-center ${balance > 0 ? "border-red-500/20 bg-red-500/5" : balance < 0 ? "border-green-500/20 bg-green-500/5" : "border-navy-700 bg-navy-950"}`}>
+              <p className="text-xs text-navy-400">Balance</p>
+              <p className={`mt-1 font-bold ${balance > 0 ? "text-red-400" : balance < 0 ? "text-green-400" : "text-navy-400"}`}>
+                {balance !== 0 ? fmt(balance) : "Settled"}
+              </p>
+            </div>
+          </div>
+
+          {/* Ledger entries */}
+          {ledger.entries.length === 0 ? (
+            <p className="py-8 text-center text-sm text-navy-400">No transactions yet.</p>
+          ) : (
+            <div className="rounded-xl border border-navy-800 overflow-hidden">
+              {/* Header */}
+              <div className="grid grid-cols-12 gap-2 bg-navy-800/60 px-4 py-2.5 text-xs font-semibold text-navy-400">
+                <div className="col-span-2">Date</div>
+                <div className="col-span-2">Type</div>
+                <div className="col-span-3">Ref</div>
+                <div className="col-span-2 text-right">Debit</div>
+                <div className="col-span-2 text-right">Credit</div>
+                <div className="col-span-1 text-right">Balance</div>
+              </div>
+              {ledger.entries.map((e, i) => {
+                const meta = ENTRY_META[e.type] || ENTRY_META.SALE;
+                const Icon = meta.icon;
+                return (
+                  <div key={i} className="grid grid-cols-12 gap-2 items-center border-t border-navy-800/50 px-4 py-2.5 hover:bg-navy-800/20 text-sm">
+                    <div className="col-span-2 text-xs text-navy-400">{e.date}</div>
+                    <div className="col-span-2">
+                      <div className={`inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold ${meta.bg} ${meta.color}`}>
+                        <Icon className="h-2.5 w-2.5" />{meta.label}
+                      </div>
+                    </div>
+                    <div className="col-span-3 text-xs text-navy-300 truncate">
+                      {e.ref}{e.note ? ` · ${e.note}` : ""}
+                    </div>
+                    <div className="col-span-2 text-right text-xs">
+                      {e.debit > 0 ? <span className="text-red-400">+{fmt(e.debit)}</span> : "—"}
+                    </div>
+                    <div className="col-span-2 text-right text-xs">
+                      {e.credit > 0 ? <span className="text-green-400">−{fmt(e.credit)}</span> : "—"}
+                    </div>
+                    <div className={`col-span-1 text-right text-xs font-semibold ${e.balance > 0 ? "text-red-400" : e.balance < 0 ? "text-green-400" : "text-navy-400"}`}>
+                      {fmt(e.balance)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -185,6 +301,8 @@ export default function PartiesPage() {
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [ledgerParty, setLedgerParty] = useState(null);
+  const [deletingParty, setDeletingParty] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -195,9 +313,9 @@ export default function PartiesPage() {
 
   useEffect(() => { if (currentBusiness?.id) load(); }, [currentBusiness?.id]);
 
-  const handleDelete = async (party) => {
-    if (!window.confirm(`Delete "${party.name}"?`)) return;
-    await partiesApi.delete(party.id);
+  const handleDelete = async () => {
+    await partiesApi.delete(deletingParty.id);
+    setDeletingParty(null);
     load();
   };
 
@@ -332,7 +450,8 @@ export default function PartiesPage() {
               key={party.id}
               party={party}
               onEdit={(p) => { setEditing(p); setShowModal(true); }}
-              onDelete={handleDelete}
+              onDelete={(p) => setDeletingParty(p)}
+              onLedger={(p) => setLedgerParty(p)}
             />
           ))}
         </div>
@@ -343,6 +462,16 @@ export default function PartiesPage() {
           initial={editing}
           onClose={() => { setShowModal(false); setEditing(null); }}
           onSaved={() => { setShowModal(false); setEditing(null); load(); }}
+        />
+      )}
+      {ledgerParty && (
+        <LedgerModal party={ledgerParty} onClose={() => setLedgerParty(null)} />
+      )}
+      {deletingParty && (
+        <ConfirmDialog
+          message={`Delete "${deletingParty.name}"? This will remove all associated records.`}
+          onConfirm={handleDelete}
+          onCancel={() => setDeletingParty(null)}
         />
       )}
     </div>

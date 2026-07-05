@@ -34,6 +34,7 @@ class MainShell extends StatelessWidget {
       body: child,
       // Quick POS floating action button
       floatingActionButton: FloatingActionButton(
+        heroTag: 'pos_fab',
         backgroundColor: AppColors.orange,
         foregroundColor: Colors.white,
         elevation: 6,

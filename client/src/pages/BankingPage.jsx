@@ -1,72 +1,128 @@
-import { useState, useEffect } from "react";
-import PageHeader from "../components/shared/PageHeader";
-import SectionCard from "../components/shared/SectionCard";
-import PrimaryButton from "../components/shared/PrimaryButton";
+import { useState, useEffect, useRef } from "react";
 import { banking as bankingApi } from "../api";
-import { CreditCard, Plus, TrendingUp, TrendingDown, X } from "lucide-react";
+import { useTranslation } from "../utils/translations";
+import { useDateFormat } from "../context/AppSettingsContext";
+import {
+  CreditCard, Plus, TrendingUp, TrendingDown, X, QrCode,
+  Trash2, Edit2, Upload, AlertTriangle, Loader, RefreshCw,
+} from "lucide-react";
 
-function AccountCard({ account, onSelect, selected }) {
+const today = () => new Date().toISOString().slice(0, 10);
+
+/* ── Confirm Dialog ─────────────────────────────────────────────────────── */
+function ConfirmDialog({ title, body, onConfirm, onCancel }) {
   return (
-    <button
-      onClick={() => onSelect(account)}
-      className={`rounded-2xl border p-5 text-left transition w-full ${
-        selected ? "border-orange-500 bg-orange-500/5" : "border-navy-800 bg-navy-900 hover:border-navy-700"
-      }`}
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="font-semibold text-white">{account.account_name}</p>
-          <p className="mt-0.5 text-xs text-navy-400">
-            {account.bank_name || "Cash"} · {account.account_type}
-          </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-navy-800 bg-navy-900 p-6 space-y-4">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
+          <AlertTriangle className="h-6 w-6 text-red-400" />
         </div>
-        <CreditCard className={`h-5 w-5 ${selected ? "text-orange-400" : "text-navy-500"}`} />
+        <h3 className="text-center text-sm font-bold text-white">{title}</h3>
+        {body && <p className="text-center text-xs text-navy-400">{body}</p>}
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 rounded-xl border border-navy-700 py-2.5 text-sm font-medium text-navy-400 hover:bg-navy-800">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white bg-red-500 hover:bg-red-600">Delete</button>
+        </div>
       </div>
-      <p className="mt-3 text-2xl font-bold text-white">
-        Rs. {Number(account.balance).toLocaleString()}
-      </p>
-    </button>
+    </div>
   );
 }
 
-function AddAccountModal({ onClose, onSaved }) {
+/* ── Add/Edit Account Modal ─────────────────────────────────────────────── */
+function AccountModal({ editData, onClose, onSaved }) {
   const [form, setForm] = useState({
-    account_name: "", bank_name: "", account_number: "",
-    account_type: "CURRENT", opening_balance: "0",
+    account_name: editData?.account_name || "",
+    bank_name: editData?.bank_name || "",
+    account_number: editData?.account_number || "",
+    account_type: editData?.account_type || "CURRENT",
+    opening_balance: editData?.opening_balance || "0",
   });
+  const [qrFile, setQrFile] = useState(null);
+  const [qrPreview, setQrPreview] = useState(editData?.qr_code_url || null);
   const [saving, setSaving] = useState(false);
-  const field = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500";
+  const [error, setError] = useState("");
+  const fileRef = useRef();
 
-  const submit = async (e) => {
+  const handleFile = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setQrFile(f);
+    setQrPreview(URL.createObjectURL(f));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.account_name.trim()) { setError("Account name is required."); return; }
     setSaving(true);
     try {
-      const bid = localStorage.getItem("business_id");
-      await bankingApi.createAccount({ ...form, business: bid });
+      const fd = new FormData();
+      Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+      if (qrFile) fd.append("qr_code", qrFile);
+      if (editData?.id) {
+        await bankingApi.updateAccount(editData.id, fd);
+      } else {
+        await bankingApi.createAccount(fd);
+      }
       onSaved();
-    } catch { } finally { setSaving(false); }
+    } catch (e) {
+      setError(e.response?.data?.detail || "Failed to save account.");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const field = "w-full rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-2xl border border-navy-700 bg-navy-900 p-6">
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="font-bold text-white">Add Bank Account</h2>
+          <h2 className="font-bold text-white">{editData?.id ? "Edit Account" : "Add Bank Account"}</h2>
           <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
         </div>
-        <form onSubmit={submit} className="space-y-3">
-          <input name="account_name" value={form.account_name} onChange={(e) => setForm({ ...form, account_name: e.target.value })} placeholder="Account name *" className={field} />
-          <input name="bank_name" value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} placeholder="Bank name" className={field} />
-          <input name="account_number" value={form.account_number} onChange={(e) => setForm({ ...form, account_number: e.target.value })} placeholder="Account number" className={field} />
-          <select value={form.account_type} onChange={(e) => setForm({ ...form, account_type: e.target.value })} className={field}>
-            <option value="CURRENT">Current</option>
-            <option value="SAVINGS">Savings</option>
-            <option value="CASH">Cash</option>
+        {error && <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input className={field} placeholder="Account name *" value={form.account_name} onChange={e => setForm(f => ({ ...f, account_name: e.target.value }))} />
+          <input className={field} placeholder="Bank name (e.g., NIC Asia)" value={form.bank_name} onChange={e => setForm(f => ({ ...f, bank_name: e.target.value }))} />
+          <input className={field} placeholder="Account number" value={form.account_number} onChange={e => setForm(f => ({ ...f, account_number: e.target.value }))} />
+          <select className={field} value={form.account_type} onChange={e => setForm(f => ({ ...f, account_type: e.target.value }))}>
+            <option value="CURRENT">Current Account</option>
+            <option value="SAVINGS">Savings Account</option>
+            <option value="CASH">Cash (Petty Cash)</option>
           </select>
-          <input type="number" value={form.opening_balance} onChange={(e) => setForm({ ...form, opening_balance: e.target.value })} placeholder="Opening balance" className={field} />
+          <input type="number" className={field} placeholder="Opening balance (Rs.)" value={form.opening_balance} onChange={e => setForm(f => ({ ...f, opening_balance: e.target.value }))} />
+
+          {/* QR Code Upload */}
+          <div>
+            <p className="mb-1.5 text-xs font-semibold text-navy-400">Payment QR Code (eSewa / Khalti / Bank)</p>
+            <div
+              className="relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-navy-700 p-4 text-center cursor-pointer hover:border-orange-500/50 transition"
+              onClick={() => fileRef.current?.click()}
+            >
+              {qrPreview ? (
+                <div className="relative">
+                  <img src={qrPreview} alt="QR" className="h-32 w-32 rounded-lg object-contain" />
+                  <button type="button" onClick={e => { e.stopPropagation(); setQrFile(null); setQrPreview(null); }}
+                    className="absolute -right-2 -top-2 rounded-full bg-red-500 p-0.5 text-white">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <QrCode className="h-8 w-8 text-navy-600 mb-2" />
+                  <p className="text-xs text-navy-400">Click to upload QR code image</p>
+                  <p className="text-[10px] text-navy-600 mt-0.5">PNG, JPG up to 5MB</p>
+                </>
+              )}
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-1">
-            <PrimaryButton type="submit" className="flex-1" disabled={saving}>{saving ? "Saving…" : "Add Account"}</PrimaryButton>
-            <PrimaryButton type="button" variant="outline" onClick={onClose}>Cancel</PrimaryButton>
+            <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50">
+              {saving ? "Saving..." : editData?.id ? "Save Changes" : "Add Account"}
+            </button>
+            <button type="button" onClick={onClose} className="rounded-xl border border-navy-700 px-4 py-2.5 text-sm text-navy-400 hover:bg-navy-800">Cancel</button>
           </div>
         </form>
       </div>
@@ -74,105 +130,284 @@ function AddAccountModal({ onClose, onSaved }) {
   );
 }
 
+/* ── Add Transaction Modal ──────────────────────────────────────────────── */
+function TransactionModal({ account, onClose, onSaved }) {
+  const [form, setForm] = useState({ transaction_type: "CREDIT", amount: "", date: today(), description: "", reference: "" });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.amount || parseFloat(form.amount) <= 0) return;
+    setSaving(true);
+    try {
+      await bankingApi.addTransaction({ ...form, account: account.id });
+      onSaved();
+    } catch {}
+    setSaving(false);
+  };
+
+  const field = "w-full rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-navy-700 bg-navy-900 p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-bold text-white">Add Transaction — {account.account_name}</h2>
+          <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            {["CREDIT", "DEBIT"].map(type => (
+              <button key={type} type="button" onClick={() => setForm(f => ({ ...f, transaction_type: type }))}
+                className={`rounded-lg py-2.5 text-sm font-semibold transition ${
+                  form.transaction_type === type
+                    ? type === "CREDIT" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+                    : "border border-navy-700 text-navy-400 hover:bg-navy-800"
+                }`}>
+                {type === "CREDIT" ? "Money In (+)" : "Money Out (-)"}
+              </button>
+            ))}
+          </div>
+          <input type="number" min="0.01" step="0.01" className={field} placeholder="Amount (Rs.) *" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required />
+          <input type="date" className={field} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+          <input className={field} placeholder="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          <input className={field} placeholder="Reference / Cheque no." value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} />
+          <div className="flex gap-3 pt-1">
+            <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50">
+              {saving ? "Saving..." : "Add Transaction"}
+            </button>
+            <button type="button" onClick={onClose} className="rounded-xl border border-navy-700 px-4 py-2.5 text-sm text-navy-400 hover:bg-navy-800">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── QR Code Display Modal ──────────────────────────────────────────────── */
+function QrModal({ account, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-xs rounded-2xl border border-navy-700 bg-navy-900 p-6 text-center">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-bold text-white">Payment QR</h2>
+          <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
+        </div>
+        <p className="text-sm text-navy-300 mb-3">{account.account_name}</p>
+        {account.qr_code_url ? (
+          <img src={account.qr_code_url} alt="QR Code" className="mx-auto max-h-64 rounded-xl object-contain" />
+        ) : (
+          <p className="text-xs text-navy-500">No QR code uploaded.</p>
+        )}
+        {account.account_number && (
+          <p className="mt-3 text-xs text-navy-400">Acc: {account.account_number}</p>
+        )}
+        <button onClick={onClose} className="mt-4 w-full rounded-xl border border-navy-700 py-2.5 text-sm text-navy-400 hover:bg-navy-800">Close</button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Main BankingPage ───────────────────────────────────────────────────── */
 export default function BankingPage() {
+  const { t } = useTranslation();
+  const formatDate = useDateFormat();
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
+  const [txLoading, setTxLoading] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [editAccount, setEditAccount] = useState(null);
+  const [showTxModal, setShowTxModal] = useState(false);
+  const [showQr, setShowQr] = useState(null);
+  const [confirm, setConfirm] = useState(null);
 
-  const load = () => {
+  const loadAccounts = () => {
     setLoading(true);
     bankingApi.accounts()
-      .then((r) => {
+      .then(r => {
         const accs = r.data.results ?? r.data;
         setAccounts(accs);
-        if (accs.length > 0) setSelected(accs[0]);
+        if (!selected && accs.length > 0) setSelected(accs[0]);
+        else if (selected) {
+          const updated = accs.find(a => a.id === selected.id);
+          if (updated) setSelected(updated);
+        }
       })
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  const loadTransactions = (accountId) => {
+    setTxLoading(true);
+    bankingApi.transactions({ account: accountId })
+      .then(r => setTransactions(r.data.results ?? r.data))
+      .catch(() => setTransactions([]))
+      .finally(() => setTxLoading(false));
+  };
 
+  useEffect(loadAccounts, []);
   useEffect(() => {
-    if (!selected) return;
-    bankingApi.transactions({ account: selected.id })
-      .then((r) => setTransactions(r.data.results ?? r.data));
+    if (selected) loadTransactions(selected.id);
   }, [selected]);
 
-  const totalBalance = accounts.reduce((s, a) => s + Number(a.balance), 0);
+  const handleDeleteAccount = async () => {
+    try { await bankingApi.deleteAccount(confirm.id); } catch {}
+    setConfirm(null);
+    if (selected?.id === confirm.id) setSelected(null);
+    loadAccounts();
+  };
+
+  const handleDeleteTx = async (txId) => {
+    try { await bankingApi.deleteTransaction(txId); } catch {}
+    if (selected) loadTransactions(selected.id);
+    loadAccounts();
+  };
+
+  const totalBalance = accounts.reduce((s, a) => s + Number(a.balance || 0), 0);
+  const totalCredit = transactions.filter(t => t.transaction_type === "CREDIT").reduce((s, t) => s + Number(t.amount), 0);
+  const totalDebit = transactions.filter(t => t.transaction_type === "DEBIT").reduce((s, t) => s + Number(t.amount), 0);
 
   return (
-    <div>
-      <PageHeader
-        title="Banking & Cash"
-        subtitle="Track all bank accounts and transactions."
-        action={
-          <PrimaryButton onClick={() => setShowAdd(true)}>
-            <Plus className="h-4 w-4" /> Add Account
-          </PrimaryButton>
-        }
-      />
-
-      {/* Total balance */}
-      <div className="mb-6 rounded-2xl border border-orange-500/30 bg-orange-500/5 p-5">
-        <p className="text-xs text-navy-400">Total Balance (All Accounts)</p>
-        <p className="mt-1 text-3xl font-extrabold text-white">
-          Rs. {totalBalance.toLocaleString()}
-        </p>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white">{t("banking")}</h1>
+          <p className="text-sm text-navy-500">Manage accounts, transactions and QR payments</p>
+        </div>
+        <button onClick={() => { setEditAccount(null); setShowAccountModal(true); }}
+          className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">
+          <Plus className="h-4 w-4" /> Add Account
+        </button>
       </div>
 
-      {/* Accounts */}
+      {/* Total balance */}
+      <div className="rounded-2xl border border-orange-500/20 bg-orange-500/5 p-5">
+        <p className="text-xs text-navy-400">Total Balance (All Accounts)</p>
+        <p className="mt-1 text-3xl font-extrabold text-white">Rs. {totalBalance.toLocaleString()}</p>
+        <p className="mt-0.5 text-xs text-navy-500">{accounts.length} account{accounts.length !== 1 ? "s" : ""}</p>
+      </div>
+
       {loading ? (
-        <p className="text-sm text-navy-400">Loading…</p>
-      ) : accounts.length ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {accounts.map((acc) => (
-            <AccountCard key={acc.id} account={acc} selected={selected?.id === acc.id} onSelect={setSelected} />
-          ))}
+        <div className="flex justify-center py-16"><Loader className="h-6 w-6 animate-spin text-orange-500" /></div>
+      ) : accounts.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-16 rounded-2xl border border-navy-800 bg-navy-900 text-center">
+          <CreditCard className="h-12 w-12 text-navy-700" />
+          <p className="text-sm text-navy-400">No bank accounts yet</p>
+          <button onClick={() => setShowAccountModal(true)} className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
+            <Plus className="h-4 w-4" /> Add First Account
+          </button>
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-3 py-12 text-center">
-          <CreditCard className="h-12 w-12 text-navy-700" />
-          <p className="text-sm text-navy-400">No bank accounts yet.</p>
-          <PrimaryButton onClick={() => setShowAdd(true)}><Plus className="h-4 w-4" /> Add Account</PrimaryButton>
-        </div>
-      )}
+        <>
+          {/* Account cards */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {accounts.map(acc => (
+              <div key={acc.id}
+                className={`relative rounded-2xl border p-4 cursor-pointer transition ${selected?.id === acc.id ? "border-orange-500 bg-orange-500/5" : "border-navy-800 bg-navy-900 hover:border-navy-700"}`}
+                onClick={() => setSelected(acc)}>
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-white truncate">{acc.account_name}</p>
+                    <p className="text-xs text-navy-400 mt-0.5">{acc.bank_name || "Cash"} · {acc.account_type}</p>
+                    {acc.account_number && <p className="text-xs text-navy-500 mt-0.5">{acc.account_number}</p>}
+                  </div>
+                  <CreditCard className={`h-5 w-5 shrink-0 ml-2 ${selected?.id === acc.id ? "text-orange-400" : "text-navy-500"}`} />
+                </div>
+                <p className="mt-3 text-2xl font-bold text-white">Rs. {Number(acc.balance || 0).toLocaleString()}</p>
+                <div className="mt-3 flex gap-1">
+                  {acc.qr_code_url && (
+                    <button onClick={e => { e.stopPropagation(); setShowQr(acc); }}
+                      className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-orange-500/40 hover:text-orange-400" title="Show QR">
+                      <QrCode className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button onClick={e => { e.stopPropagation(); setEditAccount(acc); setShowAccountModal(true); }}
+                    className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-orange-500/40 hover:text-orange-400" title="Edit">
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); setConfirm(acc); }}
+                    className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-red-500/40 hover:text-red-400" title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
 
-      {/* Transactions */}
-      {selected && (
-        <div className="mt-6">
-          <SectionCard title={`Transactions — ${selected.account_name}`}>
-            {transactions.length ? (
-              <div className="space-y-2">
-                {transactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between rounded-xl border border-navy-800 bg-navy-950 px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${tx.transaction_type === "CREDIT" ? "bg-green-500/15" : "bg-red-500/15"}`}>
+          {/* Selected account transactions */}
+          {selected && (
+            <div className="rounded-2xl border border-navy-800 bg-navy-900 overflow-hidden">
+              <div className="flex items-center justify-between border-b border-navy-800 px-5 py-3.5">
+                <div>
+                  <h2 className="font-semibold text-white">{selected.account_name} — Transactions</h2>
+                  <div className="mt-0.5 flex gap-3 text-xs">
+                    <span className="text-green-400">In: Rs. {totalCredit.toLocaleString()}</span>
+                    <span className="text-red-400">Out: Rs. {totalDebit.toLocaleString()}</span>
+                  </div>
+                </div>
+                <button onClick={() => setShowTxModal(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600">
+                  <Plus className="h-3.5 w-3.5" /> Add
+                </button>
+              </div>
+              {txLoading ? (
+                <div className="flex justify-center py-10"><Loader className="h-5 w-5 animate-spin text-orange-500" /></div>
+              ) : transactions.length === 0 ? (
+                <p className="py-10 text-center text-sm text-navy-400">No transactions yet</p>
+              ) : (
+                <div className="divide-y divide-navy-800/50">
+                  {transactions.map(tx => (
+                    <div key={tx.id} className="flex items-center gap-3 px-5 py-3 hover:bg-navy-800/30 transition">
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tx.transaction_type === "CREDIT" ? "bg-green-500/10" : "bg-red-500/10"}`}>
                         {tx.transaction_type === "CREDIT"
                           ? <TrendingUp className="h-4 w-4 text-green-400" />
                           : <TrendingDown className="h-4 w-4 text-red-400" />}
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-white">{tx.description || tx.reference || "Transaction"}</p>
-                        <p className="text-xs text-navy-400">{tx.date}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white truncate">{tx.description || tx.reference || tx.transaction_type}</p>
+                        <p className="text-xs text-navy-500">{formatDate(tx.date)}</p>
                       </div>
+                      <p className={`shrink-0 text-sm font-semibold ${tx.transaction_type === "CREDIT" ? "text-green-400" : "text-red-400"}`}>
+                        {tx.transaction_type === "CREDIT" ? "+" : "-"}Rs. {Number(tx.amount).toLocaleString()}
+                      </p>
+                      <button onClick={() => handleDeleteTx(tx.id)}
+                        className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:text-red-400 hover:bg-red-500/10">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                    <p className={`text-sm font-semibold ${tx.transaction_type === "CREDIT" ? "text-green-400" : "text-red-400"}`}>
-                      {tx.transaction_type === "CREDIT" ? "+" : "-"}Rs. {Number(tx.amount).toLocaleString()}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="py-6 text-center text-sm text-navy-400">No transactions for this account.</p>
-            )}
-          </SectionCard>
-        </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
-      {showAdd && (
-        <AddAccountModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />
+      {/* Modals */}
+      {showAccountModal && (
+        <AccountModal
+          editData={editAccount}
+          onClose={() => { setShowAccountModal(false); setEditAccount(null); }}
+          onSaved={() => { setShowAccountModal(false); setEditAccount(null); loadAccounts(); }}
+        />
+      )}
+      {showTxModal && selected && (
+        <TransactionModal
+          account={selected}
+          onClose={() => setShowTxModal(false)}
+          onSaved={() => { setShowTxModal(false); loadTransactions(selected.id); loadAccounts(); }}
+        />
+      )}
+      {showQr && <QrModal account={showQr} onClose={() => setShowQr(null)} />}
+      {confirm && (
+        <ConfirmDialog
+          title={`Delete "${confirm.account_name}"?`}
+          body="All transactions for this account will also be deleted."
+          onConfirm={handleDeleteAccount}
+          onCancel={() => setConfirm(null)}
+        />
       )}
     </div>
   );

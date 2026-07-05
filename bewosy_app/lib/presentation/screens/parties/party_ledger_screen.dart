@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_settings.dart';
 import '../../../data/services/api_service.dart';
@@ -22,20 +23,24 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
   static const _typeColors = {
     'SALE': AppColors.info,
     'RECEIPT': AppColors.success,
+    'SALE_RETURN': AppColors.warning,
     'PURCHASE': Color(0xFF7C3AED),
     'PAYMENT': AppColors.warning,
     'PAYMENT_IN': AppColors.success,
     'PAYMENT_OUT': AppColors.error,
+    'PURCHASE_RETURN': Color(0xFF059669),
     'OPENING': AppColors.navy500,
   };
 
   static const _typeIcons = {
     'SALE': Icons.receipt_long_rounded,
     'RECEIPT': Icons.arrow_downward_rounded,
+    'SALE_RETURN': Icons.keyboard_return_rounded,
     'PURCHASE': Icons.local_shipping_rounded,
     'PAYMENT': Icons.payments_rounded,
     'PAYMENT_IN': Icons.arrow_downward_rounded,
     'PAYMENT_OUT': Icons.arrow_upward_rounded,
+    'PURCHASE_RETURN': Icons.reply_rounded,
     'OPENING': Icons.account_balance_wallet_rounded,
   };
 
@@ -55,7 +60,11 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
       _entries = List<Map<String, dynamic>>.from(
           (data['entries'] as List? ?? [])
               .map((e) => Map<String, dynamic>.from(e as Map)));
-      _summary = Map<String, dynamic>.from(data['summary'] as Map? ?? {});
+      _summary = {
+        'total_debit':  data['total_debit'],
+        'total_credit': data['total_credit'],
+        'balance':      data['closing_balance'],
+      };
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
   }
@@ -102,6 +111,11 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.whatsapp_rounded),
+            tooltip: 'Send Reminder',
+            onPressed: () => _sendWhatsAppReminder(context, context.read<AppSettings>()),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             onPressed: _fetch,
@@ -186,7 +200,7 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
   }
 
   Widget _buildFilterChips() {
-    const types = ['ALL', 'SALE', 'RECEIPT', 'PURCHASE', 'PAYMENT_IN', 'PAYMENT_OUT'];
+    const types = ['ALL', 'SALE', 'RECEIPT', 'SALE_RETURN', 'PURCHASE', 'PAYMENT_IN', 'PAYMENT_OUT', 'PURCHASE_RETURN'];
     return SizedBox(
       height: 44,
       child: ListView.builder(
@@ -253,14 +267,61 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
     );
   }
 
+  Future<void> _sendWhatsAppReminder(BuildContext context, AppSettings settings) async {
+    final party   = widget.party;
+    final name    = party['name']?.toString() ?? 'Customer';
+    final phone   = party['phone']?.toString() ?? '';
+    final balance = _balance;
+
+    if (balance == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No outstanding balance for this party')));
+      return;
+    }
+
+    final isReceivable = balance > 0;
+    final msg = isReceivable
+        ? '''Dear *$name*,
+
+This is a friendly reminder that you have an outstanding balance of *${settings.formatAmount(balance.abs())}* with us.
+
+Kindly settle the payment at your earliest convenience.
+
+Thank you! 🙏
+_Bewosy_'''
+        : '''Dear *$name*,
+
+Your account shows a balance of *${settings.formatAmount(balance.abs())}* in your favor.
+
+Please contact us to arrange the payment.
+
+Thank you! 🙏
+_Bewosy_''';
+
+    final encoded = Uri.encodeComponent(msg);
+    final url = phone.isNotEmpty
+        ? 'https://wa.me/$phone?text=$encoded'
+        : 'https://wa.me/?text=$encoded';
+
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('WhatsApp not available on this device')));
+    }
+  }
+
   String _typeLabel(String type) {
     return switch (type) {
       'SALE' => 'Sale',
       'RECEIPT' => 'Receipt',
+      'SALE_RETURN' => 'Sale Return',
       'PURCHASE' => 'Purchase',
       'PAYMENT' => 'Payment',
       'PAYMENT_IN' => 'Payment In',
       'PAYMENT_OUT' => 'Payment Out',
+      'PURCHASE_RETURN' => 'Purchase Return',
       'OPENING' => 'Opening',
       _ => type,
     };
@@ -328,8 +389,8 @@ class _LedgerEntryTile extends StatelessWidget {
     final credit =
         double.tryParse(entry['credit']?.toString() ?? '0') ?? 0;
     final balance =
-        double.tryParse(entry['running_balance']?.toString() ?? '0') ?? 0;
-    final ref = entry['reference']?.toString() ?? '';
+        double.tryParse(entry['balance']?.toString() ?? '0') ?? 0;
+    final ref = entry['ref']?.toString() ?? '';
     final date = entry['date']?.toString() ?? '';
     final note = entry['note']?.toString() ?? '';
     final isDark = settings.isDark;

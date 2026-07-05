@@ -18,7 +18,7 @@ class _StaffScreenState extends State<StaffScreen>
   List _activity = [];
   bool _loading = true;
 
-  static const _roles = ['OWNER', 'MANAGER', 'ACCOUNTANT', 'SALESPERSON', 'VIEWER'];
+  static const _roles = ['MANAGER', 'CASHIER', 'VIEWER'];
 
   static const _permissions = <String, String>{
     'sales': 'Sales',
@@ -79,6 +79,7 @@ class _StaffScreenState extends State<StaffScreen>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'staff_fab',
         backgroundColor: AppColors.orange,
         foregroundColor: Colors.white,
         onPressed: () => _showInviteSheet(context, settings),
@@ -105,9 +106,9 @@ class _StaffScreenState extends State<StaffScreen>
                             final s = _staff[i];
                             final role = s['role'] ?? 'VIEWER';
                             final roleColor = switch (role) {
-                              'OWNER' => AppColors.orange,
+                              'OWNER'   => AppColors.orange,
                               'MANAGER' => AppColors.info,
-                              'ACCOUNTANT' => AppColors.success,
+                              'CASHIER' => AppColors.success,
                               _ => AppColors.navy500,
                             };
                             return AppCard(
@@ -118,7 +119,7 @@ class _StaffScreenState extends State<StaffScreen>
                                   backgroundColor:
                                       roleColor.withOpacity(0.15),
                                   child: Text(
-                                    (s['name'] ?? '?')
+                                    (s['user_name'] ?? '?')
                                         .toString()
                                         .substring(0, 1)
                                         .toUpperCase(),
@@ -133,11 +134,11 @@ class _StaffScreenState extends State<StaffScreen>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(s['name'] ?? '—',
+                                      Text(s['user_name'] ?? '—',
                                           style: const TextStyle(
                                               fontWeight: FontWeight.w700,
                                               fontSize: 14)),
-                                      Text(s['email'] ?? '',
+                                      Text(s['user_email'] ?? '',
                                           style: const TextStyle(
                                               fontSize: 12,
                                               color: AppColors.navy500)),
@@ -256,7 +257,7 @@ class _StaffScreenState extends State<StaffScreen>
   void _showInviteSheet(BuildContext context, AppSettings settings) {
     final emailCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
-    String role = 'SALESPERSON';
+    String role = 'CASHIER';
     final Set<String> selectedPerms = {'sales'};
     bool saving = false;
 
@@ -379,7 +380,7 @@ class _StaffScreenState extends State<StaffScreen>
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')));
+                                  SnackBar(content: Text(ApiService.errorMessage(e))));
                             }
                           }
                           ss(() => saving = false);

@@ -363,13 +363,25 @@ class _LoginScreenState extends State<LoginScreen> {
                 (Icons.people, 'Staff'),
                 (Icons.bar_chart, 'Reports'),
               ])
-                Chip(
-                  label: Row(
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.navy800,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: AppColors.navy600, width: 1),
+                  ),
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(item.$1, size: 14, color: AppColors.orange),
-                      const SizedBox(width: 4),
-                      Text(item.$2),
+                      Icon(item.$1, size: 13, color: AppColors.orange),
+                      const SizedBox(width: 5),
+                      Text(
+                        item.$2,
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.navy200),
+                      ),
                     ],
                   ),
                 ),

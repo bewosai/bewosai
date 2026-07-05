@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Search, Edit2, Trash2, X, AlertCircle } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Search, Edit2, Trash2, X, AlertCircle, Upload, Image, Eye } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from "recharts";
@@ -49,16 +49,34 @@ function ExpenseModal({ onClose, onSaved, editData }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [receiptImage, setReceiptImage] = useState(null);
+  const [receiptPreview, setReceiptPreview] = useState(editData?.receipt_image_url || null);
+  const receiptRef = useRef(null);
+
+  const handleReceiptChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReceiptImage(file);
+    setReceiptPreview(URL.createObjectURL(file));
+  };
 
   const handleSubmit = async () => {
     setError("");
     if (!form.amount || parseFloat(form.amount) <= 0) { setError("Amount is required."); return; }
     setSaving(true);
     try {
-      if (editData?.id) {
-        await expensesApi.update(editData.id, form);
+      let payload;
+      if (receiptImage) {
+        payload = new FormData();
+        Object.entries(form).forEach(([k, v]) => payload.append(k, v));
+        payload.append("receipt_image", receiptImage);
       } else {
-        await expensesApi.create(form);
+        payload = form;
+      }
+      if (editData?.id) {
+        await expensesApi.update(editData.id, payload);
+      } else {
+        await expensesApi.create(payload);
       }
       onSaved();
     } catch (e) {
@@ -131,6 +149,30 @@ function ExpenseModal({ onClose, onSaved, editData }) {
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
             />
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-navy-400">Receipt Image (optional)</label>
+            <input ref={receiptRef} type="file" accept="image/*" className="hidden" onChange={handleReceiptChange} />
+            {receiptPreview ? (
+              <div className="relative inline-block">
+                <img src={receiptPreview} alt="Receipt" className="h-24 w-auto rounded-lg border border-navy-700 object-cover" />
+                <button
+                  type="button"
+                  onClick={() => { setReceiptImage(null); setReceiptPreview(null); if (receiptRef.current) receiptRef.current.value = ""; }}
+                  className="absolute -right-2 -top-2 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => receiptRef.current?.click()}
+                className="flex items-center gap-2 rounded-lg border border-dashed border-navy-600 px-4 py-2.5 text-xs text-navy-400 hover:border-orange-500 hover:text-orange-400 transition"
+              >
+                <Upload className="h-4 w-4" /> Upload receipt photo
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex gap-3 justify-end border-t border-navy-800 p-5">
           <button onClick={onClose} className="px-4 py-2 rounded-lg border border-navy-700 text-navy-400 hover:bg-navy-800">Cancel</button>
@@ -172,6 +214,7 @@ export default function ExpensesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
+  const [viewReceiptImage, setViewReceiptImage] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -330,6 +373,12 @@ export default function ExpensesPage() {
                   {maskAmount(parseFloat(item.amount || 0), v => `Rs. ${v.toLocaleString()}`)}
                 </div>
                 <div className="col-span-2 sm:col-span-1 flex justify-end gap-1">
+                  {item.receipt_image_url && (
+                    <button onClick={() => setViewReceiptImage(item.receipt_image_url)}
+                      className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-orange-400" title="View Receipt">
+                      <Image size={13} />
+                    </button>
+                  )}
                   <button onClick={() => { setEditItem(item); setShowModal(true); }}
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-white">
                     <Edit2 size={13} />
@@ -364,6 +413,14 @@ export default function ExpensesPage() {
               }} className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 text-sm">Delete</button>
             </div>
           </div>
+        </div>
+      )}
+      {viewReceiptImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setViewReceiptImage(null)}>
+          <img src={viewReceiptImage} alt="Receipt" className="max-h-full max-w-full rounded-xl object-contain" />
+          <button className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" onClick={() => setViewReceiptImage(null)}>
+            <X className="h-5 w-5" />
+          </button>
         </div>
       )}
     </div>

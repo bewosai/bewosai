@@ -37,6 +37,8 @@ function OTPInput({ value, onChange, disabled }) {
       {Array.from({ length: 6 }).map((_, i) => (
         <input
           key={i}
+          id={`otp-${i}`}
+          name={`otp-${i}`}
           ref={(el) => (inputs.current[i] = el)}
           maxLength={1}
           value={(value || "")[i] || ""}
@@ -116,6 +118,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   // Steps: 1=email, 2=otp, 3=profile (new users only)
+  const [mode, setMode] = useState("signin"); // "signin" | "signup"
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -142,6 +145,8 @@ export default function LoginPage() {
 
   const clear = () => { setError(""); setInfo(""); };
 
+  const switchMode = (m) => { setMode(m); setError(""); setInfo(""); setEmail(""); };
+
   /* ── Step 1 → Send OTP ── */
   const handleSendOtp = async (e) => {
     e?.preventDefault();
@@ -151,16 +156,21 @@ export default function LoginPage() {
       setError("Please enter a valid email address.");
       return;
     }
-    const res = await sendOtp(trimmed);
+    const isSignup = mode === "signup";
+    const res = await sendOtp(trimmed, isSignup);
     if (res.ok) {
       setEmail(trimmed);
       setUserExists(res.userExists);
       setStep(2);
       setResendTimer(60);
-      setInfo(res.userExists ? `Welcome back! OTP sent to ${trimmed}` : `OTP sent to ${trimmed}`);
+      setInfo(res.userExists ? `Welcome back! OTP sent to ${trimmed}` : `New account — OTP sent to ${trimmed}`);
       if (res.otp) setDevOtp(res.otp);
     } else {
       setError(res.error);
+      // If the email already exists and they tried to sign up, hint to switch mode
+      if (res.userExists) {
+        setInfo("Tip: Switch to Sign In to access your existing account.");
+      }
     }
   };
 
@@ -268,16 +278,40 @@ export default function LoginPage() {
             {/* ── Step 1: Email ── */}
             {step === 1 && (
               <form onSubmit={handleSendOtp}>
+                {/* Sign In / Sign Up toggle */}
+                <div className="mb-5 flex rounded-xl bg-navy-950 border border-navy-800 p-1">
+                  <button
+                    type="button"
+                    onClick={() => switchMode("signin")}
+                    className={`flex-1 rounded-lg py-2 text-sm font-semibold transition ${mode === "signin" ? "bg-orange-500 text-white" : "text-navy-400 hover:text-white"}`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchMode("signup")}
+                    className={`flex-1 rounded-lg py-2 text-sm font-semibold transition ${mode === "signup" ? "bg-orange-500 text-white" : "text-navy-400 hover:text-white"}`}
+                  >
+                    Sign Up
+                  </button>
+                </div>
+
                 <div className="mb-5 text-center">
-                  <h2 className="text-xl font-bold text-white">Welcome to Bewosy</h2>
+                  <h2 className="text-xl font-bold text-white">
+                    {mode === "signin" ? "Welcome back!" : "Create your account"}
+                  </h2>
                   <p className="mt-1.5 text-sm text-navy-400">
-                    Enter your email to sign in or create an account
+                    {mode === "signin"
+                      ? "Enter your email to receive a sign-in code"
+                      : "Enter your Gmail or email to get started"}
                   </p>
                 </div>
 
-                <div className="relative mb-1">
+                <div className="relative mb-4">
                   <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
                   <input
+                    id="email"
+                    name="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -288,9 +322,6 @@ export default function LoginPage() {
                     className="w-full rounded-2xl border border-navy-700 bg-navy-950 py-4 pl-11 pr-4 text-base text-white outline-none transition placeholder:text-navy-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
                   />
                 </div>
-                <p className="mb-4 text-xs text-navy-500 px-1">
-                  One email = one account. No duplicate accounts.
-                </p>
 
                 <button
                   type="submit"

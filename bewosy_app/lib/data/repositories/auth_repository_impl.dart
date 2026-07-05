@@ -16,8 +16,11 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl(this._api);
 
   @override
-  Future<Map<String, dynamic>> sendOtp(String email) async {
-    final res = await _api.post('/auth/send-otp/', data: {'email': email});
+  Future<Map<String, dynamic>> sendOtp(String email, {bool isSignup = false}) async {
+    final res = await _api.post('/auth/send-otp/', data: {
+      'email': email,
+      'is_signup': isSignup,
+    });
     return Map<String, dynamic>.from(res.data as Map);
   }
 

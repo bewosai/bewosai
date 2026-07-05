@@ -26,8 +26,35 @@ class BusinessRepositoryImpl implements BusinessRepository {
 
   @override
   Future<Map<String, dynamic>> getReportSummary() async {
-    final res = await _api.get('/reports/dashboard-summary/');
+    final res = await _api.get('/reports/dashboard/');
     return _map(res.data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getProfitReport({String? dateFrom, String? dateTo}) async {
+    final params = <String, dynamic>{};
+    if (dateFrom != null) params['date_from'] = dateFrom;
+    if (dateTo != null) params['date_to'] = dateTo;
+    final res = await _api.get('/reports/profit/', params: params.isEmpty ? null : params);
+    return _map(res.data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getInventoryReport() async {
+    final res = await _api.get('/reports/inventory/');
+    return _map(res.data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getReceivableAging() async {
+    final res = await _api.get('/reports/receivable-aging/');
+    return _map(res.data);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getLowStockProducts() async {
+    final res = await _api.get('/inventory/products/', params: {'low_stock': true});
+    return _list(res.data);
   }
 
   @override
@@ -57,6 +84,18 @@ class BusinessRepositoryImpl implements BusinessRepository {
   @override
   Future<Map<String, dynamic>> createPurchase(Map<String, dynamic> data) async {
     final res = await _api.post('/purchases/', data: data);
+    return _map(res.data);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getPurchaseReturns() async {
+    final res = await _api.get('/purchases/returns/');
+    return _list(res.data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> createPurchaseReturn(Map<String, dynamic> data) async {
+    final res = await _api.post('/purchases/returns/', data: data);
     return _map(res.data);
   }
 
@@ -155,5 +194,33 @@ class BusinessRepositoryImpl implements BusinessRepository {
   @override
   Future<void> permanentDelete(String type, int id) async {
     await _api.delete('/recycle-bin/$type/$id/');
+  }
+
+  @override
+  Future<Map<String, dynamic>> getDayBook({String? date}) async {
+    final params = date != null ? {'date': date} : null;
+    final res = await _api.get('/reports/day-book/', params: params);
+    return _map(res.data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getCashFlow({String? dateFrom, String? dateTo}) async {
+    final params = <String, dynamic>{};
+    if (dateFrom != null) params['date_from'] = dateFrom;
+    if (dateTo != null) params['date_to'] = dateTo;
+    final res = await _api.get('/reports/cash-flow/', params: params.isEmpty ? null : params);
+    return _map(res.data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getBusinessProfile() async {
+    final res = await _api.get('/business/profile/');
+    return _map(res.data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateBusinessProfile(Map<String, dynamic> data) async {
+    final res = await _api.patch('/business/profile/', data: data);
+    return _map(res.data);
   }
 }

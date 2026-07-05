@@ -2,9 +2,10 @@ import { useState, useRef } from "react";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { useTranslation } from "../utils/translations";
 import { useAuth } from "../context/AuthContext";
+import { auth as authApi } from "../api";
 import {
   Sun, Moon, Globe, Eye, EyeOff, Calendar, Building2,
-  Upload, Save, Bell, Shield, Palette, User, Check,
+  Upload, Save, Bell, Shield, Palette, User, Check, FileText,
 } from "lucide-react";
 
 function SettingCard({ title, icon: Icon, children }) {
@@ -68,6 +69,15 @@ export default function SettingsPage() {
   const { t } = useTranslation();
   const { currentBusiness, user } = useAuth();
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: user?.name || "", phone: user?.phone || "" });
+  const [invoiceForm, setInvoiceForm] = useState({
+    header_color: localStorage.getItem("invoice_header_color") || "#f97316",
+    footer_text: localStorage.getItem("invoice_footer_text") || "Thank you for your business!",
+    invoice_prefix: localStorage.getItem("invoice_prefix") || "INV-",
+  });
+  const [logoPreview, setLogoPreview] = useState(localStorage.getItem("business_logo") || null);
+  const logoRef = useRef(null);
   const [businessForm, setBusinessForm] = useState({
     name: currentBusiness?.name || "",
     address: currentBusiness?.address || "",
@@ -76,7 +86,30 @@ export default function SettingsPage() {
     business_type: currentBusiness?.business_type || "",
   });
 
-  const handleSave = () => {
+  const handleLogoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const b64 = ev.target.result;
+      setLogoPreview(b64);
+      localStorage.setItem("business_logo", b64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await authApi.updateMe(profileForm);
+    } catch {}
+    localStorage.setItem("invoice_header_color", invoiceForm.header_color);
+    localStorage.setItem("invoice_footer_text", invoiceForm.footer_text);
+    localStorage.setItem("invoice_prefix", invoiceForm.invoice_prefix);
+    if (businessForm.name) localStorage.setItem("business_name", businessForm.name);
+    if (businessForm.address) localStorage.setItem("business_address", businessForm.address);
+    if (businessForm.phone) localStorage.setItem("business_phone", businessForm.phone);
+    setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -98,7 +131,7 @@ export default function SettingsPage() {
           }`}
         >
           {saved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-          {saved ? (language === "ne" ? "सुरक्षित!" : "Saved!") : t("saveSettings")}
+          {saving ? (language === "ne" ? "सुरक्षित…" : "Saving…") : saved ? (language === "ne" ? "सुरक्षित!" : "Saved!") : t("saveSettings")}
         </button>
       </div>
 
@@ -209,11 +242,83 @@ export default function SettingsPage() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-navy-400">{t("businessLogo")}</label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-navy-700 px-4 py-3 hover:border-orange-500 transition">
-              <Upload className="h-5 w-5 text-navy-500" />
-              <span className="text-sm text-navy-500">{t("uploadLogo")}</span>
-              <input type="file" accept="image/*" className="hidden" />
-            </label>
+            <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+            {logoPreview ? (
+              <div className="flex items-center gap-3">
+                <img src={logoPreview} alt="Logo" className="h-14 w-14 rounded-xl object-cover border border-navy-700" />
+                <div className="space-y-1">
+                  <p className="text-xs text-green-400">Logo uploaded</p>
+                  <button onClick={() => logoRef.current?.click()} className="text-xs text-orange-400 hover:underline">Change</button>
+                  <button onClick={() => { setLogoPreview(null); localStorage.removeItem("business_logo"); }} className="ml-2 text-xs text-red-400 hover:underline">Remove</button>
+                </div>
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-navy-700 px-4 py-3 hover:border-orange-500 transition">
+                <Upload className="h-5 w-5 text-navy-500" />
+                <span className="text-sm text-navy-500">{t("uploadLogo")}</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+              </label>
+            )}
+          </div>
+        </SettingCard>
+
+        {/* Invoice Customization */}
+        <SettingCard title={language === "ne" ? "बिजक अनुकूलन" : "Invoice Customization"} icon={FileText}>
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-navy-400">Header Color</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={invoiceForm.header_color}
+                  onChange={e => setInvoiceForm(f => ({ ...f, header_color: e.target.value }))}
+                  className="h-9 w-14 cursor-pointer rounded-lg border border-navy-700 bg-navy-800 p-1"
+                />
+                <div className="flex gap-2">
+                  {["#f97316", "#3b82f6", "#22c55e", "#8b5cf6", "#ef4444", "#1e293b"].map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setInvoiceForm(f => ({ ...f, header_color: c }))}
+                      className={`h-7 w-7 rounded-full border-2 transition ${invoiceForm.header_color === c ? "border-white scale-110" : "border-transparent"}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-navy-400">Invoice Prefix</label>
+              <input
+                value={invoiceForm.invoice_prefix}
+                onChange={e => setInvoiceForm(f => ({ ...f, invoice_prefix: e.target.value }))}
+                placeholder="INV-"
+                className="w-full rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
+              />
+              <p className="mt-1 text-xs text-navy-500">e.g. Invoice numbers will appear as {invoiceForm.invoice_prefix}001</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-navy-400">Invoice Footer Text</label>
+              <textarea
+                rows={2}
+                value={invoiceForm.footer_text}
+                onChange={e => setInvoiceForm(f => ({ ...f, footer_text: e.target.value }))}
+                placeholder="Thank you for your business!"
+                className="w-full resize-none rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
+              />
+            </div>
+            <div
+              className="rounded-xl border p-4"
+              style={{ borderColor: invoiceForm.header_color + "40", backgroundColor: invoiceForm.header_color + "10" }}
+            >
+              <p className="text-xs font-semibold mb-1" style={{ color: invoiceForm.header_color }}>Preview</p>
+              <div className="flex items-center justify-between">
+                {logoPreview && <img src={logoPreview} alt="logo" className="h-8 w-8 rounded object-cover" />}
+                <p className="text-xs text-white font-bold">{businessForm.name || "Your Business"}</p>
+                <span className="text-xs font-bold" style={{ color: invoiceForm.header_color }}>INVOICE</span>
+              </div>
+              <p className="mt-2 text-[10px] text-navy-500 text-center italic">{invoiceForm.footer_text}</p>
+            </div>
           </div>
         </SettingCard>
 
@@ -237,7 +342,8 @@ export default function SettingsPage() {
                 {language === "ne" ? "पूरा नाम" : "Full Name"}
               </label>
               <input
-                defaultValue={user?.name}
+                value={profileForm.name}
+                onChange={e => setProfileForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="Your name"
                 className="w-full rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
               />
@@ -247,7 +353,8 @@ export default function SettingsPage() {
                 {language === "ne" ? "फोन नम्बर" : "Phone Number"}
               </label>
               <input
-                defaultValue={user?.phone}
+                value={profileForm.phone}
+                onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))}
                 placeholder="+977-..."
                 className="w-full rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
               />

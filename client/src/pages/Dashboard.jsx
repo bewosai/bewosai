@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, TrendingDown, AlertTriangle, ShoppingCart,
-  Package, Plus, Wallet, ArrowUpRight, ArrowDownRight,
+  Package, Plus, Wallet, ArrowUpRight, ArrowDownRight, ArrowDownLeft,
   Users, Receipt, BarChart3, Loader,
 } from "lucide-react";
 
@@ -81,12 +81,15 @@ export default function DashboardPage() {
   const f = (v) => fmt(v || 0);
 
   const kpis = [
-    { label: t("todaySales"), value: f(data?.sales_today), icon: ShoppingCart, iconBg: "bg-blue-100 text-blue-600", path: "/sales" },
-    { label: t("monthSales"), value: f(data?.sales_month), icon: TrendingUp, iconBg: "bg-green-100 text-green-600", path: "/sales" },
-    { label: t("receivable"), value: f(data?.total_receivable), icon: Wallet, iconBg: "bg-orange-100 text-orange-600", path: "/payments" },
-    { label: t("totalExpenses"), value: f(data?.expenses_month), icon: TrendingDown, iconBg: "bg-red-100 text-red-500", path: "/expenses" },
-    { label: t("netProfit"), value: f(data?.profit_month), icon: BarChart3, iconBg: "bg-purple-100 text-purple-600", path: "/reports" },
-    { label: t("lowStock"), value: data?.low_stock_count ?? "–", icon: Package, iconBg: "bg-yellow-100 text-yellow-600", path: "/inventory/low-stock" },
+    { label: t("todaySales"),     value: f(data?.sales_today),      icon: ShoppingCart,  iconBg: "bg-blue-100 text-blue-600",    path: "/sales",                  sub: language === "ne" ? "आजको बिक्री" : "Today" },
+    { label: "Today's Purchase",  value: f(data?.purchases_today),  icon: Receipt,       iconBg: "bg-purple-100 text-purple-600", path: "/purchases",              sub: language === "ne" ? "आजको खरिद" : "Today" },
+    { label: "Today's Collection",value: f(data?.collection_today), icon: Wallet,        iconBg: "bg-green-100 text-green-600",   path: "/payments",               sub: language === "ne" ? "आज संकलन" : "Cash + Bank" },
+    { label: "Today's Expense",   value: f(data?.expenses_today),   icon: TrendingDown,  iconBg: "bg-red-100 text-red-500",       path: "/expenses",               sub: language === "ne" ? "आजको खर्च" : "Today" },
+    { label: t("receivable"),     value: f(data?.total_receivable), icon: ArrowUpRight,  iconBg: "bg-orange-100 text-orange-600", path: "/payments",               sub: language === "ne" ? "पाउनु पर्ने" : "Outstanding" },
+    { label: "Payable",           value: f(data?.total_payable),    icon: ArrowDownRight,iconBg: "bg-red-100 text-red-500",       path: "/purchases",              sub: language === "ne" ? "बुझाउनु पर्ने" : "Outstanding" },
+    { label: "Cash Balance",      value: f(data?.cash_balance),     icon: Wallet,        iconBg: "bg-yellow-100 text-yellow-600", path: "/banking",                sub: language === "ne" ? "नगद मौज्दात" : "Estimated" },
+    { label: t("netProfit"),      value: f(data?.profit_month),     icon: BarChart3,     iconBg: "bg-purple-100 text-purple-600", path: "/reports",                sub: language === "ne" ? "यो महिना" : "This month" },
+    { label: t("lowStock"),       value: data?.low_stock_count ?? "–", icon: Package,   iconBg: "bg-yellow-100 text-yellow-600", path: "/inventory/low-stock",    sub: language === "ne" ? "कम स्टक" : "Items" },
   ];
 
   return (
@@ -115,6 +118,32 @@ export default function DashboardPage() {
           {kpis.map((k) => (
             <KpiCard key={k.label} {...k} onClick={() => navigate(k.path)} />
           ))}
+        </div>
+      )}
+
+      {/* Top Items (when data available) */}
+      {!loading && data?.top_items?.length > 0 && (
+        <div className="rounded-2xl border border-navy-800 bg-navy-900 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-navy-800 px-5 py-3.5">
+            <h2 className="font-semibold text-white">{language === "ne" ? "सर्वाधिक बिक्री वस्तु" : "Top Selling Items"}</h2>
+            <button onClick={() => navigate("/inventory")} className="text-xs text-orange-500 hover:text-orange-400">
+              {language === "ne" ? "स्टक हेर्नुहोस् →" : "View stock →"}
+            </button>
+          </div>
+          <div className="divide-y divide-navy-800">
+            {data.top_items.map((item, i) => (
+              <div key={i} className="flex items-center gap-3 px-5 py-3">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-xs font-bold text-orange-500">
+                  {i + 1}
+                </div>
+                <p className="flex-1 text-sm text-white truncate">{item.product_name}</p>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold text-white">{f(item.total_revenue)}</p>
+                  <p className="text-[10px] text-navy-500">{item.total_qty} units</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

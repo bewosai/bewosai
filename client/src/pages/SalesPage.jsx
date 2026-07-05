@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Plus, Search, Edit2, Trash2, Eye, Printer, Share2, X,
-  ChevronDown, Check, AlertCircle, ShoppingCart, FileText, RotateCcw
+  ChevronDown, Check, AlertCircle, ShoppingCart, FileText, RotateCcw, Copy
 } from "lucide-react";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext";
@@ -20,15 +20,12 @@ function formatDate(dateStr, dateMode, language) {
   return d.toLocaleDateString("en-GB");
 }
 
-const PAYMENT_METHODS = ["Cash", "Bank Transfer", "Credit", "Cheque", "Mobile Banking"];
-const STATUS_COLORS = {
-  CONFIRMED: "bg-green-500/10 text-green-400",
-  DRAFT: "bg-navy-700/50 text-navy-400",
-  OVERDUE: "bg-red-500/10 text-red-400",
-  PARTIAL: "bg-orange-500/10 text-orange-400",
-  PAID: "bg-green-500/10 text-green-400",
-  CANCELLED: "bg-red-500/10 text-red-400",
-};
+import { PAYMENT_METHODS as PM_CONSTS, SALE_STATUS } from "../constants";
+
+const PAYMENT_METHODS = PM_CONSTS.map(m => m.value);
+const STATUS_COLORS = Object.fromEntries(
+  Object.entries(SALE_STATUS).map(([k, v]) => [k, v.cls])
+);
 
 const EMPTY_ITEM = { product_id: "", product_name: "", quantity: 1, unit_price: 0, discount_amount: 0 };
 const EMPTY_FORM = {
@@ -49,6 +46,11 @@ const EMPTY_FORM = {
 function PrintModal({ sale, onClose }) {
   const businessName = localStorage.getItem("business_name") || "Business Name";
   const businessAddress = localStorage.getItem("business_address") || "";
+  const businessPhone = localStorage.getItem("business_phone") || "";
+  const businessLogo = localStorage.getItem("business_logo") || null;
+  const headerColor = localStorage.getItem("invoice_header_color") || "#f97316";
+  const footerText = localStorage.getItem("invoice_footer_text") || "Thank you for your business!";
+  const invoicePrefix = localStorage.getItem("invoice_prefix") || "";
   const items = sale.items || [];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -63,14 +65,19 @@ function PrintModal({ sale, onClose }) {
           </div>
         </div>
         <div className="p-6 print:p-2" id="print-area">
-          <div className="mb-4 flex items-start justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">{businessName}</h2>
-              {businessAddress && <p className="text-xs text-gray-500">{businessAddress}</p>}
+          {/* Colored header bar */}
+          <div className="mb-4 rounded-xl px-4 py-3 flex items-center justify-between" style={{ backgroundColor: headerColor }}>
+            <div className="flex items-center gap-3">
+              {businessLogo && <img src={businessLogo} alt="logo" className="h-10 w-10 rounded-lg object-cover bg-white/20" />}
+              <div>
+                <h2 className="text-xl font-bold text-white">{businessName}</h2>
+                {businessAddress && <p className="text-xs text-white/80">{businessAddress}</p>}
+                {businessPhone && <p className="text-xs text-white/80">{businessPhone}</p>}
+              </div>
             </div>
             <div className="text-right">
-              <p className="text-lg font-bold text-orange-500">INVOICE</p>
-              <p className="text-xs text-gray-500">#{sale.invoice_number || sale.id}</p>
+              <p className="text-lg font-bold text-white">INVOICE</p>
+              <p className="text-xs text-white/80">{invoicePrefix}{sale.invoice_number || sale.id}</p>
             </div>
           </div>
           <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
@@ -119,6 +126,9 @@ function PrintModal({ sale, onClose }) {
           </div>
           {sale.notes && (
             <div className="mt-4 text-xs text-gray-500 border-t pt-2">Notes: {sale.notes}</div>
+          )}
+          {footerText && (
+            <div className="mt-4 border-t pt-3 text-center text-xs text-gray-400 italic">{footerText}</div>
           )}
         </div>
       </div>
@@ -390,7 +400,7 @@ function SaleModal({ onClose, onSaved, editData }) {
                     value={form.payment_method}
                     onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}
                   >
-                    {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
+                    {PM_CONSTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
                 </div>
                 <div className="flex justify-between font-semibold text-orange-400 border-t border-navy-700 pt-2">
@@ -480,6 +490,29 @@ export default function SalesPage() {
       setSaleList(prev => prev.filter(s => s.id !== deleteSale.id));
     } catch {}
     setDeleteSale(null);
+  };
+
+  const duplicateSale = async (sale) => {
+    try {
+      // Load full sale details (with items)
+      const { data } = await salesApi.get(sale.id);
+      // Get a new invoice number
+      const numRes = await salesApi.nextNumber?.();
+      const newInvoice = {
+        ...data,
+        invoice_number: numRes?.data?.next_number || `COPY-${data.invoice_number}`,
+        sale_date: new Date().toISOString().slice(0, 10),
+        status: "DRAFT",
+        paid_amount: 0,
+      };
+      delete newInvoice.id;
+      setEditSale(newInvoice);
+      setShowModal(true);
+    } catch {
+      // fallback: open blank modal pre-filled
+      setEditSale({ ...sale, id: undefined, status: "DRAFT", paid_amount: 0 });
+      setShowModal(true);
+    }
   };
 
   const shareWhatsApp = (sale) => {
@@ -599,6 +632,10 @@ export default function SalesPage() {
                   <button onClick={() => { setEditSale(sale); setShowModal(true); }} title="Edit"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-white">
                     <Edit2 size={13} />
+                  </button>
+                  <button onClick={() => duplicateSale(sale)} title="Duplicate Invoice"
+                    className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-orange-400">
+                    <Copy size={13} />
                   </button>
                   <button onClick={() => setPrintSale(sale)} title="Print"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-white">

@@ -61,15 +61,13 @@ class _PaymentsScreenState extends State<PaymentsScreen>
         0,
         (s, r) =>
             s +
-            ((double.tryParse(r['total_amount']?.toString() ?? '0') ?? 0) -
-                (double.tryParse(r['paid_amount']?.toString() ?? '0') ?? 0)));
+            ((double.tryParse(r['due_amount']?.toString() ?? r['total']?.toString() ?? '0') ?? 0)));
 
     final totalPayable = _payable.fold<double>(
         0,
         (s, r) =>
             s +
-            ((double.tryParse(r['total_amount']?.toString() ?? '0') ?? 0) -
-                (double.tryParse(r['paid_amount']?.toString() ?? '0') ?? 0)));
+            ((double.tryParse(r['due_amount']?.toString() ?? r['total']?.toString() ?? '0') ?? 0)));
 
     return Scaffold(
       appBar: AppBar(
@@ -81,6 +79,7 @@ class _PaymentsScreenState extends State<PaymentsScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'payments_fab',
         backgroundColor: AppColors.orange,
         foregroundColor: Colors.white,
         onPressed: () => _showRecordPaymentSheet(context, settings),
@@ -197,12 +196,10 @@ class _PaymentsScreenState extends State<PaymentsScreen>
     bool loadingParties = true;
 
     const methods = [
-      {'key': 'CASH', 'label': 'Cash'},
-      {'key': 'BANK', 'label': 'Bank'},
-      {'key': 'ESEWA', 'label': 'eSewa'},
+      {'key': 'CASH',   'label': 'Cash'},
+      {'key': 'BANK',   'label': 'Bank'},
+      {'key': 'ESEWA',  'label': 'eSewa'},
       {'key': 'KHALTI', 'label': 'Khalti'},
-      {'key': 'IME_PAY', 'label': 'IME Pay'},
-      {'key': 'MOBILE', 'label': 'Mobile'},
     ];
 
     showModalBottomSheet(
@@ -365,7 +362,8 @@ class _PaymentsScreenState extends State<PaymentsScreen>
                                   'amount': amount,
                                   'payment_method': paymentMethod,
                                   'payment_type': direction,
-                                  'notes': notesCtrl.text.trim(),
+                                  'date': DateTime.now().toIso8601String().substring(0, 10),
+                                  'note': notesCtrl.text.trim(),
                                 },
                               );
                               if (context.mounted) {
@@ -381,7 +379,7 @@ class _PaymentsScreenState extends State<PaymentsScreen>
                             } catch (e) {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Error: $e')));
+                                    SnackBar(content: Text(ApiService.errorMessage(e))));
                               }
                             }
                             ss(() => saving = false);
@@ -478,11 +476,10 @@ class _DueBillList extends StatelessWidget {
         itemCount: items.length,
         itemBuilder: (ctx, i) {
           final item = items[i];
-          final total =
-              double.tryParse(item['total_amount']?.toString() ?? '0') ?? 0;
-          final paid =
-              double.tryParse(item['paid_amount']?.toString() ?? '0') ?? 0;
-          final balance = total - paid;
+          final balance =
+              double.tryParse(item['due_amount']?.toString() ?? '0') ??
+              ((double.tryParse(item['total']?.toString() ?? '0') ?? 0) -
+               (double.tryParse(item['paid_amount']?.toString() ?? '0') ?? 0));
           final isOverdue = item['is_overdue'] == true;
 
           return AppCard(
@@ -510,7 +507,10 @@ class _DueBillList extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item['bill_number'] ?? '—',
+                    Text(
+                        type == 'receivable'
+                            ? (item['invoice_number'] ?? '—')
+                            : (item['bill_number'] ?? '—'),
                         style: const TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 14)),
                     Text(

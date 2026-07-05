@@ -4,8 +4,9 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from django.conf import settings
-from django.core.mail import send_mail
 from datetime import timedelta
+from bewosy.email import send_otp_email
+from bewosy.utils import get_bid, get_business
 from .models import User, Business, StaffMember, OTPCode, LoginActivity, StaffActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import UserSerializer, BusinessSerializer, StaffMemberSerializer, InviteStaffSerializer
 
@@ -15,33 +16,35 @@ class SendOTPView(APIView):
 
     def post(self, request):
         email = request.data.get("email", "").strip().lower()
+
         if not email:
             return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Use existing user's account_type if they exist; default to business for new
+        # Safely cast is_signup regardless of whether it arrives as bool or string
+        _raw = request.data.get("is_signup", False)
+        is_signup = _raw if isinstance(_raw, bool) else str(_raw).lower() in ("true", "1", "yes")
+
         existing = User.objects.filter(email=email).first()
+
+        # Reject explicit sign-up attempts for already-registered emails
+        if is_signup and existing:
+            return Response({
+                "error": "This email is already registered. Please sign in instead.",
+                "user_exists": True,
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         account_type = existing.account_type if existing else ACCOUNT_BUSINESS
-
         otp = OTPCode.generate(email, account_type)
+        sent = send_otp_email(email, otp.code)
 
-        try:
-            send_mail(
-                subject="Your Bewosy Verification Code",
-                message=(
-                    f"Your Bewosy OTP: {otp.code}\n\n"
-                    "Valid for 10 minutes. Never share this code.\n\n— Bewosy Team"
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-                fail_silently=True,
+        if not sent:
+            return Response(
+                {"error": "Could not send OTP email. Please check your email address or try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        except Exception:
-            pass
-        print(f"\n[BEWOSY OTP] Email: {email}  Code: {otp.code}\n")
 
         response_data = {
             "message": f"OTP sent to {email}. Valid for 10 minutes.",
-            # Tell frontend whether this email already has an account
             "user_exists": existing is not None,
         }
         if settings.DEBUG:
@@ -256,4 +259,93 @@ class StaffActivityView(APIView):
                 "ip_address": la.ip_address,
                 "success": la.success,
             })
+        return Response(data)
+
+
+# ── Business-scoped staff endpoints (used by Flutter /staff/ calls) ────────────
+
+class BusinessStaffListView(generics.ListAPIView):
+    """List all staff members for the current business."""
+    serializer_class = StaffMemberSerializer
+
+    def get_queryset(self):
+        bid = get_bid(self.request)
+        if not bid:
+            return StaffMember.objects.none()
+        return StaffMember.objects.filter(
+            business_id=bid,
+            business__staff__user=self.request.user,
+            business__staff__is_active=True,
+        ).select_related("user").distinct()
+
+
+class BusinessStaffInviteView(APIView):
+    """Invite (or add) a staff member to the current business."""
+
+    def post(self, request):
+        business = get_business(request)
+        if not business:
+            return Response({"error": "Business not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = request.data.get("email", "").strip().lower()
+        name = request.data.get("name", "").strip()
+        role = request.data.get("role", StaffMember.ROLE_CASHIER)
+
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        valid_roles = [r for r, _ in StaffMember.ROLE_CHOICES]
+        if role not in valid_roles:
+            role = StaffMember.ROLE_CASHIER
+
+        user, _ = User.objects.get_or_create(
+            email=email,
+            defaults={"name": name or email.split("@")[0].capitalize(), "account_type": ACCOUNT_BUSINESS},
+        )
+        if name and not user.name:
+            user.name = name
+            user.save(update_fields=["name"])
+
+        member, created = StaffMember.objects.get_or_create(
+            user=user, business=business,
+            defaults={"role": role},
+        )
+        if not created:
+            member.role = role
+            member.is_active = True
+            member.save(update_fields=["role", "is_active"])
+
+        return Response(StaffMemberSerializer(member).data, status=status.HTTP_201_CREATED)
+
+
+class BusinessStaffActivityView(APIView):
+    """Return login activity for all staff in the current business."""
+
+    def get(self, request):
+        bid = get_bid(request)
+        if not bid:
+            return Response([], status=status.HTTP_200_OK)
+
+        staff_user_ids = StaffMember.objects.filter(
+            business_id=bid,
+            business__staff__user=request.user,
+            business__staff__is_active=True,
+        ).values_list("user_id", flat=True).distinct()
+
+        activities = LoginActivity.objects.filter(
+            user_id__in=staff_user_ids,
+        ).select_related("user").order_by("-timestamp")[:100]
+
+        data = [
+            {
+                "id": la.id,
+                "action": "LOGIN",
+                "description": f"{la.user.name or la.user.email} logged in",
+                "user_name": la.user.name or la.user.email,
+                "timestamp": la.timestamp,
+                "ip_address": la.ip_address,
+                "success": la.success,
+            }
+            for la in activities
+        ]
         return Response(data)

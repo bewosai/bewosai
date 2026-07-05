@@ -1,10 +1,12 @@
 // Presentation layer — coordinates usecases, manages UI state
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/constants/app_constants.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/business_model.dart';
+import '../../data/services/api_service.dart';
 import '../../domain/usecases/auth_usecases.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -55,16 +57,20 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<Map<String, dynamic>> sendOtp(String email) async {
+  Future<Map<String, dynamic>> sendOtp(String email, {bool isSignup = false}) async {
     _loading = true;
     _error = null;
     notifyListeners();
     try {
-      final result = await _sendOtpUc(email);
+      final result = await _sendOtpUc(email, isSignup: isSignup);
       return {'ok': true, ...result};
     } catch (e) {
       _error = _parseError(e);
-      return {'ok': false, 'error': _error};
+      bool userExists = false;
+      if (e is DioException && e.response?.data is Map) {
+        userExists = (e.response!.data['user_exists'] ?? false) == true;
+      }
+      return {'ok': false, 'error': _error, 'user_exists': userExists};
     } finally {
       _loading = false;
       notifyListeners();
@@ -154,11 +160,5 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _parseError(dynamic e) {
-    try {
-      return e.toString().replaceAll('Exception: ', '');
-    } catch (_) {
-      return 'An error occurred.';
-    }
-  }
+  String _parseError(dynamic e) => ApiService.errorMessage(e);
 }

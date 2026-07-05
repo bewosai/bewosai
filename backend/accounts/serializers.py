@@ -17,7 +17,8 @@ class BusinessSerializer(serializers.ModelSerializer):
         model = Business
         fields = (
             "id", "name", "business_type", "address", "phone", "email",
-            "logo", "plan", "status", "subscription_expires",
+            "logo", "pan_number", "vat_number", "currency", "fiscal_year_start",
+            "plan", "status", "subscription_expires",
             "owner", "owner_name", "staff_count", "created_at",
         )
         read_only_fields = ("id", "owner", "created_at")

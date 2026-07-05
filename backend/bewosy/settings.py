@@ -4,9 +4,9 @@ from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config("SECRET_KEY", default="bewosy-insecure-dev-key")
+SECRET_KEY = config("SECRET_KEY", default="bewosy-insecure-dev-key-change-in-production")
 DEBUG = config("DEBUG", default=True, cast=bool)
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,0.0.0.0").split(",")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -21,16 +21,17 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "django_filters",
+    "drf_spectacular",
     # Local apps
     "accounts",
     "inventory",
     "parties",
     "sales",
+    "purchases",
     "expenses",
     "banking",
     "reports",
     "superadmin",
-    "purchases",
 ]
 
 MIDDLEWARE = [
@@ -93,19 +94,34 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# ── Django REST Framework ──────────────────────────────────────────────────────
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 20,
+    "PAGE_SIZE": 50,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Bewosy API",
+    "DESCRIPTION": "Business management platform API for Bewosy — handles sales, inventory, parties, banking, expenses, and reports.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+}
+
+# ── JWT ────────────────────────────────────────────────────────────────────────
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
@@ -115,17 +131,59 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
-CORS_ALLOWED_ORIGINS = config(
-    "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:5173,http://127.0.0.1:5173",
-).split(",")
+# ── CORS ───────────────────────────────────────────────────────────────────────
+# In development, allow all origins so the Flutter mobile app and Vite web
+# client can both reach the API without configuration friction.
+# In production, set CORS_ALLOWED_ORIGINS via environment variable.
+
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOWED_ORIGINS = config(
+        "CORS_ALLOWED_ORIGINS",
+        default="http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+
 CORS_ALLOW_CREDENTIALS = True
 
-# Email (OTP)
-EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+# Allow the custom header the Flutter app sends for business context
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "x-business-id",  # Flutter app business context header
+]
+
+# ── Email ─────────────────────────────────────────────────────────────────────
+# Option A — Gmail SMTP (recommended, no extra account needed):
+#   EMAIL_HOST_USER=your@gmail.com
+#   EMAIL_HOST_PASSWORD=xxxx xxxx xxxx xxxx  ← 16-char Gmail App Password
+#
+# Option B — SendGrid (set API key, leave SMTP fields blank):
+#   SENDGRID_API_KEY=SG.xxxxx
+#   SENDGRID_FROM_EMAIL=your@gmail.com
+#
+# Neither set → OTPs print to Django console (dev fallback).
+
+SENDGRID_API_KEY = config("SENDGRID_API_KEY", default="")
+SENDGRID_FROM_EMAIL = config("SENDGRID_FROM_EMAIL", default="noreply@bewosy.com")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Bewosy <noreply@bewosy.com>")
+
 EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Bewosy <noreply@bewosy.com>")
+
+# Auto-select backend: SMTP when Gmail credentials present, console otherwise
+EMAIL_BACKEND = (
+    "django.core.mail.backends.smtp.EmailBackend"
+    if EMAIL_HOST_USER
+    else "django.core.mail.backends.console.EmailBackend"
+)

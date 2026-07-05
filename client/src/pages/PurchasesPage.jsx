@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { useRef } from "react";
 import {
-  Plus, Search, Edit2, Trash2, X, AlertCircle, ShoppingCart
+  Plus, Search, Edit2, Trash2, X, AlertCircle, ShoppingCart, Upload, Image, Eye,
 } from "lucide-react";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext";
@@ -65,6 +66,10 @@ function PurchaseModal({ onClose, onSaved, editData }) {
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [billImage, setBillImage] = useState(null);   // File object
+  const [billPreview, setBillPreview] = useState(editData?.bill_image_url || null);
+  const [viewingImage, setViewingImage] = useState(false);
+  const billImageRef = useRef(null);
 
   useEffect(() => {
     parties.list({ party_type: "SUPPLIER" }).then(r => setSuppliers(r.data.results ?? r.data)).catch(() => {});
@@ -96,13 +101,22 @@ function PurchaseModal({ onClose, onSaved, editData }) {
     if (!form.supplier_id && !form.supplier_name) { setError("Please select a supplier."); return; }
     setSaving(true);
     try {
-      const payload = {
+      let payload;
+      const baseData = {
         ...form,
         status: statusOverride || form.status,
         subtotal: subtotal.toFixed(2),
         total_amount: grandTotal.toFixed(2),
         due_amount: balanceDue.toFixed(2),
+        items: JSON.stringify(form.items),
       };
+      if (billImage) {
+        payload = new FormData();
+        Object.entries(baseData).forEach(([k, v]) => payload.append(k, v));
+        payload.append("bill_image", billImage);
+      } else {
+        payload = { ...baseData, items: form.items };
+      }
       if (editData?.id) {
         await purchasesApi.update(editData.id, payload);
       } else {
@@ -273,6 +287,36 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                   placeholder="Additional notes..."
                 />
               </div>
+
+              {/* Bill Image Upload */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-navy-400">Bill Image (optional)</label>
+                <input ref={billImageRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) { setBillImage(f); setBillPreview(URL.createObjectURL(f)); }
+                  }} />
+                {billPreview ? (
+                  <div className="flex items-center gap-2">
+                    <img src={billPreview} alt="bill" className="h-16 w-16 rounded-lg object-cover border border-navy-700 cursor-pointer"
+                      onClick={() => setViewingImage(true)} />
+                    <div className="text-xs text-navy-400">
+                      <button onClick={() => setViewingImage(true)} className="flex items-center gap-1 text-blue-400 hover:underline mb-1">
+                        <Eye className="h-3 w-3" /> View
+                      </button>
+                      <button onClick={() => { setBillImage(null); setBillPreview(null); if (billImageRef.current) billImageRef.current.value = ""; }}
+                        className="flex items-center gap-1 text-red-400 hover:underline">
+                        <X className="h-3 w-3" /> Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => billImageRef.current?.click()}
+                    className="flex items-center gap-2 rounded-xl border border-dashed border-navy-700 px-4 py-3 text-sm text-navy-400 hover:border-orange-500/50 hover:text-orange-400 transition w-full">
+                    <Upload className="h-4 w-4" /> Upload bill photo
+                  </button>
+                )}
+              </div>
             </div>
             <div className="rounded-xl border border-navy-700 bg-navy-800/40 p-4 space-y-2 text-sm">
               <div className="flex justify-between text-navy-400"><span>Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
@@ -317,6 +361,16 @@ function PurchaseModal({ onClose, onSaved, editData }) {
           </button>
         </div>
       </div>
+
+      {/* Full-screen image viewer */}
+      {viewingImage && billPreview && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4" onClick={() => setViewingImage(false)}>
+          <img src={billPreview} alt="bill" className="max-h-full max-w-full rounded-xl object-contain" />
+          <button className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" onClick={() => setViewingImage(false)}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -334,6 +388,7 @@ export default function PurchasesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
+  const [viewBillImage, setViewBillImage] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -463,6 +518,12 @@ export default function PurchasesPage() {
                   </span>
                 </div>
                 <div className="col-span-6 sm:col-span-1 flex justify-end gap-1">
+                  {item.bill_image_url && (
+                    <button onClick={() => setViewBillImage(item.bill_image_url)} title="View Bill"
+                      className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-blue-400">
+                      <Image size={13} />
+                    </button>
+                  )}
                   <button onClick={() => { setEditItem(item); setShowModal(true); }} title="Edit"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-white">
                     <Edit2 size={13} />
@@ -497,6 +558,16 @@ export default function PurchasesPage() {
               }} className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 text-sm">Delete</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Bill image viewer */}
+      {viewBillImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setViewBillImage(null)}>
+          <img src={viewBillImage} alt="Bill" className="max-h-full max-w-full rounded-xl object-contain" />
+          <button className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" onClick={() => setViewBillImage(null)}>
+            <X className="h-5 w-5" />
+          </button>
         </div>
       )}
     </div>
