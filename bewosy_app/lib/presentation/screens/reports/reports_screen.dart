@@ -327,8 +327,6 @@ class _ProfitLossTab extends StatefulWidget {
 }
 
 class _ProfitLossTabState extends State<_ProfitLossTab> {
-  String _period = 'month';
-
   @override
   Widget build(BuildContext context) {
     final s = widget.settings;

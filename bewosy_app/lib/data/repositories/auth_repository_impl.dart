@@ -2,11 +2,8 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/constants/app_constants.dart';
-import '../../domain/entities/user_entity.dart';
-import '../../domain/entities/business_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../models/user_model.dart';
-import '../models/business_model.dart';
 import '../services/api_service.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
@@ -48,15 +45,7 @@ class AuthRepositoryImpl implements AuthRepository {
     await _storage.write(
         key: AppConstants.keyUser, value: jsonEncode(user.toJson()));
 
-    final businesses = (data['businesses'] as List? ?? [])
-        .map((b) => BusinessModel.fromJson(Map<String, dynamic>.from(b as Map)))
-        .toList();
-
-    return {
-      ...data,
-      'user_entity': _toUserEntity(user),
-      'business_entities': businesses.map(_toBusinessEntity).toList(),
-    };
+    return data;
   }
 
   @override
@@ -75,44 +64,4 @@ class AuthRepositoryImpl implements AuthRepository {
     }
     await _storage.deleteAll();
   }
-
-  @override
-  Future<UserEntity?> getStoredUser() async {
-    final json = await _storage.read(key: AppConstants.keyUser);
-    if (json == null) return null;
-    final model = UserModel.fromJson(
-        Map<String, dynamic>.from(jsonDecode(json) as Map));
-    return _toUserEntity(model);
-  }
-
-  @override
-  Future<BusinessEntity?> getStoredBusiness() async {
-    final json =
-        await _storage.read(key: AppConstants.keyCurrentBusiness);
-    if (json == null) return null;
-    final model = BusinessModel.fromJson(
-        Map<String, dynamic>.from(jsonDecode(json) as Map));
-    return _toBusinessEntity(model);
-  }
-
-  UserEntity _toUserEntity(UserModel m) => UserEntity(
-        id: m.id,
-        email: m.email,
-        name: m.name,
-        phone: m.phone,
-        accountType: m.accountType,
-        isPlatformAdmin: m.isPlatformAdmin,
-        isVerified: m.isVerified,
-      );
-
-  BusinessEntity _toBusinessEntity(BusinessModel m) => BusinessEntity(
-        id: m.id,
-        name: m.name,
-        businessType: m.businessType,
-        address: m.address,
-        phone: m.phone,
-        email: m.email,
-        plan: m.plan,
-        status: m.status,
-      );
 }

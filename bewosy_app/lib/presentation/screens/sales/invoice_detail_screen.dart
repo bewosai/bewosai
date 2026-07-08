@@ -383,7 +383,31 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   }
 
   Widget _buildActionButtons(AppSettings settings) {
+    final sale    = _fullSale ?? widget.sale;
+    final total   = double.tryParse(sale['total']?.toString() ?? '0') ?? 0;
+    final paid    = double.tryParse(sale['paid_amount']?.toString() ?? '0') ?? 0;
+    final balance = total - paid;
+
     return Column(children: [
+      // Collect Payment — shown only when there's an outstanding balance
+      if (balance > 0.005) ...[
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => _showCollectPaymentSheet(settings),
+            icon: const Icon(Icons.payments_rounded, size: 18),
+            label: Text('Collect Payment  (${settings.formatAmount(balance)} due)'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
       Row(children: [
         Expanded(
           child: OutlinedButton.icon(
@@ -431,6 +455,138 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         ),
       ),
     ]);
+  }
+
+  void _showCollectPaymentSheet(AppSettings settings) {
+    final sale    = _fullSale ?? widget.sale;
+    final total   = double.tryParse(sale['total']?.toString() ?? '0') ?? 0;
+    final paid    = double.tryParse(sale['paid_amount']?.toString() ?? '0') ?? 0;
+    final balance = total - paid;
+    final saleId  = sale['id'];
+
+    final amountCtrl = TextEditingController(
+        text: balance.toStringAsFixed(2));
+    final notesCtrl  = TextEditingController();
+    String method    = sale['payment_method']?.toString() ?? 'CASH';
+    bool saving      = false;
+
+    const methods = [
+      {'key': 'CASH',   'label': 'Cash'},
+      {'key': 'BANK',   'label': 'Bank'},
+      {'key': 'ESEWA',  'label': 'eSewa'},
+      {'key': 'KHALTI', 'label': 'Khalti'},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx2, ss) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx2).viewInsets.bottom),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(
+                    height: 4, width: 40,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2)))),
+                const Text('Collect Payment',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text('Balance due: ${settings.formatAmount(balance)}',
+                    style: const TextStyle(color: AppColors.navy500, fontSize: 13)),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: amountCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Amount Received',
+                    prefixText: '${settings.currency} ',
+                    prefixIcon: const Icon(Icons.payments_rounded),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: method,
+                  decoration:
+                      const InputDecoration(labelText: 'Payment Method'),
+                  items: methods.map((m) => DropdownMenuItem(
+                        value: m['key'], child: Text(m['label']!))).toList(),
+                  onChanged: (v) => ss(() => method = v!),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesCtrl,
+                  decoration:
+                      const InputDecoration(labelText: 'Notes (optional)'),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final amt = double.tryParse(amountCtrl.text.trim());
+                            if (amt == null || amt <= 0) return;
+                            ss(() => saving = true);
+                            try {
+                              final api = context.read<ApiService>();
+                              final newPaid = (paid + amt).clamp(0, total);
+                              await api.patch('/sales/$saleId/', data: {
+                                'paid_amount': newPaid,
+                                'payment_method': method,
+                                if (notesCtrl.text.trim().isNotEmpty)
+                                  'notes': notesCtrl.text.trim(),
+                              });
+                              if (context.mounted) {
+                                Navigator.pop(ctx2);
+                                _loadFull();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        '${settings.formatAmount(amt)} collected!'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(ApiService.errorMessage(e))));
+                              }
+                            }
+                            ss(() => saving = false);
+                          },
+                    icon: const Icon(Icons.check_rounded, size: 18),
+                    label: saving
+                        ? const Text('Saving...')
+                        : const Text('Confirm Payment'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _shareWhatsApp(AppSettings settings) async {

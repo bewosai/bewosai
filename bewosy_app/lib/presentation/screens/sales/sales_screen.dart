@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_settings.dart';
 import '../../../data/services/api_service.dart';
@@ -356,7 +358,6 @@ class _CreateSaleSheet extends StatefulWidget {
 }
 
 class _CreateSaleSheetState extends State<_CreateSaleSheet> {
-  final _partyCtrl    = TextEditingController();
   final _notesCtrl    = TextEditingController();
   final _discountCtrl = TextEditingController(text: '0');
   final _paidCtrl     = TextEditingController(text: '0');
@@ -366,13 +367,89 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
   bool _saving = false;
   final List<Map<String, dynamic>> _items = [];
 
+  // Party selection
+  int? _selectedCustomerId;
+  List<Map<String, dynamic>> _customers = [];
+
+  // Product list for picker
+  List<Map<String, dynamic>> _products = [];
+
+  static const _draftKey = 'sale_draft';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+    _restoreDraft();
+  }
+
+  Future<void> _restoreDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || !mounted) return;
+      final d = jsonDecode(raw) as Map<String, dynamic>;
+      setState(() {
+        _selectedCustomerId = d['customer'] as int?;
+        _paymentMethod      = d['payment_method']?.toString() ?? 'CASH';
+        _status             = d['status']?.toString() ?? 'CONFIRMED';
+        _taxRate            = (d['tax_rate'] as num?)?.toDouble() ?? 0;
+        _discountCtrl.text  = d['discount']?.toString() ?? '0';
+        _paidCtrl.text      = d['paid']?.toString() ?? '0';
+        _notesCtrl.text     = d['notes']?.toString() ?? '';
+        final rawItems = d['items'] as List?;
+        if (rawItems != null) {
+          _items
+            ..clear()
+            ..addAll(rawItems.map((i) => Map<String, dynamic>.from(i as Map)));
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _saveDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_draftKey, jsonEncode({
+        'customer':       _selectedCustomerId,
+        'payment_method': _paymentMethod,
+        'status':         _status,
+        'tax_rate':       _taxRate,
+        'discount':       _discountCtrl.text,
+        'paid':           _paidCtrl.text,
+        'notes':          _notesCtrl.text,
+        'items':          _items,
+      }));
+    } catch (_) {}
+  }
+
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_draftKey);
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final results = await Future.wait([
+        widget.biz.getParties(partyType: 'CUSTOMER'),
+        widget.biz.getProducts(),
+      ]);
+      if (mounted) setState(() {
+        _customers = results[0];
+        _products  = results[1];
+      });
+    } catch (_) {}
+  }
+
   void _addItem() {
     setState(() => _items.add({
           'product_name': '',
-          'quantity': 1,
+          'product': null,
+          'quantity': 1.0,
           'unit_price': 0.0,
           'discount_amount': 0.0,
         }));
+    _saveDraft();
   }
 
   double get _subtotal =>
@@ -391,7 +468,7 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
     try {
       final paid = double.tryParse(_paidCtrl.text) ?? 0;
       await widget.biz.createSale({
-        'customer': null,
+        if (_selectedCustomerId != null) 'customer': _selectedCustomerId,
         'sale_date': DateTime.now().toIso8601String().substring(0, 10),
         'payment_method': _paymentMethod,
         'status': _status,
@@ -408,6 +485,7 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
         }).toList(),
       });
       if (mounted) {
+        await _clearDraft();
         Navigator.pop(context);
         widget.onCreated();
       }
@@ -446,12 +524,22 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
               style: const TextStyle(
                   fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 20),
-          TextField(
-            controller: _partyCtrl,
+          DropdownButtonFormField<int?>(
+            value: _selectedCustomerId,
             decoration: InputDecoration(
               labelText: s.t('customer'),
               prefixIcon: const Icon(Icons.person_rounded),
+              hintText: 'Walk-in customer',
             ),
+            items: [
+              const DropdownMenuItem<int?>(
+                  value: null, child: Text('Walk-in Customer')),
+              ..._customers.map((p) => DropdownMenuItem<int?>(
+                    value: p['id'] as int?,
+                    child: Text(p['name']?.toString() ?? ''),
+                  )),
+            ],
+            onChanged: (v) { setState(() => _selectedCustomerId = v); _saveDraft(); },
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -463,7 +551,7 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
               DropdownMenuItem(value: 'ESEWA',  child: Text('eSewa')),
               DropdownMenuItem(value: 'KHALTI', child: Text('Khalti')),
             ],
-            onChanged: (v) => setState(() => _paymentMethod = v!),
+            onChanged: (v) { setState(() => _paymentMethod = v!); _saveDraft(); },
           ),
           const SizedBox(height: 12),
           // VAT toggle — Nepal 13%
@@ -484,7 +572,7 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
               Switch.adaptive(
                 value: _taxRate == 13,
                 activeColor: AppColors.orange,
-                onChanged: (v) => setState(() => _taxRate = v ? 13 : 0),
+                onChanged: (v) { setState(() => _taxRate = v ? 13 : 0); _saveDraft(); },
               ),
             ]),
           ),
@@ -495,7 +583,7 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                   labelText: 'Discount (Rs.)', prefixIcon: Icon(Icons.discount_outlined)),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) { setState(() {}); _saveDraft(); },
             )),
             const SizedBox(width: 12),
             Expanded(child: TextField(
@@ -503,7 +591,7 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                   labelText: 'Paid Amount', prefixIcon: Icon(Icons.payments_outlined)),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) { setState(() {}); _saveDraft(); },
             )),
           ]),
           const SizedBox(height: 12),
@@ -514,7 +602,7 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
               DropdownMenuItem(value: 'CONFIRMED', child: Text('Confirmed')),
               DropdownMenuItem(value: 'DRAFT',     child: Text('Draft')),
             ],
-            onChanged: (v) => setState(() => _status = v!),
+            onChanged: (v) { setState(() => _status = v!); _saveDraft(); },
           ),
           const SizedBox(height: 16),
           Row(children: [
@@ -531,8 +619,9 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
                 index: e.key,
                 item: e.value,
                 settings: s,
-                onUpdate: (k, v) => setState(() => _items[e.key][k] = v),
-                onRemove: () => setState(() => _items.removeAt(e.key)),
+                products: _products,
+                onUpdate: (k, v) { setState(() => _items[e.key][k] = v); _saveDraft(); },
+                onRemove: () { setState(() => _items.removeAt(e.key)); _saveDraft(); },
               )),
           if (_items.isNotEmpty) ...[
             const Divider(height: 24),
@@ -550,6 +639,7 @@ class _CreateSaleSheetState extends State<_CreateSaleSheet> {
             controller: _notesCtrl,
             decoration: InputDecoration(labelText: s.t('notes')),
             maxLines: 2,
+            onChanged: (_) => _saveDraft(),
           ),
           const SizedBox(height: 20),
           PrimaryButton(
@@ -581,19 +671,76 @@ Widget _summaryRow(String label, double value, Color color, AppSettings s,
   );
 }
 
-class _ItemRow extends StatelessWidget {
+class _ItemRow extends StatefulWidget {
   final int index;
   final Map<String, dynamic> item;
   final AppSettings settings;
+  final List<Map<String, dynamic>> products;
   final Function(String, dynamic) onUpdate;
   final VoidCallback onRemove;
   const _ItemRow({
     required this.index,
     required this.item,
     required this.settings,
+    required this.products,
     required this.onUpdate,
     required this.onRemove,
   });
+  @override
+  State<_ItemRow> createState() => _ItemRowState();
+}
+
+class _ItemRowState extends State<_ItemRow> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _qtyCtrl;
+  late final TextEditingController _priceCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl  = TextEditingController(text: widget.item['product_name']?.toString() ?? '');
+    _qtyCtrl   = TextEditingController(text: (widget.item['quantity'] ?? 1).toString());
+    _priceCtrl = TextEditingController(text: (widget.item['unit_price'] ?? 0.0).toString());
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _qtyCtrl.dispose();
+    _priceCtrl.dispose();
+    super.dispose();
+  }
+
+  void _pickProduct(BuildContext ctx) {
+    if (widget.products.isEmpty) return;
+    showModalBottomSheet(
+      context: ctx,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _ProductPickerSheet(
+        products: widget.products,
+        settings: widget.settings,
+        onPick: (p) {
+          final price = double.tryParse(
+              p['sale_price']?.toString() ?? p['selling_price']?.toString() ?? '0') ?? 0;
+          final name = p['name']?.toString() ?? '';
+          final id   = p['id'];
+          _nameCtrl.text  = name;
+          _priceCtrl.text = price.toString();
+          widget.onUpdate('product_name', name);
+          widget.onUpdate('product', id);
+          widget.onUpdate('unit_price', price);
+          setState(() {});
+        },
+      ),
+    );
+  }
+
+  double get _lineTotal {
+    final qty   = double.tryParse(_qtyCtrl.text) ?? 0;
+    final price = double.tryParse(_priceCtrl.text) ?? 0;
+    return qty * price;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -605,52 +752,147 @@ class _ItemRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
             Expanded(
-              child: TextFormField(
-                initialValue: item['product_name'],
-                decoration: const InputDecoration(
-                    hintText: 'Product name',
-                    isDense: true,
-                    border: InputBorder.none),
-                onChanged: (v) => onUpdate('product_name', v),
+              child: GestureDetector(
+                onTap: widget.products.isNotEmpty ? () => _pickProduct(context) : null,
+                child: AbsorbPointer(
+                  absorbing: widget.products.isNotEmpty,
+                  child: TextField(
+                    controller: _nameCtrl,
+                    decoration: InputDecoration(
+                      hintText: widget.products.isNotEmpty
+                          ? 'Tap to pick product'
+                          : 'Product name',
+                      isDense: true,
+                      border: InputBorder.none,
+                      suffixIcon: widget.products.isNotEmpty
+                          ? const Icon(Icons.arrow_drop_down_rounded,
+                              size: 20, color: AppColors.navy500)
+                          : null,
+                    ),
+                    onChanged: (v) => widget.onUpdate('product_name', v),
+                  ),
+                ),
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded,
-                  size: 18, color: AppColors.error),
-              onPressed: onRemove,
+              icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.error),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: widget.onRemove,
             ),
           ]),
           Row(children: [
             Expanded(
-              child: TextFormField(
-                initialValue: item['quantity'].toString(),
+              child: TextField(
+                controller: _qtyCtrl,
                 decoration: const InputDecoration(
-                    hintText: 'Qty',
-                    isDense: true,
-                    border: InputBorder.none),
-                keyboardType: TextInputType.number,
-                onChanged: (v) => onUpdate('quantity', int.tryParse(v) ?? 1),
+                    labelText: 'Qty', isDense: true, border: InputBorder.none),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (v) {
+                  widget.onUpdate('quantity', double.tryParse(v) ?? 1);
+                  setState(() {});
+                },
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               flex: 2,
-              child: TextFormField(
-                initialValue: item['unit_price'].toString(),
+              child: TextField(
+                controller: _priceCtrl,
                 decoration: const InputDecoration(
-                    hintText: 'Unit price',
-                    isDense: true,
-                    border: InputBorder.none),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (v) =>
-                    onUpdate('unit_price', double.tryParse(v) ?? 0),
+                    labelText: 'Price', isDense: true, border: InputBorder.none),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (v) {
+                  widget.onUpdate('unit_price', double.tryParse(v) ?? 0);
+                  setState(() {});
+                },
               ),
             ),
+            const SizedBox(width: 8),
+            Text(
+              '= ${widget.settings.formatAmount(_lineTotal)}',
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.orange),
+            ),
           ]),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductPickerSheet extends StatefulWidget {
+  final List<Map<String, dynamic>> products;
+  final AppSettings settings;
+  final void Function(Map<String, dynamic>) onPick;
+  const _ProductPickerSheet({required this.products, required this.settings, required this.onPick});
+  @override
+  State<_ProductPickerSheet> createState() => _ProductPickerSheetState();
+}
+
+class _ProductPickerSheetState extends State<_ProductPickerSheet> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _q.isEmpty
+        ? widget.products
+        : widget.products.where((p) =>
+            (p['name'] ?? '').toString().toLowerCase().contains(_q.toLowerCase()) ||
+            (p['barcode'] ?? '').toString().toLowerCase().contains(_q.toLowerCase())).toList();
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(height: 4, width: 40, decoration: BoxDecoration(
+              color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              autofocus: true,
+              decoration: const InputDecoration(
+                  hintText: 'Search product…',
+                  prefixIcon: Icon(Icons.search_rounded, size: 20),
+                  isDense: true),
+              onChanged: (v) => setState(() => _q = v),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 300,
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: filtered.length,
+              itemBuilder: (_, i) {
+                final p = filtered[i];
+                final price = double.tryParse(
+                    p['sale_price']?.toString() ?? p['selling_price']?.toString() ?? '0') ?? 0;
+                final stock = double.tryParse(p['stock_quantity']?.toString() ?? '0') ?? 0;
+                final unit  = p['unit_name']?.toString() ?? '';
+                return ListTile(
+                  dense: true,
+                  title: Text(p['name']?.toString() ?? '',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  subtitle: Text('${widget.settings.formatAmount(price)}  ·  Stock: $stock $unit',
+                      style: const TextStyle(fontSize: 11, color: AppColors.navy500)),
+                  trailing: const Icon(Icons.add_circle_rounded, color: AppColors.orange, size: 20),
+                  onTap: () {
+                    Navigator.pop(context);
+                    widget.onPick(p);
+                  },
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
         ],
       ),
     );

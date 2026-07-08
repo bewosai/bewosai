@@ -285,14 +285,31 @@ class _CreatePurchaseSheet extends StatefulWidget {
 }
 
 class _CreatePurchaseSheetState extends State<_CreatePurchaseSheet> {
-  final _supplierCtrl = TextEditingController();
   final _notesCtrl    = TextEditingController();
   String _paymentMode = 'CASH';
   bool _saving = false;
   final List<Map<String, dynamic>> _items = [];
 
-  double get _total =>
-      _items.fold(0, (s, i) => s + (i['quantity'] as int) * (i['unit_price'] as double));
+  // Supplier selection
+  int? _selectedSupplierId;
+  List<Map<String, dynamic>> _suppliers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSuppliers();
+  }
+
+  Future<void> _loadSuppliers() async {
+    try {
+      final parties = await widget.biz.getParties(partyType: 'SUPPLIER');
+      if (mounted) setState(() { _suppliers = parties; });
+    } catch (_) {
+    }
+  }
+
+  double get _total => _items.fold(0.0, (s, i) =>
+      s + (i['quantity'] as num).toDouble() * (i['unit_price'] as num).toDouble());
 
   @override
   Widget build(BuildContext context) {
@@ -312,12 +329,21 @@ class _CreatePurchaseSheetState extends State<_CreatePurchaseSheet> {
           Text(s.t('new_purchase'),
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 20),
-          TextField(
-            controller: _supplierCtrl,
+          DropdownButtonFormField<int?>(
+            value: _selectedSupplierId,
             decoration: InputDecoration(
               labelText: s.t('supplier'),
               prefixIcon: const Icon(Icons.business_rounded),
             ),
+            items: [
+              const DropdownMenuItem<int?>(
+                  value: null, child: Text('No Supplier')),
+              ..._suppliers.map((p) => DropdownMenuItem<int?>(
+                    value: p['id'] as int?,
+                    child: Text(p['name']?.toString() ?? ''),
+                  )),
+            ],
+            onChanged: (v) => setState(() => _selectedSupplierId = v),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -402,13 +428,10 @@ class _CreatePurchaseSheetState extends State<_CreatePurchaseSheet> {
               setState(() => _saving = true);
               try {
                 await widget.biz.createPurchase({
+                  if (_selectedSupplierId != null) 'supplier': _selectedSupplierId,
                   'purchase_date': DateTime.now().toIso8601String().substring(0, 10),
                   'payment_method': _paymentMode,
-                  'notes': _notesCtrl.text.trim().isNotEmpty
-                      ? _notesCtrl.text.trim()
-                      : (_supplierCtrl.text.trim().isNotEmpty
-                          ? 'Supplier: ${_supplierCtrl.text.trim()}'
-                          : ''),
+                  'notes': _notesCtrl.text.trim(),
                   'items': _items,
                 });
                 if (mounted) {

@@ -112,8 +112,8 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.whatsapp_rounded),
-            tooltip: 'Send Reminder',
+            icon: const Icon(Icons.chat_rounded),
+            tooltip: 'Send WhatsApp Reminder',
             onPressed: () => _sendWhatsAppReminder(context, context.read<AppSettings>()),
           ),
           IconButton(

@@ -458,6 +458,142 @@ class _DueBillList extends StatelessWidget {
     required this.onRefresh,
   });
 
+  void _showPayNow(BuildContext context, Map item, double balance) {
+    final itemId     = item['id'];
+    final isReceivable = type == 'receivable';
+    final paid       = double.tryParse(item['paid_amount']?.toString() ?? '0') ?? 0;
+    final total      = double.tryParse(item['total']?.toString() ?? '0') ?? 0;
+    final amountCtrl = TextEditingController(text: balance.toStringAsFixed(2));
+    final notesCtrl  = TextEditingController();
+    String method    = item['payment_method']?.toString() ?? 'CASH';
+    bool saving      = false;
+
+    const methods = [
+      {'key': 'CASH',   'label': 'Cash'},
+      {'key': 'BANK',   'label': 'Bank'},
+      {'key': 'ESEWA',  'label': 'eSewa'},
+      {'key': 'KHALTI', 'label': 'Khalti'},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx2, ss) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx2).viewInsets.bottom),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(
+                    height: 4, width: 40,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2)))),
+                Text(
+                  isReceivable ? 'Collect Payment' : 'Record Payment',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${isReceivable ? "Receivable" : "Payable"}: ${settings.formatAmount(balance)}',
+                  style: const TextStyle(color: AppColors.navy500, fontSize: 13),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: amountCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Amount',
+                    prefixText: '${settings.currency} ',
+                    prefixIcon: const Icon(Icons.payments_rounded),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: method,
+                  decoration:
+                      const InputDecoration(labelText: 'Payment Method'),
+                  items: methods.map((m) => DropdownMenuItem(
+                        value: m['key'], child: Text(m['label']!))).toList(),
+                  onChanged: (v) => ss(() => method = v!),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesCtrl,
+                  decoration:
+                      const InputDecoration(labelText: 'Notes (optional)'),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final amt = double.tryParse(amountCtrl.text.trim());
+                            if (amt == null || amt <= 0) return;
+                            ss(() => saving = true);
+                            try {
+                              final api = context.read<ApiService>();
+                              final newPaid = (paid + amt).clamp(0, total);
+                              final endpoint = isReceivable
+                                  ? '/sales/$itemId/'
+                                  : '/purchases/$itemId/';
+                              await api.patch(endpoint, data: {
+                                'paid_amount': newPaid,
+                                'payment_method': method,
+                                if (notesCtrl.text.trim().isNotEmpty)
+                                  'notes': notesCtrl.text.trim(),
+                              });
+                              if (context.mounted) {
+                                Navigator.pop(ctx2);
+                                onRefresh();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        '${settings.formatAmount(amt)} ${isReceivable ? "collected" : "paid"}!'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(ApiService.errorMessage(e))));
+                              }
+                            }
+                            ss(() => saving = false);
+                          },
+                    icon: const Icon(Icons.check_rounded, size: 18),
+                    label: saving
+                        ? const Text('Saving...')
+                        : Text(isReceivable ? 'Confirm Collection' : 'Confirm Payment'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isReceivable ? AppColors.success : AppColors.error,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
@@ -481,103 +617,132 @@ class _DueBillList extends StatelessWidget {
               ((double.tryParse(item['total']?.toString() ?? '0') ?? 0) -
                (double.tryParse(item['paid_amount']?.toString() ?? '0') ?? 0));
           final isOverdue = item['is_overdue'] == true;
+          final isReceivable = type == 'receivable';
 
           return AppCard(
             padding: const EdgeInsets.all(14),
-            child: Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isOverdue
-                      ? AppColors.errorLight
-                      : AppColors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  type == 'receivable'
-                      ? Icons.receipt_long_rounded
-                      : Icons.local_shipping_rounded,
-                  color:
-                      isOverdue ? AppColors.error : AppColors.orange,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                        type == 'receivable'
-                            ? (item['invoice_number'] ?? '—')
-                            : (item['bill_number'] ?? '—'),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14)),
-                    Text(
-                        type == 'receivable'
-                            ? (item['party_name'] ?? settings.t('customer'))
-                            : (item['supplier_name'] ??
-                                settings.t('supplier')),
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.navy500)),
-                    if (item['due_date'] != null)
-                      Row(children: [
-                        Icon(
-                          isOverdue
-                              ? Icons.warning_rounded
-                              : Icons.calendar_today_rounded,
-                          size: 12,
-                          color: isOverdue
-                              ? AppColors.error
-                              : AppColors.navy500,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Due: ${item['due_date']}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isOverdue
-                                ? AppColors.error
-                                : AppColors.navy500,
-                            fontWeight: isOverdue
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ]),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    settings.formatAmount(balance),
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                      color: type == 'receivable'
-                          ? AppColors.success
-                          : AppColors.error,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isOverdue
+                          ? AppColors.errorLight
+                          : AppColors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      isReceivable
+                          ? Icons.receipt_long_rounded
+                          : Icons.local_shipping_rounded,
+                      color: isOverdue ? AppColors.error : AppColors.orange,
+                      size: 20,
                     ),
                   ),
-                  if (isOverdue)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.errorLight,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text('OVERDUE',
-                          style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.error)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            isReceivable
+                                ? (item['invoice_number'] ?? '—')
+                                : (item['bill_number'] ?? '—'),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 14)),
+                        Text(
+                            isReceivable
+                                ? (item['party_name'] ?? settings.t('customer'))
+                                : (item['supplier_name'] ??
+                                    settings.t('supplier')),
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.navy500)),
+                        if (item['due_date'] != null)
+                          Row(children: [
+                            Icon(
+                              isOverdue
+                                  ? Icons.warning_rounded
+                                  : Icons.calendar_today_rounded,
+                              size: 12,
+                              color: isOverdue
+                                  ? AppColors.error
+                                  : AppColors.navy500,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Due: ${item['due_date']}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isOverdue
+                                    ? AppColors.error
+                                    : AppColors.navy500,
+                                fontWeight: isOverdue
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ]),
+                      ],
                     ),
-                ],
-              ),
-            ]),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        settings.formatAmount(balance),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          color: isReceivable
+                              ? AppColors.success
+                              : AppColors.error,
+                        ),
+                      ),
+                      if (isOverdue)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.errorLight,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('OVERDUE',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.error)),
+                        ),
+                    ],
+                  ),
+                ]),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showPayNow(ctx, Map<String, dynamic>.from(item as Map), balance),
+                    icon: Icon(
+                      isReceivable ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                      size: 16,
+                    ),
+                    label: Text(
+                      isReceivable ? 'Collect Payment' : 'Pay Now',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      side: BorderSide(
+                          color: isReceivable ? AppColors.success : AppColors.error),
+                      foregroundColor:
+                          isReceivable ? AppColors.success : AppColors.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),

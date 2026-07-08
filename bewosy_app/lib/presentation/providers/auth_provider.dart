@@ -24,6 +24,7 @@ class AuthProvider extends ChangeNotifier {
   List<BusinessModel> _businesses = [];
   BusinessModel? _currentBusiness;
   bool _loading = false;
+  bool _initialized = false;
   String? _error;
 
   AuthProvider(this._repo) {
@@ -37,6 +38,7 @@ class AuthProvider extends ChangeNotifier {
   List<BusinessModel> get businesses => _businesses;
   BusinessModel? get currentBusiness => _currentBusiness;
   bool get loading => _loading;
+  bool get isInitialized => _initialized;
   String? get error => _error;
   bool get isLoggedIn => _user != null;
 
@@ -53,8 +55,9 @@ class AuthProvider extends ChangeNotifier {
         _currentBusiness = BusinessModel.fromJson(
             Map<String, dynamic>.from(jsonDecode(bizJson) as Map));
       }
-      notifyListeners();
     } catch (_) {}
+    _initialized = true;
+    notifyListeners();
   }
 
   Future<Map<String, dynamic>> sendOtp(String email, {bool isSignup = false}) async {

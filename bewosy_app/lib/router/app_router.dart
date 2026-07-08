@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../presentation/providers/auth_provider.dart';
+import '../presentation/screens/auth/splash_screen.dart';
 import '../presentation/screens/auth/login_screen.dart';
 import '../presentation/screens/auth/select_business_screen.dart';
 import '../presentation/screens/main/main_shell.dart';
@@ -23,11 +24,14 @@ final _shellKey = GlobalKey<NavigatorState>();
 GoRouter createRouter(AuthProvider auth) {
   return GoRouter(
     navigatorKey: _rootKey,
-    initialLocation: '/login',
+    initialLocation: '/splash',
     refreshListenable: auth,
     redirect: (context, state) {
-      final loggedIn = auth.isLoggedIn;
       final path = state.uri.path;
+      // Splash handles its own navigation — never redirect away from it
+      if (path == '/splash') return null;
+
+      final loggedIn = auth.isLoggedIn;
       final publicPaths = ['/login', '/create-business', '/select-business'];
       final isPublic = publicPaths.any((p) => path.startsWith(p));
 
@@ -40,6 +44,10 @@ GoRouter createRouter(AuthProvider auth) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (_, __) => const SplashScreen(),
+      ),
       GoRoute(
         path: '/login',
         builder: (_, __) => const LoginScreen(),

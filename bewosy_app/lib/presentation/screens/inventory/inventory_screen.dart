@@ -51,6 +51,35 @@ class _InventoryScreenState extends State<InventoryScreen>
     if (mounted) setState(() => _loading = false);
   }
 
+  // Returns unit map for a product (matches by unit_name or unit id)
+  Map<String, dynamic>? _unitFor(Map<String, dynamic> p) {
+    final unitName = p['unit_name']?.toString();
+    if (unitName == null) return null;
+    try {
+      return _units.firstWhere((u) => u['name']?.toString() == unitName)
+          as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Returns "2 Carton (48 Pieces)" style string when secondary unit exists
+  String _stockText(Map<String, dynamic> p) {
+    final stock = double.tryParse(p['stock_quantity']?.toString() ?? '0') ?? 0;
+    final unit  = _unitFor(p);
+    final primaryUnit = p['unit_name']?.toString() ?? '';
+    if (unit == null) return 'Stock: $stock $primaryUnit';
+    final secName = unit['secondary_name']?.toString() ?? unit['secondary_unit']?.toString();
+    final rate    = double.tryParse(unit['conversion_rate']?.toString() ?? '0') ?? 0;
+    if (secName == null || secName.isEmpty || rate == 0) {
+      return 'Stock: ${_fmt(stock)} $primaryUnit';
+    }
+    final secondary = stock * rate;
+    return 'Stock: ${_fmt(stock)} $primaryUnit (${_fmt(secondary)} $secName)';
+  }
+
+  String _fmt(double v) => v == v.truncate() ? v.toInt().toString() : v.toStringAsFixed(2);
+
   List get _filteredProducts {
     var list = _products;
     if (_selectedCategory != 'ALL') {
@@ -278,7 +307,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                                                 color: AppColors.orange),
                                           ),
                                           Text(
-                                            'Stock: $stock ${p['unit_name'] ?? ''}',
+                                            _stockText(p),
                                             style: TextStyle(
                                               fontSize: 11,
                                               color: isLowStock
@@ -597,6 +626,12 @@ class _InventoryScreenState extends State<InventoryScreen>
     bool saving = false;
 
     final currentStock = product['stock_quantity']?.toString() ?? '0';
+    final unit         = _unitFor(product);
+    final primaryUnit  = product['unit_name']?.toString() ?? '';
+    final secName      = unit?['secondary_name']?.toString() ?? unit?['secondary_unit']?.toString() ?? '';
+    final convRate     = double.tryParse(unit?['conversion_rate']?.toString() ?? '0') ?? 0;
+    final hasSecondary = secName.isNotEmpty && convRate > 0;
+    final secStock     = (double.tryParse(currentStock) ?? 0) * convRate;
 
     const types = [
       ('IN', 'Stock In', Icons.add_circle_outline_rounded, AppColors.success),
@@ -653,11 +688,18 @@ class _InventoryScreenState extends State<InventoryScreen>
                       color: AppColors.orange.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text('Stock: $currentStock',
-                        style: const TextStyle(
-                            color: AppColors.orange,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13)),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      Text('$currentStock $primaryUnit',
+                          style: const TextStyle(
+                              color: AppColors.orange,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13)),
+                      if (hasSecondary)
+                        Text('${_fmt(secStock)} $secName',
+                            style: const TextStyle(
+                                color: AppColors.navy500,
+                                fontSize: 11)),
+                    ]),
                   ),
                 ]),
                 const SizedBox(height: 16),
@@ -701,17 +743,20 @@ class _InventoryScreenState extends State<InventoryScreen>
                   }).toList(),
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                StatefulBuilder(builder: (_, sq) => TextField(
                   controller: qtyCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Quantity',
+                  decoration: InputDecoration(
+                    labelText: hasSecondary ? 'Quantity ($primaryUnit)' : 'Quantity',
                     hintText: 'Enter quantity',
-                    prefixIcon: Icon(Icons.numbers_rounded),
+                    prefixIcon: const Icon(Icons.numbers_rounded),
+                    helperText: hasSecondary && qtyCtrl.text.isNotEmpty
+                        ? '= ${_fmt((double.tryParse(qtyCtrl.text) ?? 0) * convRate)} $secName'
+                        : null,
                   ),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   autofocus: true,
-                ),
+                  onChanged: (_) => sq(() {}),
+                )),
                 const SizedBox(height: 12),
                 TextField(
                   controller: notesCtrl,

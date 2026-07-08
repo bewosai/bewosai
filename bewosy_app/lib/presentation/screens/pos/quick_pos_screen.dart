@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_settings.dart';
 import '../../../data/services/api_service.dart';
-import '../../../data/services/api_service.dart';
 import '../../providers/business_provider.dart';
 
 class QuickPosScreen extends StatefulWidget {

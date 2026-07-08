@@ -24,34 +24,12 @@ abstract class BusinessRepository {
 
   // Inventory
   Future<List<Map<String, dynamic>>> getProducts();
-  Future<List<Map<String, dynamic>>> getLowStockProducts();
   Future<List<Map<String, dynamic>>> getCategories();
   Future<List<Map<String, dynamic>>> getUnits();
-  Future<Map<String, dynamic>> createProduct(Map<String, dynamic> data);
 
   // Parties
   Future<List<Map<String, dynamic>>> getParties({String? partyType});
-  Future<Map<String, dynamic>> createParty(Map<String, dynamic> data);
-
-  // Payments
-  Future<List<Map<String, dynamic>>> getReceivables();
-  Future<List<Map<String, dynamic>>> getPayables();
-
-  // Staff
-  Future<List<Map<String, dynamic>>> getStaff();
-  Future<List<Map<String, dynamic>>> getActivityLog();
-  Future<void> inviteStaff(Map<String, dynamic> data);
-
-  // Recycle Bin
-  Future<List<Map<String, dynamic>>> getRecycleBin({String? type});
-  Future<void> restoreFromBin(String type, int id);
-  Future<void> permanentDelete(String type, int id);
 
   // Nepal-specific reports
   Future<Map<String, dynamic>> getDayBook({String? date});
-  Future<Map<String, dynamic>> getCashFlow({String? dateFrom, String? dateTo});
-
-  // Business profile
-  Future<Map<String, dynamic>> getBusinessProfile();
-  Future<Map<String, dynamic>> updateBusinessProfile(Map<String, dynamic> data);
 }

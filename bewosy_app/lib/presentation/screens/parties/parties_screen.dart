@@ -381,7 +381,7 @@ class _PartiesScreenState extends State<PartiesScreen>
                                 'customer_type':  customerType,
                             };
                             if (isEdit) {
-                              await api.patch('/parties/${existing!['id']}/', data: data);
+                              await api.patch('/parties/${existing['id']}/', data: data);
                             } else {
                               await api.post('/parties/', data: data);
                             }
