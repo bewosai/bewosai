@@ -18,6 +18,9 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500 transition";
+// PartyPayment.payment_method only accepts these values on the backend (see backend/parties/models.py METHOD_CHOICES) —
+// other PAYMENT_METHODS entries (IME_PAY, MOBILE, CHEQUE, CREDIT) would 400 if submitted here.
+const PARTY_PAYMENT_METHOD_VALUES = ["CASH", "BANK", "ESEWA", "KHALTI"];
 
 /* ─── Payment Form Modal ─── */
 function PaymentModal({ type, onClose, onSaved }) {
@@ -161,7 +164,7 @@ function PaymentModal({ type, onClose, onSaved }) {
         <div>
           <label className="mb-1 block text-xs font-semibold text-navy-400">Payment Method</label>
           <select className={F} value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}>
-            {PAYMENT_METHODS.filter(m => m.value !== "CREDIT").map(m => (
+            {PAYMENT_METHODS.filter(m => PARTY_PAYMENT_METHOD_VALUES.includes(m.value)).map(m => (
               <option key={m.value} value={m.value}>{m.label}</option>
             ))}
           </select>

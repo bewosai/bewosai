@@ -23,7 +23,9 @@ function QuotationModal({ initial, onClose, onSaved }) {
     date: initial?.date ?? today(),
     expiry_date: initial?.expiry_date ?? "",
     subtotal: initial?.subtotal ?? "",
-    discount: initial?.discount ?? "0",
+    discount: initial?.subtotal && parseFloat(initial.subtotal) > 0
+      ? String(Math.round((parseFloat(initial?.discount || 0) / parseFloat(initial.subtotal)) * 10000) / 100)
+      : (initial?.discount ?? "0"),
     total: initial?.total ?? "",
     status: initial?.status ?? "DRAFT",
     notes: initial?.notes ?? "",
@@ -50,15 +52,17 @@ function QuotationModal({ initial, onClose, onSaved }) {
     c.name.toLowerCase().includes(customerSearch.toLowerCase())
   );
 
-  // Auto-calc total when subtotal or discount changes
+  // Auto-calc total when subtotal or discount % changes
   const handleSubtotal = (val) => {
     const sub = parseFloat(val) || 0;
-    const dis = parseFloat(form.discount) || 0;
+    const pct = Math.min(100, Math.max(0, parseFloat(form.discount) || 0));
+    const dis = sub * pct / 100;
     setForm(f => ({ ...f, subtotal: val, total: String(Math.max(0, sub - dis)) }));
   };
   const handleDiscount = (val) => {
     const sub = parseFloat(form.subtotal) || 0;
-    const dis = parseFloat(val) || 0;
+    const pct = Math.min(100, Math.max(0, parseFloat(val) || 0));
+    const dis = sub * pct / 100;
     setForm(f => ({ ...f, discount: val, total: String(Math.max(0, sub - dis)) }));
   };
 
@@ -69,11 +73,13 @@ function QuotationModal({ initial, onClose, onSaved }) {
     if (!form.total) { setError("Total amount is required."); return; }
     setSaving(true);
     try {
+      const subtotalNum = parseFloat(form.subtotal) || 0;
+      const discountPct = Math.min(100, Math.max(0, parseFloat(form.discount) || 0));
       const payload = {
         ...form,
         customer: form.customer || null,
-        subtotal: parseFloat(form.subtotal) || 0,
-        discount: parseFloat(form.discount) || 0,
+        subtotal: subtotalNum,
+        discount: (subtotalNum * discountPct / 100).toFixed(2),
         total: parseFloat(form.total) || 0,
         business: bid,
       };
@@ -147,8 +153,8 @@ function QuotationModal({ initial, onClose, onSaved }) {
                 value={form.subtotal} onChange={e => handleSubtotal(e.target.value)} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-navy-400">Discount</label>
-              <input type="number" min="0" step="0.01" className={F} placeholder="0.00"
+              <label className="mb-1 block text-xs font-semibold text-navy-400">Discount (%)</label>
+              <input type="number" min="0" max="100" step="0.01" className={F} placeholder="0"
                 value={form.discount} onChange={e => handleDiscount(e.target.value)} />
             </div>
             <div>

@@ -294,7 +294,10 @@ function StockAdjustModal({ product, onClose, onSaved }) {
     if (!form.quantity || parseFloat(form.quantity) <= 0) { setErr("Enter a valid quantity."); return; }
     setSaving(true);
     try {
-      const qty = isNegative ? -Math.abs(parseFloat(form.quantity)) : Math.abs(parseFloat(form.quantity));
+      // Backend already subtracts for OUT/DAMAGE/LOST/TRANSFER and adds for
+      // IN/OPENING, so always send a positive magnitude — pre-negating here
+      // would make the backend's subtraction add stock back instead.
+      const qty = Math.abs(parseFloat(form.quantity));
       await inventoryApi.addStockMovement({
         product: product.id,
         movement_type: form.movement_type,

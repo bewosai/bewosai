@@ -186,12 +186,14 @@ function PartyCard({ party, onEdit, onDelete, onLedger }) {
 
 /* ── Party Ledger Modal ── */
 const ENTRY_META = {
-  SALE:        { icon: ShoppingCart, label: "Invoice",       color: "text-blue-400",   bg: "bg-blue-500/10" },
-  RECEIPT:     { icon: ArrowDownLeft, label: "Receipt",      color: "text-green-400",  bg: "bg-green-500/10" },
-  PURCHASE:    { icon: Package,       label: "Purchase",     color: "text-purple-400", bg: "bg-purple-500/10" },
-  PAYMENT:     { icon: ArrowUpRight,  label: "Payment",      color: "text-orange-400", bg: "bg-orange-500/10" },
-  PAYMENT_IN:  { icon: ArrowDownLeft, label: "Payment In",   color: "text-green-400",  bg: "bg-green-500/10" },
-  PAYMENT_OUT: { icon: ArrowUpRight,  label: "Payment Out",  color: "text-red-400",    bg: "bg-red-500/10" },
+  SALE:            { icon: ShoppingCart, label: "Invoice",         color: "text-blue-400",   bg: "bg-blue-500/10" },
+  RECEIPT:         { icon: ArrowDownLeft, label: "Receipt",        color: "text-green-400",  bg: "bg-green-500/10" },
+  PURCHASE:        { icon: Package,       label: "Purchase",       color: "text-purple-400", bg: "bg-purple-500/10" },
+  PAYMENT:         { icon: ArrowUpRight,  label: "Payment",        color: "text-orange-400", bg: "bg-orange-500/10" },
+  PAYMENT_IN:      { icon: ArrowDownLeft, label: "Payment In",     color: "text-green-400",  bg: "bg-green-500/10" },
+  PAYMENT_OUT:     { icon: ArrowUpRight,  label: "Payment Out",    color: "text-red-400",    bg: "bg-red-500/10" },
+  SALE_RETURN:     { icon: ShoppingCart,  label: "Sale Return",    color: "text-green-400",  bg: "bg-green-500/10" },
+  PURCHASE_RETURN: { icon: Package,       label: "Purchase Return", color: "text-red-400",   bg: "bg-red-500/10" },
 };
 
 function LedgerModal({ party, onClose }) {
@@ -348,7 +350,7 @@ export default function PartiesPage() {
 
   const TABS = [
     { key: "ALL",      label: t("all"),       count: stats.total },
-    { key: "CUSTOMER", label: t("mod_parties").replace("Party","") + "Customers", count: stats.customers },
+    { key: "CUSTOMER", label: "Customers",     count: stats.customers },
     { key: "SUPPLIER", label: "Suppliers",    count: stats.suppliers },
     { key: "BOTH",     label: "Both",         count: parties.filter(p => p.party_type === "BOTH").length },
   ];

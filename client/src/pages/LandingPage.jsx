@@ -169,7 +169,7 @@ export default function LandingPage() {
               Log In
             </Link>
             <Link
-              to="/register"
+              to="/choose-profile"
               className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-400"
             >
               Get Started Free
@@ -206,7 +206,7 @@ export default function LandingPage() {
 
           <div className="mt-10 flex flex-wrap justify-center gap-4">
             <Link
-              to="/register"
+              to="/choose-profile"
               className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-8 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400"
             >
               Start Free Today <ArrowRight className="h-5 w-5" />
@@ -293,7 +293,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <Link
-                  to="/register"
+                  to="/choose-profile"
                   className={`mt-8 block rounded-2xl py-3 text-center text-sm font-bold transition ${
                     plan.badge
                       ? "bg-orange-500 text-white hover:bg-orange-400"

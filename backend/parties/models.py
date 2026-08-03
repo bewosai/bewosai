@@ -38,13 +38,20 @@ class Party(models.Model):
 
     @property
     def balance(self):
-        paid_in = self.payments.filter(payment_type="IN").aggregate(
-            total=models.Sum("amount")
-        )["total"] or 0
-        paid_out = self.payments.filter(payment_type="OUT").aggregate(
-            total=models.Sum("amount")
-        )["total"] or 0
-        return self.opening_balance + paid_out - paid_in
+        """
+        Outstanding amount owed by (positive) or to (negative) this party.
+        Sourced from Sale/Purchase.due_amount rather than the PartyPayment ledger,
+        since due_amount is kept current by both sale/purchase creation and
+        payment reconciliation (see PartyPaymentListCreateView._reconcile_payment),
+        while PartyPayment rows alone miss dues never yet reconciled.
+        """
+        sales_due = self.sales.filter(
+            status="CONFIRMED", is_deleted=False
+        ).aggregate(total=models.Sum("due_amount"))["total"] or 0
+        purchases_due = self.purchases.filter(
+            status="CONFIRMED", is_deleted=False
+        ).aggregate(total=models.Sum("due_amount"))["total"] or 0
+        return self.opening_balance + sales_due - purchases_due
 
 
 class PartyPayment(models.Model):

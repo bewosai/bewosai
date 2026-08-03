@@ -5,7 +5,7 @@ from datetime import timedelta
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config("SECRET_KEY", default="bewosy-insecure-dev-key-change-in-production")
-DEBUG = config("DEBUG", default=True, cast=bool)
+DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,0.0.0.0").split(",")
 
 INSTALLED_APPS = [
@@ -102,6 +102,7 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
+        "bewosy.permissions.BusinessNotArchivedForWrites",
     ),
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -111,6 +112,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.ScopedRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": (
+        {"otp_send": "60/hour", "otp_verify": "120/hour"}
+        if DEBUG else
+        {"otp_send": "5/hour", "otp_verify": "20/hour"}
+    ),
 }
 
 SPECTACULAR_SETTINGS = {
@@ -160,17 +169,6 @@ CORS_ALLOW_HEADERS = [
     "x-business-id",  # Flutter app business context header
 ]
 
-# ── Email ─────────────────────────────────────────────────────────────────────
-# Option A — Gmail SMTP (recommended, no extra account needed):
-#   EMAIL_HOST_USER=your@gmail.com
-#   EMAIL_HOST_PASSWORD=xxxx xxxx xxxx xxxx  ← 16-char Gmail App Password
-#
-# Option B — SendGrid (set API key, leave SMTP fields blank):
-#   SENDGRID_API_KEY=SG.xxxxx
-#   SENDGRID_FROM_EMAIL=your@gmail.com
-#
-# Neither set → OTPs print to Django console (dev fallback).
-
 SENDGRID_API_KEY = config("SENDGRID_API_KEY", default="")
 SENDGRID_FROM_EMAIL = config("SENDGRID_FROM_EMAIL", default="noreply@bewosy.com")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Bewosy <noreply@bewosy.com>")
@@ -187,3 +185,12 @@ EMAIL_BACKEND = (
     if EMAIL_HOST_USER
     else "django.core.mail.backends.console.EmailBackend"
 )
+
+# ── Logging ────────────────────────────────────────────────────────────────────
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "INFO"},
+}

@@ -3,6 +3,8 @@ import { useAuth } from "./context/AuthContext";
 
 // Auth pages
 import LoginPage from "./pages/Login";
+import VerifyOtpPage from "./pages/VerifyOtp";
+import ChooseProfilePage from "./pages/ChooseProfile";
 import LandingPage from "./pages/LandingPage";
 import CreateBusinessPage from "./pages/CreateBusiness";
 import SelectBusinessPage from "./pages/SelectBusiness";
@@ -37,16 +39,26 @@ function GuestOnly({ children }) {
   return <Navigate to={user?.account_type === "personal" ? "/personal/dashboard" : "/dashboard"} replace />;
 }
 
+// create-business/select-business are only ever reached after a successful
+// OTP verification, so they require auth but not a chosen business yet.
+function RequireAuth({ children }) {
+  const { isLoggedIn } = useAuth();
+  if (!isLoggedIn) return <Navigate to="/login" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <Routes>
       {/* Public */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
+      <Route path="/choose-profile" element={<GuestOnly><ChooseProfilePage /></GuestOnly>} />
+      <Route path="/verify-otp" element={<VerifyOtpPage />} />
 
       {/* Post-login setup */}
-      <Route path="/create-business" element={<CreateBusinessPage />} />
-      <Route path="/select-business" element={<SelectBusinessPage />} />
+      <Route path="/create-business" element={<RequireAuth><CreateBusinessPage /></RequireAuth>} />
+      <Route path="/select-business" element={<RequireAuth><SelectBusinessPage /></RequireAuth>} />
 
       {/* ── PERSONAL routes ── */}
       <Route

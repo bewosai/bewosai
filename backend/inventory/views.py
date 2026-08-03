@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import F
 
+from bewosy.permissions import IsPremiumBusiness
 from bewosy.utils import get_bid
 from .models import Category, Unit, Product, StockMovement
 from .serializers import CategorySerializer, UnitSerializer, ProductSerializer, StockMovementSerializer
@@ -103,6 +104,12 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
             is_deleted=False,
         )
 
+    def perform_destroy(self, instance):
+        from django.utils import timezone
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=["is_deleted", "deleted_at"])
+
 
 class StockMovementListCreateView(generics.ListCreateAPIView):
     serializer_class = StockMovementSerializer
@@ -136,10 +143,14 @@ class StockMovementListCreateView(generics.ListCreateAPIView):
 
 
 class ProductBulkImportView(APIView):
-    """Bulk create products from Excel import. Accepts list of product objects."""
+    """Bulk create products from Excel import. Accepts list of product objects. Premium only."""
+
+    permission_classes = [IsPremiumBusiness]
 
     def post(self, request):
         bid = get_bid(request)
+        if not bid:
+            return Response({"error": "No business selected."}, status=status.HTTP_400_BAD_REQUEST)
         rows = request.data.get("products", [])
         if not isinstance(rows, list):
             return Response({"error": "Expected 'products' list."}, status=status.HTTP_400_BAD_REQUEST)

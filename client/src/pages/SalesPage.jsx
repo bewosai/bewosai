@@ -37,7 +37,7 @@ const EMPTY_FORM = {
   items: [{ ...EMPTY_ITEM }],
   discount: 0,
   paid_amount: 0,
-  payment_method: "Cash",
+  payment_method: "CASH",
   notes: "",
   status: "CONFIRMED",
 };
@@ -120,9 +120,9 @@ function PrintModal({ sale, onClose }) {
             {parseFloat(sale.discount || 0) > 0 && (
               <div className="flex justify-between text-red-500"><span>Discount</span><span>- Rs. {parseFloat(sale.discount).toFixed(2)}</span></div>
             )}
-            <div className="flex justify-between font-bold border-t pt-1"><span>Grand Total</span><span>Rs. {parseFloat(sale.total_amount || sale.total || 0).toFixed(2)}</span></div>
+            <div className="flex justify-between font-bold border-t pt-1"><span>Grand Total</span><span>Rs. {parseFloat(sale.total ?? sale.total_amount ?? 0).toFixed(2)}</span></div>
             <div className="flex justify-between text-green-600"><span>Paid</span><span>Rs. {parseFloat(sale.paid_amount || 0).toFixed(2)}</span></div>
-            <div className="flex justify-between text-red-500 font-semibold"><span>Balance Due</span><span>Rs. {(parseFloat(sale.total_amount || sale.total || 0) - parseFloat(sale.paid_amount || 0)).toFixed(2)}</span></div>
+            <div className="flex justify-between text-red-500 font-semibold"><span>Balance Due</span><span>Rs. {(parseFloat(sale.total ?? sale.total_amount ?? 0) - parseFloat(sale.paid_amount || 0)).toFixed(2)}</span></div>
           </div>
           {sale.notes && (
             <div className="mt-4 text-xs text-gray-500 border-t pt-2">Notes: {sale.notes}</div>
@@ -140,15 +140,22 @@ function PrintModal({ sale, onClose }) {
 function SaleModal({ onClose, onSaved, editData }) {
   const { language } = useAppSettings();
   const [form, setForm] = useState(editData ? {
-    customer_id: editData.customer_id || "",
+    customer_id: editData.customer_id || editData.customer || "",
     customer_name: editData.customer_name || editData.party_name || "",
     invoice_number: editData.invoice_number || "",
     sale_date: editData.sale_date || editData.date || today(),
     due_date: editData.due_date || "",
-    items: editData.items?.length ? editData.items : [{ ...EMPTY_ITEM }],
-    discount: editData.discount || 0,
+    items: editData.items?.length
+      ? editData.items.map(it => ({
+          ...it,
+          product_id: it.product_id ?? it.product ?? "",
+        }))
+      : [{ ...EMPTY_ITEM }],
+    discount: editData.subtotal && parseFloat(editData.subtotal) > 0
+      ? Math.round((parseFloat(editData.discount || 0) / parseFloat(editData.subtotal)) * 10000) / 100
+      : (editData.discount || 0),
     paid_amount: editData.paid_amount || 0,
-    payment_method: editData.payment_method || "Cash",
+    payment_method: editData.payment_method || "CASH",
     notes: editData.notes || "",
     status: editData.status || "CONFIRMED",
   } : { ...EMPTY_FORM, items: [{ ...EMPTY_ITEM }] });
@@ -185,20 +192,37 @@ function SaleModal({ onClose, onSaved, editData }) {
   const removeItem = (i) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
 
   const subtotal = form.items.reduce((s, it) => s + (it.quantity * it.unit_price) - (parseFloat(it.discount_amount) || 0), 0);
-  const grandTotal = Math.max(0, subtotal - parseFloat(form.discount || 0));
+  const discountPercent = Math.min(100, Math.max(0, parseFloat(form.discount) || 0));
+  const discountAmount = subtotal * discountPercent / 100;
+  const grandTotal = Math.max(0, subtotal - discountAmount);
   const balanceDue = Math.max(0, grandTotal - parseFloat(form.paid_amount || 0));
 
   const handleSubmit = async (statusOverride) => {
     setError("");
     if (!form.customer_id && !form.customer_name) { setError("Please select a customer."); return; }
+    if (form.items.some(it => !it.product_id || !it.quantity || it.quantity <= 0)) {
+      setError("Please select a product and a valid quantity for every item.");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
-        ...form,
+        customer: form.customer_id || null,
+        invoice_number: form.invoice_number,
+        sale_date: form.sale_date,
+        due_date: form.due_date || null,
+        discount: discountAmount.toFixed(2),
+        paid_amount: form.paid_amount || 0,
+        payment_method: form.payment_method,
+        notes: form.notes,
         status: statusOverride || form.status,
-        subtotal: subtotal.toFixed(2),
-        total_amount: grandTotal.toFixed(2),
-        due_amount: balanceDue.toFixed(2),
+        items: form.items.map(it => ({
+          product: it.product_id || null,
+          product_name: it.product_name,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+          discount_amount: it.discount_amount || 0,
+        })),
       };
       if (editData?.id) {
         await salesApi.update(editData.id, payload);
@@ -207,7 +231,10 @@ function SaleModal({ onClose, onSaved, editData }) {
       }
       onSaved();
     } catch (e) {
-      setError(e.response?.data?.detail || "Failed to save. Please try again.");
+      const data = e.response?.data;
+      const msg = data?.detail ||
+        (data && typeof data === "object" ? Object.values(data).flat().join(" ") : null);
+      setError(msg || "Failed to save. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -363,8 +390,8 @@ function SaleModal({ onClose, onSaved, editData }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-navy-400">Overall Discount (Rs.)</label>
-                <input type="number" min="0"
+                <label className="mb-1 block text-xs font-semibold text-navy-400">Overall Discount (%)</label>
+                <input type="number" min="0" max="100" step="0.01"
                   className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
                   value={form.discount}
                   onChange={e => setForm(f => ({ ...f, discount: parseFloat(e.target.value) || 0 }))}
@@ -382,7 +409,7 @@ function SaleModal({ onClose, onSaved, editData }) {
             </div>
             <div className="rounded-xl border border-navy-700 bg-navy-800/40 p-4 space-y-2 text-sm">
               <div className="flex justify-between text-navy-400"><span>Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-navy-400"><span>Discount</span><span>- Rs. {parseFloat(form.discount || 0).toFixed(2)}</span></div>
+              <div className="flex justify-between text-navy-400"><span>Discount ({discountPercent}%)</span><span>- Rs. {discountAmount.toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-white border-t border-navy-700 pt-2"><span>Grand Total</span><span>Rs. {grandTotal.toFixed(2)}</span></div>
               <div className="pt-1 space-y-2">
                 <div>
@@ -470,14 +497,16 @@ export default function SalesPage() {
 
   const thisMonth = new Date().toISOString().slice(0, 7);
   const monthSales = saleList.filter(s => (s.sale_date || s.date || "").startsWith(thisMonth));
-  const totalSales = monthSales.reduce((s, x) => s + parseFloat(x.total_amount || 0), 0);
+  const totalSales = monthSales.reduce((s, x) => s + parseFloat(x.total ?? x.total_amount ?? 0), 0);
   const totalReceivable = saleList.reduce((s, x) => s + parseFloat(x.due_amount || 0), 0);
-  const overdueCount = saleList.filter(s => s.status === "OVERDUE").length;
+  const isOverdue = (s) =>
+    s.status === "CONFIRMED" && parseFloat(s.due_amount || 0) > 0 && s.due_date && s.due_date < today();
+  const overdueCount = saleList.filter(isOverdue).length;
 
   const TABS = ["ALL", "DRAFT", "CONFIRMED", "OVERDUE"];
 
   const filtered = saleList.filter(s => {
-    const matchTab = tab === "ALL" || s.status === tab;
+    const matchTab = tab === "ALL" || (tab === "OVERDUE" ? isOverdue(s) : s.status === tab);
     const q = search.toLowerCase();
     const matchSearch = !q || (s.invoice_number || "").toLowerCase().includes(q) ||
       (s.customer_name || s.party_name || "").toLowerCase().includes(q);
@@ -516,7 +545,7 @@ export default function SalesPage() {
   };
 
   const shareWhatsApp = (sale) => {
-    const msg = `Invoice #${sale.invoice_number || sale.id}\nCustomer: ${sale.customer_name || sale.party_name || "Walk-in"}\nDate: ${sale.sale_date || sale.date}\nTotal: Rs. ${parseFloat(sale.total_amount || 0).toFixed(2)}\nPaid: Rs. ${parseFloat(sale.paid_amount || 0).toFixed(2)}\nDue: Rs. ${parseFloat(sale.due_amount || 0).toFixed(2)}\nStatus: ${sale.status}`;
+    const msg = `Invoice #${sale.invoice_number || sale.id}\nCustomer: ${sale.customer_name || sale.party_name || "Walk-in"}\nDate: ${sale.sale_date || sale.date}\nTotal: Rs. ${parseFloat(sale.total ?? sale.total_amount ?? 0).toFixed(2)}\nPaid: Rs. ${parseFloat(sale.paid_amount || 0).toFixed(2)}\nDue: Rs. ${parseFloat(sale.due_amount || 0).toFixed(2)}\nStatus: ${sale.status}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -615,7 +644,7 @@ export default function SalesPage() {
                   {formatDate(sale.sale_date || sale.date, dateMode, language)}
                 </div>
                 <div className="col-span-4 sm:col-span-1 text-right text-white font-medium">
-                  {maskAmount(parseFloat(sale.total_amount || 0), v => `Rs. ${v.toLocaleString()}`)}
+                  {maskAmount(parseFloat(sale.total ?? sale.total_amount ?? 0), v => `Rs. ${v.toLocaleString()}`)}
                 </div>
                 <div className="col-span-4 sm:col-span-1 text-right text-green-400 text-xs">
                   {maskAmount(parseFloat(sale.paid_amount || 0), v => `Rs. ${v.toLocaleString()}`)}

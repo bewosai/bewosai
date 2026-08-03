@@ -1,5 +1,6 @@
-import random
-from django.db import models
+import secrets
+from django.db import models, transaction
+from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.utils import timezone
 from datetime import timedelta
@@ -52,18 +53,22 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class OTPCode(models.Model):
+    MAX_ATTEMPTS = 5
+    RESEND_COOLDOWN_SECONDS = 60
+
     email = models.EmailField()
-    code = models.CharField(max_length=6)
+    code_hash = models.CharField(max_length=128)
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default=ACCOUNT_BUSINESS)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
+    attempts = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.email} – {self.code}"
+        return f"{self.email} – OTP ({'used' if self.is_used else 'active'})"
 
     @property
     def is_valid(self):
@@ -71,14 +76,63 @@ class OTPCode(models.Model):
 
     @classmethod
     def generate(cls, email, account_type):
+        """Create a new OTP, invalidating any prior unused ones. Returns (otp, plaintext_code)."""
         cls.objects.filter(email=email, is_used=False).update(is_used=True)
-        code = str(random.randint(100000, 999999))
-        return cls.objects.create(
+        code = str(secrets.SystemRandom().randint(100000, 999999))
+        otp = cls.objects.create(
             email=email,
-            code=code,
+            code_hash=make_password(code),
             account_type=account_type,
             expires_at=timezone.now() + timedelta(minutes=10),
         )
+        return otp, code
+
+    @classmethod
+    def seconds_until_resend(cls, email):
+        """Seconds the caller must still wait before requesting another OTP, or 0 if allowed now."""
+        last = cls.objects.filter(email=email).order_by("-created_at").first()
+        if not last:
+            return 0
+        elapsed = (timezone.now() - last.created_at).total_seconds()
+        remaining = cls.RESEND_COOLDOWN_SECONDS - elapsed
+        return max(0, int(remaining))
+
+    @classmethod
+    def verify_and_consume(cls, email, code):
+        """
+        Validate `code` for `email` and mark it used on success.
+        Returns (otp_or_None, error_code) where error_code is one of
+        None, "invalid", "expired", "too_many_attempts".
+        """
+        with transaction.atomic():
+            otp = (
+                cls.objects.select_for_update()
+                .filter(email=email, is_used=False, expires_at__gt=timezone.now())
+                .order_by("-created_at")
+                .first()
+            )
+            if not otp:
+                # An unused-but-expired row means the user had a valid code
+                # that simply timed out (10 min) rather than typed the wrong
+                # digits — worth telling apart since the fix differs (request
+                # a new code vs. re-check what you typed). A "Resend" marks
+                # the old row is_used=True, so it won't match here either.
+                had_unused = cls.objects.filter(email=email, is_used=False).exists()
+                return None, "expired" if had_unused else "invalid"
+
+            if otp.attempts >= cls.MAX_ATTEMPTS:
+                otp.is_used = True
+                otp.save(update_fields=["is_used"])
+                return None, "too_many_attempts"
+
+            if not check_password(code, otp.code_hash):
+                otp.attempts += 1
+                otp.save(update_fields=["attempts"])
+                return None, "invalid"
+
+            otp.is_used = True
+            otp.save(update_fields=["is_used"])
+            return otp, None
 
 
 class Business(models.Model):
@@ -88,7 +142,12 @@ class Business(models.Model):
 
     STATUS_ACTIVE = "ACTIVE"
     STATUS_SUSPENDED = "SUSPENDED"
-    STATUS_CHOICES = [(STATUS_ACTIVE, "Active"), (STATUS_SUSPENDED, "Suspended")]
+    STATUS_ARCHIVED = "ARCHIVED"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_SUSPENDED, "Suspended"),
+        (STATUS_ARCHIVED, "Archived"),
+    ]
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="businesses")
     name = models.CharField(max_length=200)

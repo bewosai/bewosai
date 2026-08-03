@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path("", views.PurchaseListCreateView.as_view(), name="purchase-list"),
+    path("next-number/", views.PurchaseNextNumberView.as_view(), name="purchase-next-number"),
     path("<int:pk>/", views.PurchaseDetailView.as_view(), name="purchase-detail"),
     path("returns/", views.PurchaseReturnListCreateView.as_view(), name="purchase-return-list"),
     path("recycle-bin/", views.RecycleBinView.as_view(), name="recycle-bin"),

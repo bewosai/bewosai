@@ -2,9 +2,10 @@ import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import { inventory as inventoryApi, parties as partiesApi } from "../api/index";
 import { useTranslation } from "../utils/translations";
+import { useAuth } from "../context/AuthContext";
 import {
   Upload, Download, FileSpreadsheet, Check, X, AlertTriangle,
-  Package, Users, ChevronRight, RefreshCw, Loader,
+  Package, Users, ChevronRight, RefreshCw, Loader, Lock, Crown,
 } from "lucide-react";
 
 /* ── helpers ── */
@@ -275,9 +276,39 @@ function ImportTab({ type }) {
   );
 }
 
+function UpgradePrompt() {
+  const { language } = useTranslation();
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-navy-800 bg-navy-900 px-6 py-16 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-orange-500/10">
+        <Lock className="h-6 w-6 text-orange-400" />
+      </div>
+      <div>
+        <p className="flex items-center justify-center gap-2 text-lg font-bold text-white">
+          <Crown className="h-5 w-5 text-orange-400" />
+          {language === "ne" ? "प्रिमियम सुविधा" : "Premium Feature"}
+        </p>
+        <p className="mt-2 max-w-md text-sm text-navy-400">
+          {language === "ne"
+            ? "Excel बाट ब्याच आयात प्रिमियम प्लानमा मात्र उपलब्ध छ। थप्न वा हटाउनको लागि आफ्नो प्लान अपग्रेड गर्नुहोस्।"
+            : "Bulk import/export from Excel is available on the Premium plan. Upgrade your plan to unlock it."}
+        </p>
+      </div>
+      <a
+        href="/settings"
+        className="rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 transition"
+      >
+        {language === "ne" ? "प्लान अपग्रेड गर्नुहोस्" : "Upgrade Plan"}
+      </a>
+    </div>
+  );
+}
+
 export default function ImportPage() {
   const { language } = useTranslation();
+  const { currentBusiness } = useAuth();
   const [activeTab, setActiveTab] = useState("products");
+  const isPremium = currentBusiness?.plan === "PREMIUM";
 
   const tabs = [
     { key: "products", label: language === "ne" ? "उत्पादनहरू" : "Products", icon: Package },
@@ -318,22 +349,28 @@ export default function ImportPage() {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2">
-        {tabs.map(({ key, label, icon: Icon }) => (
-          <button key={key} onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition ${
-              activeTab === key
-                ? "bg-orange-500 text-white"
-                : "border border-navy-800 bg-navy-900 text-navy-400 hover:text-white"
-            }`}
-          >
-            <Icon className="h-4 w-4" /> {label}
-          </button>
-        ))}
-      </div>
+      {!isPremium ? (
+        <UpgradePrompt />
+      ) : (
+        <>
+          {/* Tabs */}
+          <div className="flex gap-2">
+            {tabs.map(({ key, label, icon: Icon }) => (
+              <button key={key} onClick={() => setActiveTab(key)}
+                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition ${
+                  activeTab === key
+                    ? "bg-orange-500 text-white"
+                    : "border border-navy-800 bg-navy-900 text-navy-400 hover:text-white"
+                }`}
+              >
+                <Icon className="h-4 w-4" /> {label}
+              </button>
+            ))}
+          </div>
 
-      <ImportTab key={activeTab} type={activeTab} />
+          <ImportTab key={activeTab} type={activeTab} />
+        </>
+      )}
     </div>
   );
 }

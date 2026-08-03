@@ -67,7 +67,7 @@ export default function SettingsPage() {
           toggleTheme, toggleLanguage, togglePrivateMode, toggleDateMode,
           setTheme, setLanguage, setDateMode, setCurrency } = useAppSettings();
   const { t } = useTranslation();
-  const { currentBusiness, user } = useAuth();
+  const { currentBusiness, user, selectBusiness } = useAuth();
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: user?.name || "", phone: user?.phone || "" });
@@ -103,6 +103,12 @@ export default function SettingsPage() {
     try {
       await authApi.updateMe(profileForm);
     } catch {}
+    if (currentBusiness?.id) {
+      try {
+        const { data } = await authApi.updateBusiness(currentBusiness.id, businessForm);
+        selectBusiness?.(data);
+      } catch {}
+    }
     localStorage.setItem("invoice_header_color", invoiceForm.header_color);
     localStorage.setItem("invoice_footer_text", invoiceForm.footer_text);
     localStorage.setItem("invoice_prefix", invoiceForm.invoice_prefix);

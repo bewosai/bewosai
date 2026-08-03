@@ -23,9 +23,6 @@ dependencies:
   # Secure token storage
   flutter_secure_storage: ^9.0.0
 
-  # Key-value storage
-  shared_preferences: ^2.2.0
-
   # Charts
   fl_chart: ^0.69.0
 
@@ -53,6 +50,14 @@ dependencies:
 
   # path provider (for temp file saves: PDF, etc.)
   path_provider: ^2.1.4
+
+  # App version info
+  package_info_plus: ^8.0.0
+
+  # Typography
+  google_fonts: ^6.2.1
+  shared_preferences: ^2.3.0
+  nepali_utils: ^3.0.8
 
 dev_dependencies:
   flutter_test:

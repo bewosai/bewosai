@@ -3,7 +3,9 @@ from accounts.models import Business, User
 
 
 class Category(models.Model):
-    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="categories")
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name="categories"
+    )
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -17,14 +19,23 @@ class Category(models.Model):
 
 
 class Unit(models.Model):
-    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="units")
-    name = models.CharField(max_length=50)                     # primary unit e.g. "Box"
-    abbreviation = models.CharField(max_length=10, blank=True) # e.g. "bx"
-    # Secondary (sub) unit — e.g. "Piece" inside a Box
+    """
+    Primary unit e.g. Box (bx).
+    Optional secondary e.g. Piece with conversion_factor:
+    1 primary = conversion_factor secondary (1 Box = 12 Pieces).
+    """
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name="units"
+    )
+    name = models.CharField(max_length=50)
+    abbreviation = models.CharField(max_length=10, blank=True)
     secondary_unit = models.CharField(max_length=50, blank=True)
     secondary_abbreviation = models.CharField(max_length=10, blank=True)
-    conversion_factor = models.DecimalField(           # how many secondary per 1 primary
-        max_digits=10, decimal_places=4, null=True, blank=True,
+    conversion_factor = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        null=True,
+        blank=True,
         help_text="e.g. 12 means 1 Box = 12 Pieces",
     )
 
@@ -44,30 +55,96 @@ class Unit(models.Model):
 
 
 class Product(models.Model):
-    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="products")
+    """
+    Item form:
+      name, category (+ add new), item_type (Product|Service),
+      unit (primary/secondary/conversion),
+      sale_price, purchase_price,
+      Product only: opening stock (stock_quantity), low_stock_threshold
+      Service: stock disabled (forced to 0 on save)
+    """
+    PRODUCT = "PRODUCT"
+    SERVICE = "SERVICE"
+    ITEM_TYPE_CHOICES = [
+        (PRODUCT, "Product"),
+        (SERVICE, "Service"),
+    ]
+
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name="products"
+    )
     name = models.CharField(max_length=200)
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
-    unit = models.ForeignKey(Unit, on_delete=models.SET_NULL, null=True, blank=True)
+    category = models.ForeignKey(
+        Category, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    item_type = models.CharField(
+        max_length=20,
+        choices=ITEM_TYPE_CHOICES,
+        default=PRODUCT,
+        db_index=True,
+        help_text="PRODUCT tracks stock; SERVICE does not",
+    )
+    unit = models.ForeignKey(
+        Unit, on_delete=models.SET_NULL, null=True, blank=True
+    )
     description = models.TextField(blank=True)
-    purchase_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    sale_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    stock_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
-    low_stock_threshold = models.DecimalField(max_digits=12, decimal_places=3, default=5)
+
+    purchase_price = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0
+    )
+    sale_price = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0
+    )
+
+    # Stock — PRODUCT only (SERVICE forced to 0 in save())
+    stock_quantity = models.DecimalField(
+        max_digits=12, decimal_places=3, default=0
+    )
+    low_stock_threshold = models.DecimalField(
+        max_digits=12, decimal_places=3, default=5
+    )
+    min_stock_level = models.DecimalField(
+        max_digits=12, decimal_places=3, default=0
+    )
+
     barcode = models.CharField(max_length=100, blank=True)
     image = models.ImageField(upload_to="products/", null=True, blank=True)
-    min_stock_level = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     is_active = models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ["name"]
+        indexes = [
+            models.Index(fields=["business", "item_type"]),
+            models.Index(fields=["business", "is_deleted"]),
+        ]
+
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.get_item_type_display()})"
+
+    @property
+    def is_product(self):
+        return self.item_type == self.PRODUCT
+
+    @property
+    def is_service(self):
+        return self.item_type == self.SERVICE
 
     @property
     def is_low_stock(self):
+        if self.item_type == self.SERVICE:
+            return False
         return self.stock_quantity <= self.low_stock_threshold
+
+    def save(self, *args, **kwargs):
+        if self.item_type == self.SERVICE:
+            self.stock_quantity = 0
+            self.low_stock_threshold = 0
+            self.min_stock_level = 0
+        super().save(*args, **kwargs)
 
 
 class StockMovement(models.Model):
@@ -88,7 +165,9 @@ class StockMovement(models.Model):
         (OPENING, "Opening Stock"),
     ]
 
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="movements")
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="movements"
+    )
     movement_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
     note = models.TextField(blank=True)
@@ -97,3 +176,6 @@ class StockMovement(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.product.name} {self.movement_type} {self.quantity}"

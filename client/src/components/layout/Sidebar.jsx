@@ -13,7 +13,7 @@ import {
   Wifi, WifiOff, RefreshCw,
 } from "lucide-react";
 
-function buildNavItems(t, language) {
+function buildNavItems(t, language, isPremium) {
   return [
     { name: t("dashboard"), path: "/dashboard", icon: LayoutDashboard },
     {
@@ -51,7 +51,9 @@ function buildNavItems(t, language) {
     { name: t("reports"), path: "/reports", icon: BarChart3 },
     { name: t("settings"), path: "/settings", icon: Settings },
     { name: t("recycleBin"), path: "/recycle-bin", icon: Trash2 },
-    { name: language === "ne" ? "Excel आयात" : "Import Excel", path: "/import", icon: FileSpreadsheet },
+    ...(isPremium
+      ? [{ name: language === "ne" ? "Excel आयात" : "Import Excel", path: "/import", icon: FileSpreadsheet }]
+      : []),
   ];
 }
 
@@ -118,7 +120,7 @@ export default function Sidebar({ open, setOpen }) {
   const { currentBusiness, user } = useAuth();
   const { t, language } = useTranslation();
   const { isOnline, pendingCount, isSyncing, flush } = useOfflineSync(api);
-  const navItems = buildNavItems(t, language);
+  const navItems = buildNavItems(t, language, currentBusiness?.plan === "PREMIUM");
 
   return (
     <>

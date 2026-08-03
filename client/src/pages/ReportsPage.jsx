@@ -58,6 +58,17 @@ export default function ReportsPage() {
   const [dateTo, setDateTo] = useState(todayStr);
   const [activeReport, setActiveReport] = useState("overview");
 
+  // Server-side report tabs (Profit & Loss, Stock, Aging, Day Book)
+  const [profitData, setProfitData] = useState(null);
+  const [profitLoading, setProfitLoading] = useState(false);
+  const [stockData, setStockData] = useState(null);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [agingData, setAgingData] = useState(null);
+  const [agingLoading, setAgingLoading] = useState(false);
+  const [dayBookDate, setDayBookDate] = useState(todayStr);
+  const [dayBookData, setDayBookData] = useState(null);
+  const [dayBookLoading, setDayBookLoading] = useState(false);
+
   useEffect(() => {
     setLoading(true);
     Promise.allSettled([
@@ -70,6 +81,46 @@ export default function ReportsPage() {
       if (pRes.status === "fulfilled") setPurchaseList(pRes.value.data.results ?? pRes.value.data);
     }).finally(() => setLoading(false));
   }, []);
+
+  // Profit & Loss tab — refetch whenever the date range or tab changes
+  useEffect(() => {
+    if (activeReport !== "profit") return;
+    setProfitLoading(true);
+    reportsApi.profit({ date_from: dateFrom, date_to: dateTo })
+      .then((res) => setProfitData(res.data))
+      .catch(() => setProfitData(null))
+      .finally(() => setProfitLoading(false));
+  }, [activeReport, dateFrom, dateTo]);
+
+  // Stock tab — fetch once when first opened
+  useEffect(() => {
+    if (activeReport !== "stock" || stockData) return;
+    setStockLoading(true);
+    reportsApi.inventory()
+      .then((res) => setStockData(res.data))
+      .catch(() => setStockData(null))
+      .finally(() => setStockLoading(false));
+  }, [activeReport, stockData]);
+
+  // Aging tab — fetch once when first opened
+  useEffect(() => {
+    if (activeReport !== "aging" || agingData) return;
+    setAgingLoading(true);
+    reportsApi.receivableAging()
+      .then((res) => setAgingData(res.data))
+      .catch(() => setAgingData(null))
+      .finally(() => setAgingLoading(false));
+  }, [activeReport, agingData]);
+
+  // Day Book tab — refetch whenever the date or tab changes
+  useEffect(() => {
+    if (activeReport !== "daybook") return;
+    setDayBookLoading(true);
+    reportsApi.dayBook({ date: dayBookDate })
+      .then((res) => setDayBookData(res.data))
+      .catch(() => setDayBookData(null))
+      .finally(() => setDayBookLoading(false));
+  }, [activeReport, dayBookDate]);
 
   // Filter by date range
   const inRange = (dateStr) => {
@@ -148,9 +199,13 @@ export default function ReportsPage() {
 
   const TABS = [
     { key: "overview", label: "Overview" },
+    { key: "profit", label: "Profit & Loss" },
+    { key: "stock", label: "Stock" },
+    { key: "aging", label: "Aging" },
     { key: "sales", label: "Sales Detail" },
     { key: "expenses", label: "Expenses" },
     { key: "purchases", label: "Purchases" },
+    { key: "daybook", label: "Day Book" },
   ];
 
   return (
@@ -299,6 +354,179 @@ export default function ReportsPage() {
         </>
       )}
 
+      {/* Profit & Loss Tab (server-computed, includes COGS) */}
+      {activeReport === "profit" && (
+        <div className="space-y-5">
+          {profitLoading ? (
+            <div className="flex h-48 items-center justify-center text-sm text-navy-400">Loading…</div>
+          ) : !profitData ? (
+            <div className="rounded-xl border border-navy-800 bg-navy-900 py-10 text-center text-sm text-navy-400">
+              Could not load profit &amp; loss data
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                {[
+                  { label: "Revenue", value: profitData.revenue, color: "orange" },
+                  { label: "COGS", value: profitData.cogs, color: "red" },
+                  { label: "Gross Profit", value: profitData.gross_profit, color: "blue" },
+                  { label: "Expenses", value: profitData.expenses, color: "red" },
+                  { label: "Net Profit", value: profitData.net_profit, color: profitData.net_profit >= 0 ? "green" : "red" },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                    <p className="text-xs text-navy-500">{label}</p>
+                    <p className={`mt-1 text-lg font-bold text-${color}-400`}>
+                      {maskAmount(value, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:w-1/2">
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Gross Margin</p>
+                  <p className="mt-1 text-lg font-bold text-white">{profitData.gross_margin_pct}%</p>
+                </div>
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Net Margin</p>
+                  <p className="mt-1 text-lg font-bold text-white">{profitData.net_margin_pct}%</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                <h3 className="mb-4 text-sm font-semibold text-white">Monthly Trend (6 months)</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart
+                    data={(profitData.monthly || []).map(m => ({ ...m, name: MONTHS[m.month - 1] || `M${m.month}` }))}
+                    margin={{ top: 0, right: 8, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e2a3b" />
+                    <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} width={55}
+                      tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
+                    <Bar dataKey="revenue" name="Revenue" fill="#f97316" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="net_profit" name="Net Profit" fill="#22c55e" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Stock Tab (server-computed inventory report) */}
+      {activeReport === "stock" && (
+        <div className="space-y-5">
+          {stockLoading ? (
+            <div className="flex h-48 items-center justify-center text-sm text-navy-400">Loading…</div>
+          ) : !stockData ? (
+            <div className="rounded-xl border border-navy-800 bg-navy-900 py-10 text-center text-sm text-navy-400">
+              Could not load stock report
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                  { label: "Total Products", value: stockData.total_products, isCount: true },
+                  { label: "Low Stock", value: stockData.low_stock_count, isCount: true, color: "yellow" },
+                  { label: "Out of Stock", value: stockData.out_of_stock_count, isCount: true, color: "red" },
+                  { label: "Stock Value", value: stockData.stock_value, color: "blue" },
+                ].map(({ label, value, isCount, color = "white" }) => (
+                  <div key={label} className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                    <p className="text-xs text-navy-500">{label}</p>
+                    <p className={`mt-1 text-lg font-bold text-${color}-400`}>
+                      {isCount ? (value ?? 0).toLocaleString() : maskAmount(value, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                <div className="px-4 py-3 border-b border-navy-800">
+                  <h3 className="text-sm font-semibold text-white">Low Stock Items ({stockData.low_stock_items?.length || 0})</h3>
+                </div>
+                {(stockData.low_stock_items || []).length === 0 ? (
+                  <div className="py-10 text-center text-sm text-navy-400">No low-stock items</div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                      <div className="col-span-5">Product</div>
+                      <div className="col-span-3 text-right">Stock Qty</div>
+                      <div className="col-span-2 text-right">Min Level</div>
+                      <div className="col-span-2 text-right">Sale Price</div>
+                    </div>
+                    {stockData.low_stock_items.map(p => (
+                      <div key={p.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                        <div className="col-span-5 text-white truncate">{p.name}</div>
+                        <div className="col-span-3 text-right text-yellow-400 font-semibold">{p.stock_quantity}</div>
+                        <div className="col-span-2 text-right text-navy-400">{p.low_stock_threshold}</div>
+                        <div className="col-span-2 text-right text-navy-400">Rs. {parseFloat(p.selling_price || p.sale_price || 0).toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Aging Tab (receivable aging buckets + top debtors) */}
+      {activeReport === "aging" && (
+        <div className="space-y-5">
+          {agingLoading ? (
+            <div className="flex h-48 items-center justify-center text-sm text-navy-400">Loading…</div>
+          ) : !agingData ? (
+            <div className="rounded-xl border border-navy-800 bg-navy-900 py-10 text-center text-sm text-navy-400">
+              Could not load receivable aging data
+            </div>
+          ) : (
+            <>
+              <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                <p className="text-xs text-navy-500">Total Receivable</p>
+                <p className="mt-1 text-2xl font-bold text-orange-400">
+                  {maskAmount(agingData.total_receivable, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[agingData.current, agingData.days31_60, agingData.days61_90, agingData.over90].map((bucket) => (
+                  <div key={bucket.label} className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                    <p className="text-xs text-navy-500">{bucket.label}</p>
+                    <p className="mt-1 text-lg font-bold text-white">
+                      {maskAmount(bucket.total, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                    </p>
+                    <p className="text-xs text-navy-500 mt-1">{bucket.count} invoice{bucket.count === 1 ? "" : "s"}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                <div className="px-4 py-3 border-b border-navy-800">
+                  <h3 className="text-sm font-semibold text-white">Top Overdue Customers</h3>
+                </div>
+                {(agingData.top_debtors || []).length === 0 ? (
+                  <div className="py-10 text-center text-sm text-navy-400">No outstanding receivables</div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                      <div className="col-span-6">Customer</div>
+                      <div className="col-span-3 text-right">Invoices</div>
+                      <div className="col-span-3 text-right">Due</div>
+                    </div>
+                    {agingData.top_debtors.map((d, i) => (
+                      <div key={d.customer_id ?? i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                        <div className="col-span-6 text-white truncate">{d.customer__name || "Walk-in"}</div>
+                        <div className="col-span-3 text-right text-navy-400">{d.invoice_count}</div>
+                        <div className="col-span-3 text-right text-red-400 font-semibold">Rs. {parseFloat(d.total_due || 0).toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Sales Detail Tab */}
       {activeReport === "sales" && (
         <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
@@ -414,6 +642,79 @@ export default function ReportsPage() {
               <div className="border-t border-navy-800 bg-navy-900/80 px-4 py-3 grid grid-cols-12 gap-2 text-xs font-bold">
                 <div className="col-span-7 text-navy-400">Total ({filteredPurchases.length} records)</div>
                 <div className="col-span-2 text-right text-white">Rs. {Math.round(totalPurchases).toLocaleString()}</div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Day Book Tab — daily transaction register */}
+      {activeReport === "daybook" && (
+        <div className="space-y-5">
+          <div className="flex items-center gap-3 rounded-2xl border border-navy-800 bg-navy-900 px-4 py-3">
+            <Calendar className="h-4 w-4 text-navy-400 shrink-0" />
+            <p className="text-xs font-semibold text-navy-400 shrink-0">Date:</p>
+            <input type="date" value={dayBookDate} onChange={e => setDayBookDate(e.target.value)}
+              className="rounded-lg border border-navy-700 bg-navy-800 px-3 py-1.5 text-xs text-white focus:border-orange-500 focus:outline-none" />
+          </div>
+
+          {dayBookLoading ? (
+            <div className="flex h-48 items-center justify-center text-sm text-navy-400">Loading…</div>
+          ) : !dayBookData ? (
+            <div className="rounded-xl border border-navy-800 bg-navy-900 py-10 text-center text-sm text-navy-400">
+              Could not load day book data
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Cash In</p>
+                  <p className="mt-1 text-lg font-bold text-green-400">
+                    {maskAmount(dayBookData.total_in, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Cash Out</p>
+                  <p className="mt-1 text-lg font-bold text-red-400">
+                    {maskAmount(dayBookData.total_out, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Net Cash</p>
+                  <p className={`mt-1 text-lg font-bold ${dayBookData.net_cash >= 0 ? "text-white" : "text-red-400"}`}>
+                    {maskAmount(dayBookData.net_cash, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                <div className="px-4 py-3 border-b border-navy-800">
+                  <h3 className="text-sm font-semibold text-white">Entries ({dayBookData.entries?.length || 0})</h3>
+                </div>
+                {(dayBookData.entries || []).length === 0 ? (
+                  <div className="py-10 text-center text-sm text-navy-400">No transactions on this date</div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                      <div className="col-span-2">Type</div>
+                      <div className="col-span-2">Ref</div>
+                      <div className="col-span-3">Party</div>
+                      <div className="col-span-2 text-right">In</div>
+                      <div className="col-span-2 text-right">Out</div>
+                      <div className="col-span-1">Method</div>
+                    </div>
+                    {dayBookData.entries.map((e, i) => (
+                      <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                        <div className="col-span-2 text-navy-300">{e.type}</div>
+                        <div className="col-span-2 text-navy-400 truncate">{e.ref}</div>
+                        <div className="col-span-3 text-white truncate">{e.party}</div>
+                        <div className="col-span-2 text-right text-green-400">{e.debit ? `Rs. ${e.debit.toLocaleString()}` : "—"}</div>
+                        <div className="col-span-2 text-right text-red-400">{e.credit ? `Rs. ${e.credit.toLocaleString()}` : "—"}</div>
+                        <div className="col-span-1 text-navy-500">{e.method}</div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             </>
           )}

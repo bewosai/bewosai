@@ -54,6 +54,7 @@ export const auth = {
   updateMe: (d) => api.patch("/auth/me/", d),
   businesses: () => api.get("/auth/businesses/"),
   createBusiness: (d) => api.post("/auth/businesses/", d),
+  updateBusiness: (id, d) => api.patch(`/auth/businesses/${id}/`, d),
   staff: (bid) => api.get(`/auth/businesses/${bid}/staff/`),
   inviteStaff: (bid, d) => api.post(`/auth/businesses/${bid}/staff/`, d),
   updateStaff: (bid, sid, d) => api.patch(`/auth/businesses/${bid}/staff/${sid}/`, d),
@@ -106,6 +107,7 @@ const bid_headers = () => ({ "X-Business-ID": bid() });
 
 export const purchases = {
   list: (params) => api.get("/purchases/", { params, headers: bid_headers() }),
+  nextNumber: () => api.get("/purchases/next-number/", { headers: bid_headers() }),
   create: (data) => {
     const isFormData = data instanceof FormData;
     return api.post("/purchases/", data, { headers: { ...bid_headers(), ...(isFormData ? { "Content-Type": "multipart/form-data" } : {}) } });
@@ -161,6 +163,9 @@ export const reports = {
   inventory: () => api.get("/reports/inventory/"),
   profit: (p) => api.get("/reports/profit/", { params: p }),
   monthly: (p) => api.get("/reports/monthly/", { params: p }),
+  receivableAging: () => api.get("/reports/receivable-aging/"),
+  dayBook: (p) => api.get("/reports/day-book/", { params: p }),
+  cashFlow: (p) => api.get("/reports/cash-flow/", { params: p }),
   staffActivity: (p) => api.get("/auth/staff-activity/", { params: p }),
 };
 

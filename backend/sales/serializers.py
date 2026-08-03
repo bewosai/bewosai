@@ -1,9 +1,15 @@
 from decimal import Decimal
+from django.db.models import Sum
 from rest_framework import serializers
-from .models import Sale, SaleItem, SaleReturn, Quotation
+from inventory.models import Product
+from .models import Sale, SaleItem, SaleReturn, SaleReturnItem, Quotation
 
 
 class SaleItemSerializer(serializers.ModelSerializer):
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(), required=False, allow_null=True
+    )
+
     class Meta:
         model = SaleItem
         fields = ("id", "product", "product_name", "quantity", "unit_price", "discount_amount", "total")
@@ -89,13 +95,60 @@ class SaleSerializer(serializers.ModelSerializer):
         return instance
 
 
+class SaleReturnItemSerializer(serializers.ModelSerializer):
+    sale_item = serializers.PrimaryKeyRelatedField(
+        queryset=SaleItem.objects.all(), required=False, allow_null=True
+    )
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(), required=False, allow_null=True
+    )
+
+    class Meta:
+        model = SaleReturnItem
+        fields = ("id", "sale_item", "product", "product_name", "quantity", "unit_price", "total")
+        read_only_fields = ("id", "total")
+
+
 class SaleReturnSerializer(serializers.ModelSerializer):
     invoice_number = serializers.CharField(source="original_sale.invoice_number", read_only=True)
+    items = SaleReturnItemSerializer(many=True, required=False)
 
     class Meta:
         model = SaleReturn
-        fields = ("id", "original_sale", "invoice_number", "return_date", "reason", "amount", "created_at")
+        fields = ("id", "original_sale", "invoice_number", "return_date", "reason", "amount", "items", "created_at")
         read_only_fields = ("id", "created_at", "invoice_number")
+
+    def validate(self, data):
+        for item in data.get("items", []):
+            sale_item = item.get("sale_item")
+            qty = item.get("quantity") or Decimal("0")
+            if sale_item:
+                already_returned = SaleReturnItem.objects.filter(sale_item=sale_item).aggregate(
+                    total=Sum("quantity")
+                )["total"] or Decimal("0")
+                remaining = sale_item.quantity - already_returned
+                if qty > remaining:
+                    raise serializers.ValidationError(
+                        f"Cannot return {qty} of '{sale_item.product_name}' — only "
+                        f"{remaining} remaining from this invoice."
+                    )
+        return data
+
+    def create(self, validated_data):
+        items_data = validated_data.pop("items", [])
+        sale_return = SaleReturn.objects.create(**validated_data)
+
+        for item_data in items_data:
+            item = SaleReturnItem(sale_return=sale_return, **item_data)
+            item.save()                     # computes item.total = qty*price
+
+            # Restore stock for linked products
+            if item.product_id:
+                product = item.product
+                product.stock_quantity += item.quantity
+                product.save(update_fields=["stock_quantity"])
+
+        return sale_return
 
 
 class QuotationSerializer(serializers.ModelSerializer):
@@ -108,4 +161,4 @@ class QuotationSerializer(serializers.ModelSerializer):
             "date", "expiry_date", "subtotal", "discount", "total",
             "status", "notes", "created_at",
         )
-        read_only_fields = ("id", "created_at", "customer_name")
+        read_only_fields = ("id", "created_at", "customer_name", "quotation_number")

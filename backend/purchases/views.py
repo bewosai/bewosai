@@ -20,6 +20,14 @@ def _next_bill_number(business):
     return f"PUR-{num:04d}"
 
 
+class PurchaseNextNumberView(APIView):
+    def get(self, request):
+        biz = get_business(request)
+        if not biz:
+            return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"next_number": _next_bill_number(biz)})
+
+
 class PurchaseListCreateView(generics.ListCreateAPIView):
     serializer_class = PurchaseSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
@@ -44,9 +52,10 @@ class PurchaseListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         biz = get_business(self.request)
+        bill_number = self.request.data.get("bill_number") or _next_bill_number(biz)
         serializer.save(
             business=biz,
-            bill_number=_next_bill_number(biz),
+            bill_number=bill_number,
             created_by=self.request.user,
         )
 

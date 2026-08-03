@@ -93,6 +93,20 @@ class SaleReturn(models.Model):
         ordering = ["-return_date"]
 
 
+class SaleReturnItem(models.Model):
+    sale_return = models.ForeignKey(SaleReturn, on_delete=models.CASCADE, related_name="items")
+    sale_item = models.ForeignKey(SaleItem, on_delete=models.SET_NULL, null=True, related_name="return_items")
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
+    product_name = models.CharField(max_length=200)
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+
+    def save(self, *args, **kwargs):
+        self.total = self.quantity * self.unit_price
+        super().save(*args, **kwargs)
+
+
 class Quotation(models.Model):
     STATUS_DRAFT = "DRAFT"
     STATUS_SENT = "SENT"

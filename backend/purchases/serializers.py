@@ -1,16 +1,23 @@
 from decimal import Decimal
 from rest_framework import serializers
+from inventory.models import Product
 from .models import Purchase, PurchaseItem, PurchaseReturn
 
 
 class PurchaseItemSerializer(serializers.ModelSerializer):
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(), required=False, allow_null=True
+    )
+
     class Meta:
         model = PurchaseItem
         fields = ["id", "product", "product_name", "quantity", "unit_price", "discount_amount", "total"]
+        read_only_fields = ["id", "total"]
 
 
 class PurchaseSerializer(serializers.ModelSerializer):
     items = PurchaseItemSerializer(many=True, required=False)
+    bill_number    = serializers.CharField(required=False, allow_blank=True)
     supplier_name  = serializers.CharField(source="supplier.name", read_only=True)
     bill_image_url = serializers.SerializerMethodField()
 

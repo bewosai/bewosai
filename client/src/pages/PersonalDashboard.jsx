@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { expenses as expensesApi, reports as reportsApi } from "../api";
+import { expenses as expensesApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PageHeader from "../components/shared/PageHeader";
 import SectionCard from "../components/shared/SectionCard";
@@ -75,7 +75,6 @@ function AddTransactionModal({ type, onClose, onSaved }) {
 
 export default function PersonalDashboard() {
   const { user } = useAuth();
-  const [data, setData] = useState(null);
   const [recentTx, setRecentTx] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null); // "income" | "expense"
@@ -83,14 +82,11 @@ export default function PersonalDashboard() {
   const load = () => {
     setLoading(true);
     const bid = localStorage.getItem("business_id");
-    Promise.all([
-      reportsApi.profit(),
-      expensesApi.list({ business: bid, ordering: "-date", page_size: 10 }),
-    ])
-      .then(([p, e]) => {
-        setData(p.data);
+    expensesApi.list({ business: bid, ordering: "-date", page_size: 10 })
+      .then((e) => {
         setRecentTx(e.data.results ?? e.data);
       })
+      .catch(() => setRecentTx([]))
       .finally(() => setLoading(false));
   };
 

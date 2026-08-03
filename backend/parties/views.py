@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
+from bewosy.permissions import IsPremiumBusiness
 from bewosy.utils import get_bid
 from .models import Party, PartyPayment
 from .serializers import PartySerializer, PartyPaymentSerializer
@@ -41,6 +42,16 @@ class PartyDetailView(generics.RetrieveUpdateDestroyAPIView):
             business__staff__is_active=True,
             is_deleted=False,
         )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.balance != 0:
+            direction = "owed to you" if instance.balance > 0 else "you owe them"
+            return Response(
+                {"error": f"Cannot delete '{instance.name}' — outstanding balance of {abs(instance.balance)} ({direction}) must be settled first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
 
     def perform_destroy(self, instance):
         from django.utils import timezone
@@ -228,23 +239,33 @@ class PartyLedgerView(APIView):
 
 
 class PartyBulkImportView(APIView):
+    """Bulk create parties from Excel import. Accepts list of party objects. Premium only."""
+
+    permission_classes = [IsPremiumBusiness]
+
     def post(self, request):
         bid = get_bid(request)
+        if not bid:
+            return Response({"error": "No business selected."}, status=status.HTTP_400_BAD_REQUEST)
         rows = request.data.get("parties", [])
         if not isinstance(rows, list):
             return Response({"error": "Expected 'parties' list."}, status=status.HTTP_400_BAD_REQUEST)
 
+        valid_types = [t for t, _ in Party.TYPE_CHOICES]
         created, skipped = [], []
         for row in rows:
             name = (row.get("name") or "").strip()
             if not name:
                 skipped.append({"row": row, "reason": "Missing name"})
                 continue
+            party_type = (row.get("party_type") or "CUSTOMER").strip().upper()
+            if party_type not in valid_types:
+                party_type = "CUSTOMER"
             try:
                 party = Party.objects.create(
                     business_id=bid,
                     name=name,
-                    party_type=row.get("party_type") or "CUSTOMER",
+                    party_type=party_type,
                     phone=row.get("phone") or "",
                     email=row.get("email") or "",
                     address=row.get("address") or "",

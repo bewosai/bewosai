@@ -20,7 +20,12 @@ function formatDate(dateStr, dateMode, language) {
   return d.toLocaleDateString("en-GB");
 }
 
-const PAYMENT_METHODS = ["Cash", "Bank Transfer", "Credit", "Cheque", "Mobile Banking"];
+const PAYMENT_METHODS = [
+  { value: "CASH", label: "Cash" },
+  { value: "BANK", label: "Bank" },
+  { value: "ESEWA", label: "eSewa" },
+  { value: "KHALTI", label: "Khalti" },
+];
 const STATUS_COLORS = {
   CONFIRMED: "bg-green-500/10 text-green-400",
   DRAFT: "bg-navy-700/50 text-navy-400",
@@ -29,9 +34,9 @@ const STATUS_COLORS = {
   CANCELLED: "bg-red-500/10 text-red-400",
 };
 
-const EMPTY_ITEM = { product_id: "", product_name: "", quantity: 1, unit_price: 0, discount_amount: 0 };
+const EMPTY_ITEM = { product: "", product_name: "", quantity: 1, unit_price: 0, discount_amount: 0 };
 const EMPTY_FORM = {
-  supplier_id: "",
+  supplier: "",
   supplier_name: "",
   bill_number: "",
   purchase_date: today(),
@@ -39,7 +44,7 @@ const EMPTY_FORM = {
   items: [{ ...EMPTY_ITEM }],
   discount: 0,
   paid_amount: 0,
-  payment_method: "Cash",
+  payment_method: "CASH",
   notes: "",
   status: "CONFIRMED",
 };
@@ -47,15 +52,19 @@ const EMPTY_FORM = {
 /* ─── Purchase Modal ─── */
 function PurchaseModal({ onClose, onSaved, editData }) {
   const [form, setForm] = useState(editData ? {
-    supplier_id: editData.supplier_id || "",
+    supplier: editData.supplier || "",
     supplier_name: editData.supplier_name || editData.party_name || "",
     bill_number: editData.bill_number || editData.invoice_number || "",
     purchase_date: editData.purchase_date || editData.date || today(),
     due_date: editData.due_date || "",
-    items: editData.items?.length ? editData.items : [{ ...EMPTY_ITEM }],
-    discount: editData.discount || 0,
+    items: editData.items?.length
+      ? editData.items.map(it => ({ ...it, product: it.product ?? it.product_id ?? "" }))
+      : [{ ...EMPTY_ITEM }],
+    discount: editData.subtotal && parseFloat(editData.subtotal) > 0
+      ? Math.round((parseFloat(editData.discount || 0) / parseFloat(editData.subtotal)) * 10000) / 100
+      : (editData.discount || 0),
     paid_amount: editData.paid_amount || 0,
-    payment_method: editData.payment_method || "Cash",
+    payment_method: editData.payment_method || "CASH",
     notes: editData.notes || "",
     status: editData.status || "CONFIRMED",
   } : { ...EMPTY_FORM, items: [{ ...EMPTY_ITEM }] });
@@ -74,16 +83,19 @@ function PurchaseModal({ onClose, onSaved, editData }) {
   useEffect(() => {
     parties.list({ party_type: "SUPPLIER" }).then(r => setSuppliers(r.data.results ?? r.data)).catch(() => {});
     inventory.products().then(r => setProducts(r.data.results ?? r.data)).catch(() => {});
+    if (!editData) {
+      purchasesApi.nextNumber?.().then(r => setForm(f => ({ ...f, bill_number: r.data.next_number || "" }))).catch(() => {});
+    }
   }, []);
 
   const setItem = (i, key, val) => {
     const items = [...form.items];
     items[i] = { ...items[i], [key]: val };
-    if (key === "product_id") {
+    if (key === "product") {
       const prod = products.find(p => String(p.id) === String(val));
       if (prod) {
         items[i].product_name = prod.name;
-        items[i].unit_price = parseFloat(prod.cost_price || prod.price || 0);
+        items[i].unit_price = parseFloat(prod.purchase_price || 0);
       }
     }
     setForm(f => ({ ...f, items }));
@@ -93,26 +105,36 @@ function PurchaseModal({ onClose, onSaved, editData }) {
   const removeItem = (i) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
 
   const subtotal = form.items.reduce((s, it) => s + (it.quantity * it.unit_price) - (parseFloat(it.discount_amount) || 0), 0);
-  const grandTotal = Math.max(0, subtotal - parseFloat(form.discount || 0));
+  const discountPercent = Math.min(100, Math.max(0, parseFloat(form.discount) || 0));
+  const discountAmount = subtotal * discountPercent / 100;
+  const grandTotal = Math.max(0, subtotal - discountAmount);
   const balanceDue = Math.max(0, grandTotal - parseFloat(form.paid_amount || 0));
 
   const handleSubmit = async (statusOverride) => {
     setError("");
-    if (!form.supplier_id && !form.supplier_name) { setError("Please select a supplier."); return; }
+    if (!form.supplier && !form.supplier_name) { setError("Please select a supplier."); return; }
+    if (form.items.some(it => !it.product || !it.quantity || it.quantity <= 0)) {
+      setError("Please select a product and a valid quantity for every item.");
+      return;
+    }
     setSaving(true);
     try {
       let payload;
       const baseData = {
         ...form,
+        due_date: form.due_date || null,
         status: statusOverride || form.status,
+        discount: discountAmount.toFixed(2),
         subtotal: subtotal.toFixed(2),
-        total_amount: grandTotal.toFixed(2),
+        total: grandTotal.toFixed(2),
         due_amount: balanceDue.toFixed(2),
         items: JSON.stringify(form.items),
       };
       if (billImage) {
         payload = new FormData();
-        Object.entries(baseData).forEach(([k, v]) => payload.append(k, v));
+        Object.entries(baseData).forEach(([k, v]) => {
+          if (v !== null && v !== undefined) payload.append(k, v);
+        });
         payload.append("bill_image", billImage);
       } else {
         payload = { ...baseData, items: form.items };
@@ -124,7 +146,10 @@ function PurchaseModal({ onClose, onSaved, editData }) {
       }
       onSaved();
     } catch (e) {
-      setError(e.response?.data?.detail || "Failed to save. Check backend is running.");
+      const data = e.response?.data;
+      const msg = data?.detail ||
+        (data && typeof data === "object" ? Object.values(data).flat().join(" ") : null);
+      setError(msg || "Failed to save. Check backend is running.");
     } finally {
       setSaving(false);
     }
@@ -164,7 +189,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                   {filteredSuppliers.slice(0, 20).map(s => (
                     <button key={s.id} className="w-full px-3 py-2 text-left text-sm text-white hover:bg-navy-700"
                       onMouseDown={() => {
-                        setForm(f => ({ ...f, supplier_id: s.id, supplier_name: s.name }));
+                        setForm(f => ({ ...f, supplier: s.id, supplier_name: s.name }));
                         setSupplierSearch(s.name);
                         setShowSupplierDropdown(false);
                       }}>
@@ -228,8 +253,8 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                     <div className="col-span-4">
                       <select
                         className="w-full rounded-md bg-navy-800 border border-navy-700 px-2 py-1.5 text-xs text-white focus:border-orange-500 focus:outline-none"
-                        value={item.product_id}
-                        onChange={e => setItem(i, "product_id", e.target.value)}
+                        value={item.product}
+                        onChange={e => setItem(i, "product", e.target.value)}
                       >
                         <option value="">Select...</option>
                         {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -271,8 +296,8 @@ function PurchaseModal({ onClose, onSaved, editData }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-navy-400">Discount (Rs.)</label>
-                <input type="number" min="0"
+                <label className="mb-1 block text-xs font-semibold text-navy-400">Discount (%)</label>
+                <input type="number" min="0" max="100" step="0.01"
                   className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
                   value={form.discount}
                   onChange={e => setForm(f => ({ ...f, discount: parseFloat(e.target.value) || 0 }))}
@@ -320,7 +345,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
             </div>
             <div className="rounded-xl border border-navy-700 bg-navy-800/40 p-4 space-y-2 text-sm">
               <div className="flex justify-between text-navy-400"><span>Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-navy-400"><span>Discount</span><span>- Rs. {parseFloat(form.discount || 0).toFixed(2)}</span></div>
+              <div className="flex justify-between text-navy-400"><span>Discount ({discountPercent}%)</span><span>- Rs. {discountAmount.toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-white border-t border-navy-700 pt-2"><span>Grand Total</span><span>Rs. {grandTotal.toFixed(2)}</span></div>
               <div className="pt-1 space-y-2">
                 <div>
@@ -338,7 +363,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                     value={form.payment_method}
                     onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}
                   >
-                    {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
+                    {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
                 </div>
                 <div className="flex justify-between font-semibold text-orange-400 border-t border-navy-700 pt-2">
@@ -402,7 +427,7 @@ export default function PurchasesPage() {
 
   const thisMonth = new Date().toISOString().slice(0, 7);
   const monthPurchases = list.filter(p => (p.purchase_date || p.date || "").startsWith(thisMonth));
-  const totalPurchases = monthPurchases.reduce((s, x) => s + parseFloat(x.total_amount || 0), 0);
+  const totalPurchases = monthPurchases.reduce((s, x) => s + parseFloat(x.total || 0), 0);
   const totalPayable = list.reduce((s, x) => s + parseFloat(x.due_amount || 0), 0);
 
   const TABS = ["ALL", "DRAFT", "CONFIRMED"];
@@ -504,7 +529,7 @@ export default function PurchasesPage() {
                   {formatDate(item.purchase_date || item.date, dateMode, language)}
                 </div>
                 <div className="col-span-4 sm:col-span-1 text-right text-white font-medium">
-                  {maskAmount(parseFloat(item.total_amount || 0), v => `Rs. ${v.toLocaleString()}`)}
+                  {maskAmount(parseFloat(item.total || 0), v => `Rs. ${v.toLocaleString()}`)}
                 </div>
                 <div className="col-span-4 sm:col-span-1 text-right text-green-400 text-xs">
                   {maskAmount(parseFloat(item.paid_amount || 0), v => `Rs. ${v.toLocaleString()}`)}

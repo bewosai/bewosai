@@ -34,7 +34,7 @@ function AccountModal({ editData, onClose, onSaved }) {
     account_name: editData?.account_name || "",
     bank_name: editData?.bank_name || "",
     account_number: editData?.account_number || "",
-    account_type: editData?.account_type || "CURRENT",
+    account_type: editData?.account_type || "CASH",
     opening_balance: editData?.opening_balance || "0",
   });
   const [qrFile, setQrFile] = useState(null);
@@ -86,9 +86,13 @@ function AccountModal({ editData, onClose, onSaved }) {
           <input className={field} placeholder="Bank name (e.g., NIC Asia)" value={form.bank_name} onChange={e => setForm(f => ({ ...f, bank_name: e.target.value }))} />
           <input className={field} placeholder="Account number" value={form.account_number} onChange={e => setForm(f => ({ ...f, account_number: e.target.value }))} />
           <select className={field} value={form.account_type} onChange={e => setForm(f => ({ ...f, account_type: e.target.value }))}>
-            <option value="CURRENT">Current Account</option>
-            <option value="SAVINGS">Savings Account</option>
             <option value="CASH">Cash (Petty Cash)</option>
+            <option value="BANK">Bank</option>
+            <option value="ESEWA">eSewa</option>
+            <option value="KHALTI">Khalti</option>
+            <option value="IME_PAY">IME Pay</option>
+            <option value="MOBILE_BANKING">Mobile Banking</option>
+            <option value="OTHER">Other</option>
           </select>
           <input type="number" className={field} placeholder="Opening balance (Rs.)" value={form.opening_balance} onChange={e => setForm(f => ({ ...f, opening_balance: e.target.value }))} />
 

@@ -31,6 +31,12 @@ def _next_quotation_number(business_id):
     return f"QUO-{num:04d}"
 
 
+class SaleNextNumberView(APIView):
+    def get(self, request):
+        bid = get_bid(request)
+        return Response({"next_number": _next_invoice_number(bid)})
+
+
 class SaleListCreateView(generics.ListCreateAPIView):
     serializer_class = SaleSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]

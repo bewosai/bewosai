@@ -2,73 +2,65 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
-import 'core/utils/app_settings.dart';
-import 'data/services/api_service.dart';
-import 'data/repositories/auth_repository_impl.dart';
-import 'data/repositories/business_repository_impl.dart';
-import 'domain/repositories/business_repository.dart';
-import 'presentation/providers/auth_provider.dart';
-import 'presentation/providers/business_provider.dart';
+import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/banking/presentation/providers/banking_provider.dart';
+import 'features/expenses/presentation/providers/expense_provider.dart';
+import 'features/inventory/presentation/providers/inventory_provider.dart';
+import 'features/parties/presentation/providers/party_provider.dart';
+import 'features/purchases/presentation/providers/purchase_provider.dart';
+import 'features/recycle_bin/presentation/providers/recycle_bin_provider.dart';
+import 'features/reports/presentation/providers/report_provider.dart';
+import 'features/sales/presentation/providers/sale_provider.dart';
+import 'features/settings/settings_dependencies.dart';
+import 'features/staff/presentation/providers/staff_provider.dart';
 import 'router/app_router.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    statusBarBrightness: Brightness.light,
+    systemNavigationBarColor: Colors.white,
+    systemNavigationBarIconBrightness: Brightness.dark,
   ));
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   runApp(const BewosyApp());
 }
 
-class BewosyApp extends StatelessWidget {
+class BewosyApp extends StatefulWidget {
   const BewosyApp({super.key});
+
+  @override
+  State<BewosyApp> createState() => _BewosyAppState();
+}
+
+class _BewosyAppState extends State<BewosyApp> {
+  final _authProvider = AuthProvider();
+  final _settingsProvider = createSettingsProvider()..load();
+  late final _router = buildAppRouter(_authProvider);
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // Core settings (presentation concern)
-        ChangeNotifierProvider(
-          create: (_) => AppSettings()..loadFromPrefs(),
-        ),
-        // Data layer: API service (only data layer uses this directly)
-        Provider<ApiService>(create: (_) => ApiService()),
-        // Data layer: Auth repository implementation
-        ProxyProvider<ApiService, AuthRepositoryImpl>(
-          create: (ctx) => AuthRepositoryImpl(ctx.read<ApiService>()),
-          update: (_, api, __) => AuthRepositoryImpl(api),
-        ),
-        // Data layer: Business repository implementation (exposed as domain interface)
-        ProxyProvider<ApiService, BusinessRepository>(
-          create: (ctx) => BusinessRepositoryImpl(ctx.read<ApiService>()),
-          update: (_, api, __) => BusinessRepositoryImpl(api),
-        ),
-        // Presentation layer: Auth state, uses domain use cases via repository
-        ChangeNotifierProxyProvider<AuthRepositoryImpl, AuthProvider>(
-          create: (ctx) => AuthProvider(ctx.read<AuthRepositoryImpl>())..loadFromStorage(),
-          update: (_, repo, prev) => prev ?? AuthProvider(repo),
-        ),
-        // Presentation layer: Business operations via domain use cases
-        ProxyProvider<BusinessRepository, BusinessProvider>(
-          create: (ctx) => BusinessProvider(ctx.read<BusinessRepository>()),
-          update: (_, repo, __) => BusinessProvider(repo),
-        ),
+        ChangeNotifierProvider.value(value: _authProvider),
+        ChangeNotifierProvider(create: (_) => PartyProvider()),
+        ChangeNotifierProvider(create: (_) => InventoryProvider()),
+        ChangeNotifierProvider(create: (_) => SaleProvider()),
+        ChangeNotifierProvider(create: (_) => PurchaseProvider()),
+        ChangeNotifierProvider(create: (_) => ExpenseProvider()),
+        ChangeNotifierProvider(create: (_) => BankingProvider()),
+        ChangeNotifierProvider(create: (_) => ReportProvider()),
+        ChangeNotifierProvider(create: (_) => StaffProvider()),
+        ChangeNotifierProvider(create: (_) => RecycleBinProvider()),
+        ChangeNotifierProvider.value(value: _settingsProvider),
       ],
-      child: Consumer2<AppSettings, AuthProvider>(
-        builder: (context, settings, auth, _) {
-          final router = createRouter(auth);
-          return MaterialApp.router(
-            title: 'Bewosy',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: settings.themeMode,
-            routerConfig: router,
-          );
-        },
+      child: MaterialApp.router(
+        title: 'Bewosy',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        routerConfig: _router,
       ),
     );
   }

@@ -22,13 +22,12 @@ export function AuthProvider({ children }) {
       const { data } = await authApi.sendOtp(email, isSignup);
       return {
         ok: true,
-        otp: data.otp,           // dev mode only
         userExists: data.user_exists,
       };
     } catch (err) {
       return {
         ok: false,
-        error: err.response?.data?.error || "Failed to send OTP.",
+        error: err.response?.data?.message || err.response?.data?.detail || "Failed to send OTP.",
         userExists: err.response?.data?.user_exists || false,
       };
     } finally {
@@ -66,7 +65,7 @@ export function AuthProvider({ children }) {
         businesses: data.businesses,
       };
     } catch (err) {
-      return { ok: false, error: err.response?.data?.error || "OTP verification failed." };
+      return { ok: false, error: err.response?.data?.message || err.response?.data?.detail || "OTP verification failed." };
     } finally {
       setLoading(false);
     }
@@ -94,7 +93,7 @@ export function AuthProvider({ children }) {
 
       return { ok: true, accountType: data.user.account_type, businesses: data.businesses };
     } catch (err) {
-      return { ok: false, error: err.response?.data?.error || "Failed to set account type." };
+      return { ok: false, error: err.response?.data?.message || err.response?.data?.detail || "Failed to set account type." };
     } finally {
       setLoading(false);
     }

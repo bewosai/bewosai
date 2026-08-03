@@ -1,128 +1,71 @@
-﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../presentation/providers/auth_provider.dart';
-import '../presentation/screens/auth/splash_screen.dart';
-import '../presentation/screens/auth/login_screen.dart';
-import '../presentation/screens/auth/select_business_screen.dart';
-import '../presentation/screens/main/main_shell.dart';
-import '../presentation/screens/dashboard/dashboard_screen.dart';
-import '../presentation/screens/sales/sales_screen.dart';
-import '../presentation/screens/purchases/purchases_screen.dart';
-import '../presentation/screens/expenses/expenses_screen.dart';
-import '../presentation/screens/inventory/inventory_screen.dart';
-import '../presentation/screens/parties/parties_screen.dart';
-import '../presentation/screens/reports/reports_screen.dart';
-import '../presentation/screens/settings/settings_screen.dart';
-import '../presentation/screens/staff/staff_screen.dart';
-import '../presentation/screens/payments/payments_screen.dart';
-import '../presentation/screens/recycle_bin/recycle_bin_screen.dart';
-import '../presentation/screens/banking/banking_screen.dart';
+import '../features/auth/presentation/providers/auth_provider.dart';
+import '../features/auth/presentation/screens/login_screen.dart';
+import '../features/auth/presentation/screens/select_business_screen.dart';
+import '../features/auth/presentation/screens/splash_screen.dart';
+import '../features/banking/presentation/screens/banking_screen.dart';
+import '../features/expenses/presentation/screens/expenses_screen.dart';
+import '../features/parties/presentation/screens/party_ledger_screen.dart';
+import '../features/recycle_bin/presentation/screens/recycle_bin_screen.dart';
+import '../features/reports/presentation/screens/reports_screen.dart';
+import '../features/sales/presentation/screens/invoice_detail_screen.dart';
+import '../features/sales/presentation/screens/pos/quick_pos_screen.dart';
+import '../features/settings/presentation/screens/settings_screen.dart';
+import '../features/shell/presentation/screens/main_shell.dart';
+import '../features/staff/presentation/screens/staff_screen.dart';
 
-final _rootKey = GlobalKey<NavigatorState>();
-final _shellKey = GlobalKey<NavigatorState>();
-
-GoRouter createRouter(AuthProvider auth) {
+GoRouter buildAppRouter(AuthProvider authProvider) {
   return GoRouter(
-    navigatorKey: _rootKey,
-    initialLocation: '/splash',
-    refreshListenable: auth,
+    initialLocation: '/',
+    refreshListenable: authProvider,
     redirect: (context, state) {
-      final path = state.uri.path;
-      // Splash handles its own navigation — never redirect away from it
-      if (path == '/splash') return null;
+      final status = authProvider.status;
+      final loc = state.matchedLocation;
 
-      final loggedIn = auth.isLoggedIn;
-      final publicPaths = ['/login', '/create-business', '/select-business'];
-      final isPublic = publicPaths.any((p) => path.startsWith(p));
-
-      if (!loggedIn && !isPublic) return '/login';
-      if (loggedIn && path == '/login') {
-        return auth.user?.accountType == 'personal'
-            ? '/personal-dashboard'
-            : '/dashboard';
+      if (status == AuthStatus.unknown) {
+        return loc == '/' ? null : '/';
+      }
+      if (status == AuthStatus.loggedOut) {
+        return loc == '/login' ? null : '/login';
+      }
+      if (status == AuthStatus.needsBusiness) {
+        return loc == '/select-business' ? null : '/select-business';
+      }
+      // ready
+      if (loc == '/' || loc == '/login' || loc == '/select-business') {
+        return '/dashboard';
       }
       return null;
     },
     routes: [
+      GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/select-business', builder: (context, state) => const SelectBusinessScreen()),
       GoRoute(
-        path: '/splash',
-        builder: (_, __) => const SplashScreen(),
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (_, __) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: '/select-business',
-        builder: (_, __) => const SelectBusinessScreen(),
+        path: '/dashboard',
+        builder: (context, state) => const MainShell(),
       ),
       GoRoute(
-        path: '/create-business',
-        builder: (_, __) => const SelectBusinessScreen(),
-      ),
-
-      // Main app shell with bottom navigation
-      ShellRoute(
-        navigatorKey: _shellKey,
-        builder: (context, state, child) => MainShell(child: child),
-        routes: [
-          GoRoute(
-            path: '/dashboard',
-            builder: (_, __) => const DashboardScreen(),
-          ),
-          GoRoute(
-            path: '/sales',
-            builder: (_, __) => const SalesScreen(),
-          ),
-          GoRoute(
-            path: '/purchases',
-            builder: (_, __) => const PurchasesScreen(),
-          ),
-          GoRoute(
-            path: '/expenses',
-            builder: (_, __) => const ExpensesScreen(),
-          ),
-          GoRoute(
-            path: '/inventory',
-            builder: (_, __) => const InventoryScreen(),
-          ),
-          GoRoute(
-            path: '/parties',
-            builder: (_, __) => const PartiesScreen(),
-          ),
-          GoRoute(
-            path: '/reports',
-            builder: (_, __) => const ReportsScreen(),
-          ),
-          GoRoute(
-            path: '/settings',
-            builder: (_, __) => const SettingsScreen(),
-          ),
-          GoRoute(
-            path: '/payments',
-            builder: (_, __) => const PaymentsScreen(),
-          ),
-          GoRoute(
-            path: '/banking',
-            builder: (_, __) => const BankingScreen(),
-          ),
-          GoRoute(
-            path: '/personal-dashboard',
-            builder: (_, __) => const DashboardScreen(),
-          ),
-        ],
-      ),
-
-      // Screens outside the shell (full screen, with back button)
-      GoRoute(
-        path: '/staff',
-        builder: (_, __) => const StaffScreen(),
+        path: '/pos',
+        builder: (context, state) {
+          final editId = state.uri.queryParameters['edit'];
+          return QuickPosScreen(saleId: editId != null ? int.tryParse(editId) : null);
+        },
       ),
       GoRoute(
-        path: '/recycle-bin',
-        builder: (_, __) => const RecycleBinScreen(),
+        path: '/invoice/:id',
+        builder: (context, state) => InvoiceDetailScreen(saleId: int.parse(state.pathParameters['id']!)),
       ),
+      GoRoute(
+        path: '/party-ledger/:id',
+        builder: (context, state) => PartyLedgerScreen(partyId: int.parse(state.pathParameters['id']!)),
+      ),
+      GoRoute(path: '/expenses', builder: (context, state) => const ExpensesScreen()),
+      GoRoute(path: '/banking', builder: (context, state) => const BankingScreen()),
+      GoRoute(path: '/reports', builder: (context, state) => const ReportsScreen()),
+      GoRoute(path: '/staff', builder: (context, state) => const StaffScreen()),
+      GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+      GoRoute(path: '/recycle-bin', builder: (context, state) => const RecycleBinScreen()),
     ],
   );
 }
-

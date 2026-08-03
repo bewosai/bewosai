@@ -424,7 +424,7 @@ function EditBusinessModal({ biz, onClose, onSaved }) {
       await adminApi.editBusiness(biz.id, form);
       onSaved();
     } catch (e) {
-      setError(e.response?.data?.detail || "Failed to update.");
+      setError(e.response?.data?.error || "Failed to update.");
     } finally { setSaving(false); }
   };
 
@@ -509,7 +509,7 @@ function BusinessDataModal({ bizId, onClose }) {
 /* ── Ticket Reply Modal ────────────────────────────────────────────────────── */
 function TicketModal({ ticket, onClose, onSaved }) {
   const [reply, setReply] = useState(ticket.admin_reply || "");
-  const [ticketStatus, setTicketStatus] = useState(ticket.status || "open");
+  const [ticketStatus, setTicketStatus] = useState(ticket.status || "OPEN");
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -521,7 +521,7 @@ function TicketModal({ ticket, onClose, onSaved }) {
     setSaving(false);
   };
 
-  const statusColors = { open: "text-yellow-400", in_progress: "text-blue-400", resolved: "text-green-400", closed: "text-navy-400" };
+  const statusColors = { OPEN: "text-yellow-400", IN_PROGRESS: "text-blue-400", CLOSED: "text-navy-400" };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -548,7 +548,7 @@ function TicketModal({ ticket, onClose, onSaved }) {
           <label className="mb-1 block text-xs font-semibold text-navy-400">Status</label>
           <select className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-sm text-white focus:border-orange-500 focus:outline-none"
             value={ticketStatus} onChange={e => setTicketStatus(e.target.value)}>
-            {["open", "in_progress", "resolved", "closed"].map(s => (
+            {["OPEN", "IN_PROGRESS", "CLOSED"].map(s => (
               <option key={s} value={s}>{s.replace("_", " ").toUpperCase()}</option>
             ))}
           </select>
@@ -947,7 +947,7 @@ function TicketsTab({ tickets, onRefresh }) {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [selectedTicket, setSelectedTicket] = useState(null);
 
-  const statusColors = { open: "yellow", in_progress: "blue", resolved: "green", closed: "gray" };
+  const statusColors = { OPEN: "yellow", IN_PROGRESS: "blue", CLOSED: "gray" };
 
   const filtered = tickets.filter(t =>
     statusFilter === "ALL" || t.status === statusFilter
@@ -956,7 +956,7 @@ function TicketsTab({ tickets, onRefresh }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        {["ALL", "open", "in_progress", "resolved", "closed"].map(s => (
+        {["ALL", "OPEN", "IN_PROGRESS", "CLOSED"].map(s => (
           <button key={s} onClick={() => setStatusFilter(s)}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${statusFilter === s ? "bg-orange-500 text-white" : "text-navy-400 hover:text-white border border-navy-700"}`}>
             {s === "ALL" ? "All" : s.replace("_", " ").toUpperCase()}
@@ -1049,7 +1049,7 @@ export default function SuperAdminPage() {
     { id: "businesses", label: `Businesses (${businesses.length})`, icon: Building2 },
     { id: "users", label: `Users (${users.length})`, icon: Users },
     { id: "announcements", label: "Announcements", icon: Bell },
-    { id: "tickets", label: `Tickets (${tickets.filter(t => t.status === "open").length} open)`, icon: MessageSquare },
+    { id: "tickets", label: `Tickets (${tickets.filter(t => t.status === "OPEN").length} open)`, icon: MessageSquare },
   ];
 
   return (

@@ -10,10 +10,11 @@ const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text
 function ReturnModal({ onClose, onSaved }) {
   const { language } = useTranslation();
   const bid = localStorage.getItem("business_id");
-  const [form, setForm] = useState({ original_sale: "", return_date: today(), reason: "", amount: "" });
+  const [form, setForm] = useState({ original_sale: "", return_date: today(), reason: "", items: [] });
   const [invoices, setInvoices] = useState([]);
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [showDrop, setShowDrop] = useState(false);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -26,19 +27,58 @@ function ReturnModal({ onClose, onSaved }) {
     (inv.customer_name || "").toLowerCase().includes(invoiceSearch.toLowerCase())
   );
 
+  const pickInvoice = async (inv) => {
+    setForm(f => ({ ...f, original_sale: inv.id, items: [] }));
+    setInvoiceSearch(`${inv.invoice_number}${inv.customer_name ? ` — ${inv.customer_name}` : ""}`);
+    setShowDrop(false);
+    setLoadingItems(true);
+    try {
+      const { data } = await sales.get(inv.id);
+      const items = (data.items || []).map(it => ({
+        sale_item: it.id,
+        product: it.product ?? null,
+        product_name: it.product_name,
+        max_quantity: parseFloat(it.quantity),
+        quantity: 0,
+        unit_price: parseFloat(it.unit_price),
+      }));
+      setForm(f => ({ ...f, items }));
+    } catch {
+      setError("Failed to load invoice items.");
+    } finally {
+      setLoadingItems(false);
+    }
+  };
+
+  const setItemQty = (i, val) => {
+    const items = [...form.items];
+    const qty = Math.min(items[i].max_quantity, Math.max(0, parseFloat(val) || 0));
+    items[i] = { ...items[i], quantity: qty };
+    setForm(f => ({ ...f, items }));
+  };
+
+  const returnAmount = form.items.reduce((s, it) => s + it.quantity * it.unit_price, 0);
+
   const submit = async (e) => {
     e.preventDefault();
     setError("");
     if (!form.original_sale) { setError("Select the original invoice."); return; }
-    if (!form.amount || parseFloat(form.amount) <= 0) { setError("Enter a valid return amount."); return; }
+    const returnedItems = form.items.filter(it => it.quantity > 0);
+    if (returnedItems.length === 0) { setError("Enter a return quantity for at least one item."); return; }
     setSaving(true);
     try {
       await sales.createReturn({
         original_sale: form.original_sale,
         return_date: form.return_date,
         reason: form.reason,
-        amount: parseFloat(form.amount),
-        business: bid,
+        amount: returnAmount.toFixed(2),
+        items: returnedItems.map(it => ({
+          sale_item: it.sale_item,
+          product: it.product,
+          product_name: it.product_name,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+        })),
       });
       onSaved();
     } catch (e) {
@@ -48,7 +88,7 @@ function ReturnModal({ onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-navy-700 bg-navy-900 p-6 shadow-2xl">
+      <div className="w-full max-w-lg rounded-2xl border border-navy-700 bg-navy-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="mb-5 flex items-center justify-between">
           <h2 className="font-bold text-white">{language === "ne" ? "नयाँ फिर्ता" : "New Sales Return"}</h2>
           <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
@@ -74,11 +114,7 @@ function ReturnModal({ onClose, onSaved }) {
                   {filteredInvoices.slice(0, 20).map(inv => (
                     <button key={inv.id} type="button"
                       className="w-full px-3 py-2.5 text-left text-sm hover:bg-navy-800 flex items-center justify-between"
-                      onMouseDown={() => {
-                        setForm(f => ({ ...f, original_sale: inv.id, amount: String(inv.total) }));
-                        setInvoiceSearch(`${inv.invoice_number}${inv.customer_name ? ` — ${inv.customer_name}` : ""}`);
-                        setShowDrop(false);
-                      }}
+                      onMouseDown={() => pickInvoice(inv)}
                     >
                       <span className="text-white">{inv.invoice_number}</span>
                       <span className="text-xs text-navy-400">{inv.customer_name || "—"} · Rs. {parseFloat(inv.total).toLocaleString()}</span>
@@ -97,13 +133,39 @@ function ReturnModal({ onClose, onSaved }) {
               onChange={e => setForm(f => ({ ...f, return_date: e.target.value }))} />
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-navy-400">
-              {language === "ne" ? "फिर्ता रकम *" : "Return Amount *"}
-            </label>
-            <input type="number" min="0.01" step="0.01" className={F} placeholder="0.00"
-              value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
-          </div>
+          {loadingItems ? (
+            <div className="flex justify-center py-4"><Loader className="h-5 w-5 animate-spin text-orange-500" /></div>
+          ) : form.items.length > 0 && (
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-navy-400">
+                {language === "ne" ? "फिर्ता वस्तुहरू *" : "Items to Return *"}
+              </label>
+              <div className="rounded-xl border border-navy-700 overflow-hidden">
+                <div className="grid grid-cols-12 gap-1 bg-navy-800/60 px-2 py-1.5 text-xs font-semibold text-navy-400">
+                  <div className="col-span-5">Product</div>
+                  <div className="col-span-3 text-right">Sold</div>
+                  <div className="col-span-4 text-right">Return Qty</div>
+                </div>
+                {form.items.map((item, i) => (
+                  <div key={item.sale_item ?? i} className="grid grid-cols-12 gap-1 px-2 py-2 border-t border-navy-700/50 items-center">
+                    <div className="col-span-5 text-xs text-white truncate">{item.product_name}</div>
+                    <div className="col-span-3 text-right text-xs text-navy-400">{item.max_quantity}</div>
+                    <div className="col-span-4">
+                      <input type="number" min="0" max={item.max_quantity} step="0.01"
+                        className="w-full rounded-md bg-navy-800 border border-navy-700 px-2 py-1.5 text-xs text-white text-right focus:border-orange-500 focus:outline-none"
+                        value={item.quantity}
+                        onChange={e => setItemQty(i, e.target.value)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex justify-between text-sm">
+                <span className="text-navy-400">{language === "ne" ? "फिर्ता रकम" : "Return Amount"}</span>
+                <span className="font-bold text-white">Rs. {returnAmount.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-semibold text-navy-400">

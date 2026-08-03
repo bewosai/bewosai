@@ -18,7 +18,13 @@ function formatDate(dateStr, dateMode, language) {
 }
 
 const CATEGORIES = ["Daily", "Purchase", "Utility", "Staff", "Other"];
-const PAYMENT_METHODS = ["Cash", "Bank Transfer", "Mobile Banking", "Cheque"];
+const PAYMENT_METHODS = [
+  { value: "CASH", label: "Cash" },
+  { value: "BANK", label: "Bank" },
+  { value: "ESEWA", label: "eSewa" },
+  { value: "KHALTI", label: "Khalti" },
+];
+const PAYMENT_METHOD_LABELS = PAYMENT_METHODS.reduce((acc, m) => ({ ...acc, [m.value]: m.label }), {});
 
 const CAT_COLORS = {
   Daily: "bg-blue-500/10 text-blue-400",
@@ -33,19 +39,19 @@ const CHART_COLORS = ["#f97316", "#3b82f6", "#22c55e", "#eab308", "#8b5cf6"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /* ─── Expense Modal ─── */
-function ExpenseModal({ onClose, onSaved, editData }) {
+function ExpenseModal({ onClose, onSaved, editData, categories }) {
   const [form, setForm] = useState(editData ? {
     amount: editData.amount || "",
     date: editData.date || today(),
-    category: editData.category || "Daily",
+    category: editData.category || categories[0]?.id || "",
     description: editData.description || editData.notes || "",
-    payment_method: editData.payment_method || "Cash",
+    payment_method: editData.payment_method || "CASH",
   } : {
     amount: "",
     date: today(),
-    category: "Daily",
+    category: categories[0]?.id || "",
     description: "",
-    payment_method: "Cash",
+    payment_method: "CASH",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -65,13 +71,17 @@ function ExpenseModal({ onClose, onSaved, editData }) {
     if (!form.amount || parseFloat(form.amount) <= 0) { setError("Amount is required."); return; }
     setSaving(true);
     try {
+      // category is optional on the backend — omit it entirely when unset
+      // instead of sending an empty string, which fails FK validation.
+      const fields = { ...form };
+      if (!fields.category) delete fields.category;
       let payload;
       if (receiptImage) {
         payload = new FormData();
-        Object.entries(form).forEach(([k, v]) => payload.append(k, v));
+        Object.entries(fields).forEach(([k, v]) => payload.append(k, v));
         payload.append("receipt_image", receiptImage);
       } else {
-        payload = form;
+        payload = fields;
       }
       if (editData?.id) {
         await expensesApi.update(editData.id, payload);
@@ -126,7 +136,7 @@ function ExpenseModal({ onClose, onSaved, editData }) {
                 value={form.category}
                 onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
               >
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
@@ -136,7 +146,7 @@ function ExpenseModal({ onClose, onSaved, editData }) {
                 value={form.payment_method}
                 onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}
               >
-                {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
+                {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
           </div>
@@ -208,6 +218,7 @@ export default function ExpensesPage() {
   const maskAmount = usePrivateAmount();
 
   const [list, setList] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("All");
   const [search, setSearch] = useState("");
@@ -224,7 +235,31 @@ export default function ExpensesPage() {
       .finally(() => setLoading(false));
   };
 
+  const loadCategories = async () => {
+    try {
+      const r = await expensesApi.categories();
+      let cats = r.data.results ?? r.data;
+      if (!cats || cats.length === 0) {
+        // Seed the standard categories on first use so the expense form has
+        // real ExpenseCategory rows to reference (the backend `category`
+        // field is an FK, not a free-text choice).
+        const created = [];
+        for (const name of CATEGORIES) {
+          try {
+            const res = await expensesApi.createCategory({ name, expense_type: name.toUpperCase() });
+            created.push(res.data);
+          } catch { /* ignore duplicates / race */ }
+        }
+        cats = created;
+      }
+      setCategories(cats);
+    } catch {
+      setCategories([]);
+    }
+  };
+
   useEffect(load, []);
+  useEffect(() => { loadCategories(); }, []);
 
   // Stats
   const thisMonth = new Date().toISOString().slice(0, 7);
@@ -235,7 +270,7 @@ export default function ExpensesPage() {
   // Category totals
   const catTotals = CATEGORIES.map(c => ({
     category: c,
-    amount: list.filter(e => e.category === c).reduce((s, e) => s + parseFloat(e.amount || 0), 0),
+    amount: list.filter(e => e.category_name === c).reduce((s, e) => s + parseFloat(e.amount || 0), 0),
   }));
 
   // Monthly chart data (last 6 months)
@@ -249,11 +284,11 @@ export default function ExpensesPage() {
 
   // Filtered list
   const filtered = list.filter(e => {
-    const matchCat = category === "All" || e.category === category;
+    const matchCat = category === "All" || e.category_name === category;
     const q = search.toLowerCase();
     const matchSearch = !q ||
       (e.description || e.notes || "").toLowerCase().includes(q) ||
-      (e.category || "").toLowerCase().includes(q);
+      (e.category_name || "").toLowerCase().includes(q);
     return matchCat && matchSearch;
   });
 
@@ -359,15 +394,15 @@ export default function ExpensesPage() {
                   {formatDate(item.date, dateMode, language)}
                 </div>
                 <div className="col-span-4 sm:col-span-2">
-                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${CAT_COLORS[item.category] || "bg-navy-700 text-navy-400"}`}>
-                    {item.category || "Other"}
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${CAT_COLORS[item.category_name] || "bg-navy-700 text-navy-400"}`}>
+                    {item.category_name || "Other"}
                   </span>
                 </div>
                 <div className="col-span-12 sm:col-span-4 text-navy-300 text-xs truncate">
                   {item.description || item.notes || "—"}
                 </div>
                 <div className="col-span-6 sm:col-span-2 text-navy-400 text-xs">
-                  {item.payment_method || "—"}
+                  {PAYMENT_METHOD_LABELS[item.payment_method] || item.payment_method || "—"}
                 </div>
                 <div className="col-span-4 sm:col-span-1 text-right font-semibold text-white">
                   {maskAmount(parseFloat(item.amount || 0), v => `Rs. ${v.toLocaleString()}`)}
@@ -397,6 +432,7 @@ export default function ExpensesPage() {
       {showModal && (
         <ExpenseModal
           editData={editItem}
+          categories={categories}
           onClose={() => { setShowModal(false); setEditItem(null); }}
           onSaved={() => { setShowModal(false); setEditItem(null); load(); }}
         />
