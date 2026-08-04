@@ -49,6 +49,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
       appBar: widget.initialLowStockFilter
           ? AppBar(title: const Text('Low Stock Products'), actions: const [HomeLogoButton()])
           : null,
+      bottomNavigationBar: widget.initialLowStockFilter ? const AppBottomNav(currentIndex: 3) : null,
       floatingActionButton: FloatingActionButton(
         heroTag: 'inventory_fab',
         onPressed: () {
@@ -191,7 +192,7 @@ class _ProductsTab extends StatelessWidget {
                             Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                             const SizedBox(height: 3),
                             Text('${p.categoryName.isEmpty ? 'Uncategorized' : p.categoryName} · ${p.unitName}',
-                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                           ],
                         ),
                       ),
@@ -203,7 +204,7 @@ class _ProductsTab extends StatelessWidget {
                             Text('${Formatters.amount(p.stockQuantity)} ${p.unitName}', style: const TextStyle(fontWeight: FontWeight.w700)),
                           ]),
                           const SizedBox(height: 3),
-                          Text(Formatters.currency(p.salePrice), style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          Text(Formatters.currency(p.salePrice), style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                         ],
                       ),
                       IconButton(
@@ -243,7 +244,7 @@ class _UnitsTab extends StatelessWidget {
                         Text('${u.name}${u.abbreviation.isNotEmpty ? ' (${u.abbreviation})' : ''}', style: const TextStyle(fontWeight: FontWeight.w700)),
                         if (u.hasSecondary)
                           Text('1 ${u.name} = ${Formatters.amount(u.conversionFactor)} ${u.secondaryUnit}',
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -471,7 +472,7 @@ class _UnitFormSheetState extends State<_UnitFormSheet> {
               Expanded(child: TextFormField(controller: _abbrController, decoration: const InputDecoration(labelText: 'Abbreviation'))),
             ]),
             const SizedBox(height: 16),
-            const Text('Secondary unit (optional, for dual-unit tracking)', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            Text('Secondary unit (optional, for dual-unit tracking)', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
             const SizedBox(height: 8),
             Row(children: [
               Expanded(child: TextFormField(controller: _secondaryController, decoration: const InputDecoration(labelText: 'Secondary Unit'))),
@@ -538,7 +539,7 @@ class _CategoryFormSheetState extends State<_CategoryFormSheet> {
             TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Category Name *'), validator: (v) => Validators.required(v, 'Name')),
             if (categories.isNotEmpty) ...[
               const SizedBox(height: 16),
-              const Text('Existing categories', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              Text('Existing categories', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
               const SizedBox(height: 8),
               Wrap(spacing: 6, runSpacing: 6, children: categories.map((c) => Chip(label: Text(c.name))).toList()),
             ],
@@ -606,7 +607,7 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Current stock: ${Formatters.amount(widget.product.stockQuantity)} ${widget.product.unitName}',
-                style: const TextStyle(color: AppColors.textSecondary)),
+                style: TextStyle(color: AppColors.textSecondary)),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _type,

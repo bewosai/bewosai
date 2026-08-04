@@ -89,6 +89,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           const HomeLogoButton(),
         ],
       ),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 1),
       body: _loading
           ? const LoadingView()
           : _error != null
@@ -106,10 +107,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(s.customerName.isNotEmpty ? s.customerName : 'Walk-in Customer', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      if (s.partyPhone.isNotEmpty) Text(s.partyPhone, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                      if (s.partyPhone.isNotEmpty) Text(s.partyPhone, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                       const SizedBox(height: 6),
                       Text('Date: ${Formatters.date(s.saleDate)}${s.dueDate != null ? ' · Due: ${Formatters.date(s.dueDate)}' : ''}',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                     ]),
                     const SizedBox(height: 16),
                     AppSectionCard(
@@ -126,7 +127,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                   children: [
                                     Text(item.productName, style: const TextStyle(fontWeight: FontWeight.w600)),
                                     Text('${Formatters.amount(item.quantity)} × ${Formatters.currency(item.unitPrice)}',
-                                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                                   ],
                                 ),
                               ),
@@ -146,7 +147,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                       _row('Paid', Formatters.currency(s.paidAmount)),
                       _row('Balance Due', Formatters.currency(s.dueAmount), color: s.dueAmount > 0 ? AppColors.error : AppColors.success),
                       const SizedBox(height: 8),
-                      Row(children: [const Text('Payment Method: ', style: TextStyle(color: AppColors.textSecondary)), Text(s.paymentMethod)]),
+                      Row(children: [Text('Payment Method: ', style: TextStyle(color: AppColors.textSecondary)), Text(s.paymentMethod)]),
                     ]),
                     if (s.notes.isNotEmpty) ...[
                       const SizedBox(height: 16),

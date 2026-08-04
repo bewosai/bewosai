@@ -28,6 +28,7 @@ class _StaffScreenState extends State<StaffScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Staff'), actions: const [HomeLogoButton()]),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'staff_fab',
         onPressed: () => showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => const _InviteStaffSheet()),
@@ -57,7 +58,7 @@ class _StaffScreenState extends State<StaffScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(s.userName.isNotEmpty ? s.userName : s.userEmail, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                        Text(s.userEmail, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                        Text(s.userEmail, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                                       ],
                                     ),
                                   ),

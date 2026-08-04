@@ -67,6 +67,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Expenses'), actions: const [HomeLogoButton()]),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'expenses_fab',
         onPressed: () => _openAddSheet(),
@@ -194,7 +195,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                       '${e.categoryName} · ${Formatters.dateShort(e.date)}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         color: AppColors.textSecondary,
                                         fontSize: 12,
                                       ),

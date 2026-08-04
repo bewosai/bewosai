@@ -54,6 +54,7 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
     final l = _ledger;
     return Scaffold(
       appBar: AppBar(title: Text(l?.party.name ?? 'Party Ledger'), actions: const [HomeLogoButton()]),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 2),
       floatingActionButton: l == null
           ? null
           : FloatingActionButton.extended(
@@ -111,7 +112,7 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
                                             const SizedBox(width: 6),
                                             Text(e.ref, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                                           ]),
-                                          Text(Formatters.dateShort(e.date), style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                                          Text(Formatters.dateShort(e.date), style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
                                         ],
                                       ),
                                     ),
@@ -120,7 +121,7 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
                                       children: [
                                         if (e.debit > 0) Text('+${Formatters.currency(e.debit)}', style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w700)),
                                         if (e.credit > 0) Text('-${Formatters.currency(e.credit)}', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w700)),
-                                        Text('Bal: ${Formatters.currency(e.balance)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                        Text('Bal: ${Formatters.currency(e.balance)}', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                                       ],
                                     ),
                                   ],
@@ -141,7 +142,7 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          Text(label, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
           Text(Formatters.currency(value), style: TextStyle(fontWeight: FontWeight.w800, color: color, fontSize: 14)),
         ],

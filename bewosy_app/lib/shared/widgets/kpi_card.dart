@@ -78,7 +78,7 @@ class KpiCard extends StatelessWidget {
           Text(
             value,
             maxLines: 1,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.3),
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.3),
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
@@ -86,7 +86,7 @@ class KpiCard extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
           ),
           if (subLabel != null) ...[
             const SizedBox(height: 2),

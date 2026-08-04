@@ -9,56 +9,82 @@ import 'app_colors.dart';
 class AppTheme {
   static const double radius = 14;
 
-  static ThemeData get light {
+  static ThemeData get light => _build(
+        brightness: Brightness.light,
+        surface: AppColors.surfaceLight,
+        background: AppColors.backgroundLight,
+        textPrimary: AppColors.textPrimaryLight,
+        textSecondary: AppColors.textSecondaryLight,
+        divider: AppColors.dividerLight,
+      );
+
+  static ThemeData get dark => _build(
+        brightness: Brightness.dark,
+        surface: AppColors.surfaceDark,
+        background: AppColors.backgroundDark,
+        textPrimary: AppColors.textPrimaryDark,
+        textSecondary: AppColors.textSecondaryDark,
+        divider: AppColors.dividerDark,
+      );
+
+  static ThemeData _build({
+    required Brightness brightness,
+    required Color surface,
+    required Color background,
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color divider,
+  }) {
     final base = ThemeData(
       useMaterial3: true,
+      brightness: brightness,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.navy900,
-        primary: AppColors.navy900,
+        primary: brightness == Brightness.dark ? AppColors.orange : AppColors.navy900,
         secondary: AppColors.orange,
         error: AppColors.error,
-        surface: AppColors.surface,
-        brightness: Brightness.light,
+        surface: surface,
+        brightness: brightness,
       ),
-      scaffoldBackgroundColor: AppColors.background,
+      scaffoldBackgroundColor: background,
       fontFamily: GoogleFonts.inter().fontFamily,
     );
 
     return base.copyWith(
       textTheme: GoogleFonts.interTextTheme(base.textTheme).apply(
-        bodyColor: AppColors.textPrimary,
-        displayColor: AppColors.textPrimary,
+        bodyColor: textPrimary,
+        displayColor: textPrimary,
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: surface,
+        foregroundColor: textPrimary,
         elevation: 0,
         scrolledUnderElevation: 1,
         centerTitle: false,
         titleTextStyle: GoogleFonts.inter(
           fontSize: 18,
           fontWeight: FontWeight.w800,
-          color: AppColors.textPrimary,
+          color: textPrimary,
         ),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        iconTheme: IconThemeData(color: textPrimary),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.surface,
+        color: surface,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radius),
-          side: BorderSide(color: AppColors.divider),
+          side: BorderSide(color: divider),
         ),
       ),
-      dividerTheme: const DividerThemeData(
-        color: AppColors.divider,
+      dividerTheme: DividerThemeData(
+        color: divider,
         thickness: 1,
         space: 1,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.navy50,
+        fillColor: brightness == Brightness.dark ? AppColors.navy800 : AppColors.navy50,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
@@ -76,7 +102,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(radius),
           borderSide: const BorderSide(color: AppColors.error, width: 1.2),
         ),
-        labelStyle: const TextStyle(color: AppColors.textSecondary),
+        labelStyle: TextStyle(color: textSecondary),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -90,8 +116,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.navy900,
-          side: const BorderSide(color: AppColors.navy200),
+          foregroundColor: textPrimary,
+          side: BorderSide(color: divider),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
           textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
@@ -108,9 +134,9 @@ class AppTheme {
         foregroundColor: Colors.white,
       ),
       chipTheme: base.chipTheme.copyWith(
-        backgroundColor: AppColors.navy50,
+        backgroundColor: brightness == Brightness.dark ? AppColors.navy800 : AppColors.navy50,
         selectedColor: AppColors.orangeLight,
-        labelStyle: const TextStyle(color: AppColors.textPrimary),
+        labelStyle: TextStyle(color: textPrimary),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         side: BorderSide.none,
       ),
@@ -120,16 +146,16 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: AppColors.surface,
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: surface,
         selectedItemColor: AppColors.orange,
-        unselectedItemColor: AppColors.textSecondary,
+        unselectedItemColor: textSecondary,
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
       ),
-      tabBarTheme: const TabBarThemeData(
+      tabBarTheme: TabBarThemeData(
         labelColor: AppColors.orange,
-        unselectedLabelColor: AppColors.textSecondary,
+        unselectedLabelColor: textSecondary,
         indicatorColor: AppColors.orange,
       ),
     );

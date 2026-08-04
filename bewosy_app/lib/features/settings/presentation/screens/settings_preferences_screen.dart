@@ -64,6 +64,7 @@ class SettingsPreferencesScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('App Preferences'), actions: const [HomeLogoButton()]),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       body: ResponsiveBody(
         child: settings.loading
             ? const Center(child: CircularProgressIndicator())
@@ -80,14 +81,14 @@ class SettingsPreferencesScreen extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                             child: Row(
                               children: [
-                                const Icon(Icons.contrast, size: 22, color: AppColors.textSecondary),
+                                Icon(Icons.contrast, size: 22, color: AppColors.textSecondary),
                                 const SizedBox(width: 16),
                                 const Expanded(
                                   child: Text('Appearance', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                                 ),
                                 Text(
                                   _themeLabel(settings.settings.themeMode),
-                                  style: const TextStyle(color: AppColors.textSecondary),
+                                  style: TextStyle(color: AppColors.textSecondary),
                                 ),
                                 const Icon(Icons.chevron_right, size: 20, color: AppColors.navy300),
                               ],
@@ -99,7 +100,7 @@ class SettingsPreferencesScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           child: Row(
                             children: [
-                              const Icon(Icons.calendar_month_outlined, size: 22, color: AppColors.textSecondary),
+                              Icon(Icons.calendar_month_outlined, size: 22, color: AppColors.textSecondary),
                               const SizedBox(width: 16),
                               const Expanded(
                                 child: Text('Calendar', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),

@@ -13,6 +13,7 @@ class SettingsTaxScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Tax & Compliance'), actions: const [HomeLogoButton()]),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       body: ResponsiveBody(
         child: ListView(
           padding: const EdgeInsets.all(16),

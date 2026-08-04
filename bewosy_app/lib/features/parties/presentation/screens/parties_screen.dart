@@ -118,7 +118,7 @@ class _PartiesScreenState extends State<PartiesScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                          if (p.phone.isNotEmpty) Text(p.phone, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                          if (p.phone.isNotEmpty) Text(p.phone, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                                         ],
                                       ),
                                     ),
@@ -134,7 +134,7 @@ class _PartiesScreenState extends State<PartiesScreen> {
                                         ),
                                         Text(
                                           p.balance > 0 ? 'Receivable' : (p.balance < 0 ? 'Payable' : 'Settled'),
-                                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                                         ),
                                       ],
                                     ),

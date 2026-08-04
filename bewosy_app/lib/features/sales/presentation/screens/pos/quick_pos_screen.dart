@@ -450,7 +450,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('VAT 13%', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                          Text('VAT 13%', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                           Switch(
                             value: _vatEnabled,
                             activeThumbColor: AppColors.orange,
@@ -509,25 +509,32 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                 ),
               ],
             ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _saving ? null : () => _save('DRAFT'),
-                  child: const Text('Save as Draft'),
-                ),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _saving ? null : () => _save('DRAFT'),
+                      child: const Text('Save as Draft'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: PrimaryButton(label: 'Confirm Invoice', isLoading: _saving, onPressed: () => _save('CONFIRMED')),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: PrimaryButton(label: 'Confirm Invoice', isLoading: _saving, onPressed: () => _save('CONFIRMED')),
-              ),
-            ],
+            ),
           ),
-        ),
+          const AppBottomNav(currentIndex: 1),
+        ],
       ),
     );
   }

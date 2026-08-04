@@ -104,7 +104,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                                       const SizedBox(height: 3),
                                       Text(
                                         '${p.supplierName.isNotEmpty ? p.supplierName : 'Unknown'} · ${Formatters.dateShort(p.purchaseDate)}',
-                                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                                       ),
                                     ],
                                   ),

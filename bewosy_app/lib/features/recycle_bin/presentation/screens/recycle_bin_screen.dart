@@ -47,6 +47,7 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Recycle Bin'), actions: const [HomeLogoButton()]),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       body: rb.isLoading && rb.items.isEmpty
           ? const LoadingView()
           : RefreshIndicator(
@@ -71,7 +72,7 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(item.label, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                        Text('Deleted ${Formatters.dateShort(item.deletedAt)}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                        Text('Deleted ${Formatters.dateShort(item.deletedAt)}', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                                       ],
                                     ),
                                   ),

@@ -11,6 +11,7 @@ export 'delete_confirm_dialog.dart';
 export 'responsive_grid.dart';
 export 'responsive_body.dart';
 export 'home_logo_button.dart';
+export 'app_bottom_nav.dart';
 
 class SectionHeader extends StatelessWidget {
   final String title;
@@ -23,7 +24,7 @@ class SectionHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2)),
+        Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2)),
         if (trailing != null) trailing!,
       ],
     );

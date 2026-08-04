@@ -4,17 +4,18 @@ class AppConstants {
   static const String appName = 'Bewosy';
 
   // ── Server URL ──────────────────────────────────────────────────────────
-  // Web browser (Flutter web)  → 127.0.0.1 (same machine as Django)
-  // Android emulator           → 10.0.2.2  (maps to host 127.0.0.1)
-  // Physical device            → your LAN IP, e.g. 192.168.1.5
+  // Override at build time for a real device / production APK, e.g.:
+  //   flutter build apk --release --dart-define=API_BASE_URL=https://your-backend.up.railway.app/api
+  // Without that flag, falls back to same-machine dev addresses:
+  //   Web browser (Flutter web)  → 127.0.0.1 (same machine as Django)
+  //   Android emulator           → 10.0.2.2  (maps to host 127.0.0.1)
+  static const String _prodUrl = String.fromEnvironment('API_BASE_URL');
   static const String _webUrl = 'http://127.0.0.1:8000/api';
   static const String _emulatorUrl = 'http://10.0.2.2:8000/api';
-  static const String _deviceUrl = 'http://10.0.2.2:8000/api'; // change to LAN IP for physical device
-  static const bool _isEmulator = true; // set false when using a real phone
 
   static String get baseUrl {
-    if (kIsWeb) return _webUrl;
-    return _isEmulator ? _emulatorUrl : _deviceUrl;
+    if (_prodUrl.isNotEmpty) return _prodUrl;
+    return kIsWeb ? _webUrl : _emulatorUrl;
   }
 
   // Secure storage keys

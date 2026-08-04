@@ -101,7 +101,7 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
           Text(_isIn ? 'Payment In' : 'Payment Out', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: accent)),
           Text(
             _isIn ? 'Record money received from a customer' : 'Record money paid to a supplier',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 16),
           InkWell(

@@ -1,12 +1,19 @@
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config("SECRET_KEY", default="bewosy-insecure-dev-key-change-in-production")
 DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,0.0.0.0").split(",")
+
+# Railway sets RAILWAY_PUBLIC_DOMAIN on the deployed service; trust it
+# automatically so ALLOWED_HOSTS doesn't need manual updates after every deploy.
+_railway_domain = config("RAILWAY_PUBLIC_DOMAIN", default="")
+if _railway_domain:
+    ALLOWED_HOSTS.append(_railway_domain)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -37,6 +44,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -65,11 +73,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "bewosy.wsgi.application"
 
+# Railway (and most PaaS hosts) inject DATABASE_URL for the attached Postgres
+# instance. Falls back to local SQLite when it's not set (plain `manage.py
+# runserver` in dev keeps working unchanged).
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+    )
 }
 
 AUTH_USER_MODEL = "accounts.User"
@@ -88,6 +99,10 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -150,10 +165,30 @@ if DEBUG:
 else:
     CORS_ALLOWED_ORIGINS = config(
         "CORS_ALLOWED_ORIGINS",
-        default="http://localhost:5173,http://127.0.0.1:5173",
+        default="http://localhost:5173,http://127.0.0.1:5173,https://bewosyapp.vercel.app",
     ).split(",")
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Needed for Django's CSRF checks (admin login, session-based requests) to
+# accept POSTs originating from the deployed frontend's origin.
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="https://bewosyapp.vercel.app",
+).split(",")
+if _railway_domain:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{_railway_domain}")
+
+# ── Production security (Railway terminates TLS at its edge proxy, so Django
+# itself sees plain HTTP — X-Forwarded-Proto tells it the real scheme) ─────────
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 7  # 1 week; raise once the domain is stable
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
 # Allow the custom header the Flutter app sends for business context
 CORS_ALLOW_HEADERS = [

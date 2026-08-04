@@ -36,7 +36,7 @@ class MoreScreen extends StatelessWidget {
                       Text(user?.name.isNotEmpty == true ? user!.name : (user?.email ?? ''),
                           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15), overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
-                      Text(business?.name ?? '', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12), overflow: TextOverflow.ellipsis),
+                      Text(business?.name ?? '', style: TextStyle(color: AppColors.textSecondary, fontSize: 12), overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),
@@ -78,7 +78,7 @@ class MoreScreen extends StatelessWidget {
     );
   }
 
-  Widget _divider() => const Divider(height: 20, color: AppColors.divider);
+  Widget _divider() => Divider(height: 20, color: AppColors.divider);
 
   Widget _tile(BuildContext context, IconData icon, String label, VoidCallback onTap, {Color? color}) {
     return InkWell(

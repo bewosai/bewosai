@@ -200,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? 'Welcome to ${AppConstants.appName}'
                             : 'Verify your email',
                         // FUTURE_PHONE: _usePhone ? 'Verify your phone' : 'Verify your email'
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 25,
                           fontWeight: FontWeight.w800,
                           color: AppColors.textPrimary,
@@ -212,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         _step == 0
                             ? 'Sign in or create an account with your email'
                             : 'We sent a 6-digit code to ${_emailController.text.trim()}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 14,
                         ),

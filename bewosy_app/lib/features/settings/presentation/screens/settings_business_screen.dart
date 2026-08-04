@@ -60,6 +60,7 @@ class _SettingsBusinessScreenState extends State<SettingsBusinessScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Business Profile'), actions: const [HomeLogoButton()]),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       body: ResponsiveBody(
         child: ListView(
           padding: const EdgeInsets.all(16),

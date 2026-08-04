@@ -15,7 +15,7 @@ Future<bool> showDeleteConfirmDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
         ),
         ElevatedButton(
           onPressed: () => Navigator.pop(ctx, true),

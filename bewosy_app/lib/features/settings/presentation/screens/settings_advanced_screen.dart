@@ -16,6 +16,7 @@ class SettingsAdvancedScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Advanced'), actions: const [HomeLogoButton()]),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       body: ResponsiveBody(
         child: ListView(
           padding: const EdgeInsets.all(16),

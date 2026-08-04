@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 /// reference [AppColors], never hard-code a `Color(0x...)`.
 ///
 /// Theme-role tokens (surface/background/text/divider/status-tints) are
-/// getters driven by [isDark], which [SettingsProvider] flips app-wide —
-/// see AppTheme and main.dart's MaterialApp.themeMode wiring. Brand colors
-/// (navy/orange scales, status hues) stay constant across both themes.
+/// getters driven by [isDark], which main.dart keeps in sync with the
+/// active [ThemeData] so every screen's hard-coded `AppColors.x` reference
+/// (not just widgets that read `Theme.of(context)`) follows dark mode too.
+/// [AppTheme] builds its light/dark ThemeData from the `*Light`/`*Dark`
+/// constants directly, since both must exist as fixed palettes regardless
+/// of whatever `isDark` happens to be at the moment they're constructed.
 class AppColors {
   AppColors._();
 
@@ -43,27 +46,40 @@ class AppColors {
     colors: [orange, orangeDark],
   );
 
-  // Dark-mode surfaces (deep navy, not pure black — matches the brand)
-  static const Color _darkBackground = Color(0xFF071B32);
-  static const Color _darkSurface = Color(0xFF0F2A48);
-  static const Color _darkDivider = Color(0xFF1E3B5C);
+  // Fixed palettes — AppTheme.light / AppTheme.dark build from these.
+  static const Color surfaceLight = Colors.white;
+  static const Color surfaceDark = Color(0xFF0F2A48);
+  static const Color backgroundLight = navy50;
+  static const Color backgroundDark = Color(0xFF071B32);
+  static const Color textPrimaryLight = navy900;
+  static const Color textPrimaryDark = Colors.white;
+  static const Color textSecondaryLight = navy500;
+  static const Color textSecondaryDark = navy300;
+  static const Color dividerLight = navy100;
+  static const Color dividerDark = Color(0xFF1E3B5C);
+  static const Color successBgLight = Color(0xFFDCFCE7);
+  static const Color successBgDark = Color(0xFF113322);
+  static const Color errorBgLight = Color(0xFFFEE2E2);
+  static const Color errorBgDark = Color(0xFF3B1414);
+  static const Color infoBgLight = Color(0xFFDBEAFE);
+  static const Color infoBgDark = Color(0xFF122A4A);
 
-  // Surfaces / text — flip with theme
-  static Color get surface => isDark ? _darkSurface : Colors.white;
-  static Color get background => isDark ? _darkBackground : navy50;
-  static Color get textPrimary => isDark ? Colors.white : navy900;
-  static Color get textSecondary => isDark ? navy300 : navy500;
-  static Color get divider => isDark ? _darkDivider : navy100;
+  // Runtime lookups — every screen already references these; they follow
+  // isDark automatically instead of needing Theme.of(context) everywhere.
+  static Color get surface => isDark ? surfaceDark : surfaceLight;
+  static Color get background => isDark ? backgroundDark : backgroundLight;
+  static Color get textPrimary => isDark ? textPrimaryDark : textPrimaryLight;
+  static Color get textSecondary => isDark ? textSecondaryDark : textSecondaryLight;
+  static Color get divider => isDark ? dividerDark : dividerLight;
+  static Color get successBg => isDark ? successBgDark : successBgLight;
+  static Color get errorBg => isDark ? errorBgDark : errorBgLight;
+  static Color get infoBg => isDark ? infoBgDark : infoBgLight;
 
-  // Status — hue stays constant, tint background flips for legibility
+  // Status — hue stays constant across themes
   static const Color success = Color(0xFF16A34A);
   static const Color error = Color(0xFFDC2626);
   static const Color warning = Color(0xFFF59E0B);
   static const Color info = Color(0xFF2563EB);
-
-  static Color get successBg => isDark ? const Color(0xFF113322) : const Color(0xFFDCFCE7);
-  static Color get errorBg => isDark ? const Color(0xFF3B1414) : const Color(0xFFFEE2E2);
-  static Color get infoBg => isDark ? const Color(0xFF122A4A) : const Color(0xFFDBEAFE);
 
   /// Maps a backend status/type code (e.g. Sale.status, Business.status) to a
   /// badge color. Falls back to neutral navy for anything unrecognized.
@@ -87,7 +103,7 @@ class AppColors {
       case 'PENDING':
         return warning;
       default:
-        return isDark ? navy300 : navy500;
+        return textSecondary;
     }
   }
 }

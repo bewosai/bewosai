@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_mode.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/banking/presentation/providers/banking_provider.dart';
 import 'features/expenses/presentation/providers/expense_provider.dart';
@@ -11,6 +13,7 @@ import 'features/purchases/presentation/providers/purchase_provider.dart';
 import 'features/recycle_bin/presentation/providers/recycle_bin_provider.dart';
 import 'features/reports/presentation/providers/report_provider.dart';
 import 'features/sales/presentation/providers/sale_provider.dart';
+import 'features/settings/presentation/providers/settings_provider.dart';
 import 'features/settings/settings_dependencies.dart';
 import 'features/staff/presentation/providers/staff_provider.dart';
 import 'router/app_router.dart';
@@ -56,11 +59,26 @@ class _BewosyAppState extends State<BewosyApp> {
         ChangeNotifierProvider(create: (_) => RecycleBinProvider()),
         ChangeNotifierProvider.value(value: _settingsProvider),
       ],
-      child: MaterialApp.router(
-        title: 'Bewosy',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        routerConfig: _router,
+      // Consumer (not context.watch) because AppColors.isDark must be set
+      // *before* AppTheme.light/.dark and the rest of the tree are built —
+      // every screen reads AppColors.x directly, not just Theme.of(context).
+      child: Consumer<SettingsProvider>(
+        builder: (context, settings, _) {
+          final mode = settings.settings.themeMode;
+          final resolvedDark = mode == AppThemeMode.system
+              ? WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark
+              : mode == AppThemeMode.dark;
+          AppColors.isDark = resolvedDark;
+
+          return MaterialApp.router(
+            title: 'Bewosy',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            darkTheme: AppTheme.dark,
+            themeMode: mode.materialThemeMode,
+            routerConfig: _router,
+          );
+        },
       ),
     );
   }

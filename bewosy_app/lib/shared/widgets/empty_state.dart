@@ -36,10 +36,10 @@ class EmptyState extends StatelessWidget {
             child: Icon(icon, size: 32, color: AppColors.navy300),
           ),
           const SizedBox(height: 18),
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2)),
+          Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2)),
           if (message != null) ...[
             const SizedBox(height: 6),
-            Text(message!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary, height: 1.4)),
+            Text(message!, textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary, height: 1.4)),
           ],
           if (action != null) ...[const SizedBox(height: 18), action!],
         ],

@@ -61,6 +61,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
           ],
         ),
       ),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       body: TabBarView(
         controller: _tabController,
         children: const [
@@ -177,7 +178,7 @@ class _StockTab extends StatelessWidget {
         const SectionHeader(title: 'Low Stock Items'),
         const SizedBox(height: 10),
         if (inv.lowStockItems.isEmpty)
-          const AppSectionCard(children: [Text('No low stock items', style: TextStyle(color: AppColors.textSecondary))])
+          AppSectionCard(children: [Text('No low stock items', style: TextStyle(color: AppColors.textSecondary))])
         else
           AppSectionCard(
             children: inv.lowStockItems.map((item) {
@@ -231,7 +232,7 @@ class _AgingTab extends StatelessWidget {
         const SectionHeader(title: 'Top Overdue Customers'),
         const SizedBox(height: 10),
         if (aging.topDebtors.isEmpty)
-          const AppSectionCard(children: [Text('No overdue customers', style: TextStyle(color: AppColors.textSecondary))])
+          AppSectionCard(children: [Text('No overdue customers', style: TextStyle(color: AppColors.textSecondary))])
         else
           AppSectionCard(
             children: aging.topDebtors.map((d) {
@@ -293,7 +294,7 @@ class _SalesTabState extends State<_SalesTab> {
           ],
         ),
         const SizedBox(height: 20),
-        const Text('Last 30 days', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        Text('Last 30 days', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
       ],
     );
   }
@@ -353,7 +354,7 @@ class _DayBookTabState extends State<_DayBookTab> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(children: [StatusBadge(label: e.type, color: AppColors.navy500), const SizedBox(width: 6), Text(e.ref, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))]),
-                            if (e.party.isNotEmpty) Text(e.party, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                            if (e.party.isNotEmpty) Text(e.party, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                           ],
                         ),
                       ),
@@ -376,7 +377,7 @@ class _DayBookTabState extends State<_DayBookTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          Text(label, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
           Text(Formatters.currency(value), style: TextStyle(fontWeight: FontWeight.w800, color: color, fontSize: 13)),
         ],
@@ -392,7 +393,7 @@ class _BarChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (points.isEmpty) {
-      return const SizedBox(height: 160, child: Center(child: Text('No data yet', style: TextStyle(color: AppColors.textSecondary))));
+      return SizedBox(height: 160, child: Center(child: Text('No data yet', style: TextStyle(color: AppColors.textSecondary))));
     }
     double maxY = 0;
     for (final m in points) {
@@ -418,7 +419,7 @@ class _BarChart extends StatelessWidget {
                 getTitlesWidget: (value, meta) {
                   final i = value.toInt();
                   if (i < 0 || i >= points.length) return const SizedBox();
-                  return Padding(padding: const EdgeInsets.only(top: 6), child: Text(points[i].label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)));
+                  return Padding(padding: const EdgeInsets.only(top: 6), child: Text(points[i].label, style: TextStyle(fontSize: 10, color: AppColors.textSecondary)));
                 },
               ),
             ),

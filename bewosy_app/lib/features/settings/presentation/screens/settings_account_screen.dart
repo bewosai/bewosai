@@ -53,6 +53,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
     final user = context.watch<AuthProvider>().user;
     return Scaffold(
       appBar: AppBar(title: const Text('Account'), actions: const [HomeLogoButton()]),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       body: ResponsiveBody(
         child: ListView(
           padding: const EdgeInsets.all(16),

@@ -11,14 +11,15 @@ import 'more_screen.dart';
 import 'transactions_screen.dart';
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  final int initialIndex;
+  const MainShell({super.key, this.initialIndex = 0});
 
   @override
   State<MainShell> createState() => _MainShellState();
 }
 
 class _MainShellState extends State<MainShell> {
-  int _index = 0;
+  late int _index = widget.initialIndex.clamp(0, 4);
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +63,7 @@ class _MainShellState extends State<MainShell> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const Icon(Icons.keyboard_arrow_down, size: 20, color: AppColors.textSecondary),
+                          Icon(Icons.keyboard_arrow_down, size: 20, color: AppColors.textSecondary),
                         ],
                       ),
                     ),

@@ -130,7 +130,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                   Text(
                                     '${Formatters.amount(d.topItems[i].totalQty)} units',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: AppColors.textSecondary,
                                       fontSize: 12,
                                     ),
@@ -154,7 +154,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SectionHeader(title: 'Recent Sales'),
                     const SizedBox(height: 10),
                     if (d.recentSales.isEmpty)
-                      const AppSectionCard(
+                      AppSectionCard(
                         children: [
                           Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
@@ -197,7 +197,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                     .isNotEmpty
                                                 ? d.recentSales[i].customerName
                                                 : 'Walk-in',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               color: AppColors.textSecondary,
                                               fontSize: 12,
                                             ),
@@ -369,7 +369,7 @@ class _StatCard extends StatelessWidget {
                   children: [
                     Text(
                       label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12.5,
                         color: AppColors.textSecondary,
                         fontWeight: FontWeight.w500,
@@ -696,7 +696,7 @@ class _CashflowChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (points.isEmpty) {
-      return const SizedBox(
+      return SizedBox(
         height: 200,
         child: Center(
           child: Text(
@@ -727,7 +727,7 @@ class _CashflowChart extends StatelessWidget {
                 show: true,
                 drawVerticalLine: false,
                 horizontalInterval: maxY / 4,
-                getDrawingHorizontalLine: (_) => const FlLine(
+                getDrawingHorizontalLine: (_) => FlLine(
                   color: AppColors.divider,
                   strokeWidth: 1,
                   dashArray: [4, 4],
@@ -747,7 +747,7 @@ class _CashflowChart extends StatelessWidget {
                     reservedSize: 40,
                     getTitlesWidget: (value, meta) => Text(
                       Formatters.amount(value),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 9,
                         color: AppColors.textSecondary,
                       ),
@@ -767,7 +767,7 @@ class _CashflowChart extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           date != null ? '${date.day}/${date.month}' : '',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 9,
                             color: AppColors.textSecondary,
                           ),
@@ -846,7 +846,7 @@ class _CashflowChart extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     color: AppColors.textSecondary,
                   ),

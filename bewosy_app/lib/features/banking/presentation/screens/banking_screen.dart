@@ -28,6 +28,7 @@ class _BankingScreenState extends State<BankingScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Banking'), actions: const [HomeLogoButton()]),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'banking_fab',
         onPressed: () => showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => const _AccountFormSheet()),
@@ -75,7 +76,7 @@ class _BankingScreenState extends State<BankingScreen> {
                                     children: [
                                       Text(a.accountName, style: const TextStyle(fontWeight: FontWeight.w700)),
                                       Text('${AppConstants.bankAccountTypeLabels[a.accountType] ?? a.accountType}${a.bankName.isNotEmpty ? ' · ${a.bankName}' : ''}',
-                                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                                     ],
                                   ),
                                 ),
@@ -106,7 +107,7 @@ class _BankingScreenState extends State<BankingScreen> {
                       ],
                     ),
                     if (bp.transactions.isEmpty)
-                      const AppSectionCard(children: [Text('No transactions yet', style: TextStyle(color: AppColors.textSecondary))])
+                      AppSectionCard(children: [Text('No transactions yet', style: TextStyle(color: AppColors.textSecondary))])
                     else
                       AppSectionCard(
                         children: bp.transactions.map((t) {
@@ -123,7 +124,7 @@ class _BankingScreenState extends State<BankingScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(t.description.isNotEmpty ? t.description : t.reference, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                                      Text(Formatters.dateShort(t.date), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                      Text(Formatters.dateShort(t.date), style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                                     ],
                                   ),
                                 ),

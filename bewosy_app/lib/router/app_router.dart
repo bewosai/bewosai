@@ -43,7 +43,10 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
       GoRoute(path: '/select-business', builder: (context, state) => const SelectBusinessScreen()),
       GoRoute(
         path: '/dashboard',
-        builder: (context, state) => const MainShell(),
+        builder: (context, state) {
+          final tab = int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
+          return MainShell(initialIndex: tab);
+        },
       ),
       GoRoute(
         path: '/pos',
