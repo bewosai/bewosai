@@ -66,7 +66,10 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     final padding = width >= 600 ? 20.0 : 16.0;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Expenses'), actions: const [HomeLogoButton()]),
+      appBar: AppBar(
+        title: const Text('Expenses'),
+        actions: const [HomeLogoButton()],
+      ),
       bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'expenses_fab',
@@ -74,174 +77,177 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Add Expense'),
       ),
-      body: RefreshIndicator(
-        onRefresh: () => context.read<ExpenseProvider>().load(),
-        child: ep.isLoading && ep.expenses.isEmpty
-            ? const LoadingView()
-            : ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.all(padding),
-                children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final cols = constraints.maxWidth >= 500 ? 2 : 2;
-                      const spacing = 12.0;
-                      final cellW =
-                          (constraints.maxWidth - spacing * (cols - 1)) / cols;
-                      return Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
+      body: ResponsiveBody(
+        child: RefreshIndicator(
+          onRefresh: () => context.read<ExpenseProvider>().load(),
+          child: ep.isLoading && ep.expenses.isEmpty
+              ? const LoadingView()
+              : ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.all(padding),
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final cols = constraints.maxWidth >= 500 ? 2 : 2;
+                        const spacing = 12.0;
+                        final cellW =
+                            (constraints.maxWidth - spacing * (cols - 1)) /
+                            cols;
+                        return Wrap(
+                          spacing: spacing,
+                          runSpacing: spacing,
+                          children: [
+                            SizedBox(
+                              width: cellW,
+                              child: KpiCard.currency(
+                                label: 'This Month',
+                                value: ep.thisMonthTotal,
+                                icon: Icons.calendar_month_outlined,
+                                color: AppColors.orange,
+                              ),
+                            ),
+                            SizedBox(
+                              width: cellW,
+                              child: KpiCard.currency(
+                                label: 'All Time',
+                                value: ep.allTimeTotal,
+                                icon: Icons.account_balance_wallet_outlined,
+                                color: AppColors.navy600,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    SearchField(
+                      hint: 'Search description or category',
+                      onChanged: (v) => setState(() => _search = v),
+                    ),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
                         children: [
-                          SizedBox(
-                            width: cellW,
-                            child: KpiCard.currency(
-                              label: 'This Month',
-                              value: ep.thisMonthTotal,
-                              icon: Icons.calendar_month_outlined,
-                              color: AppColors.orange,
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: AppFilterChip(
+                              label: 'All',
+                              selected: _categoryFilter == null,
+                              onTap: () =>
+                                  setState(() => _categoryFilter = null),
                             ),
                           ),
-                          SizedBox(
-                            width: cellW,
-                            child: KpiCard.currency(
-                              label: 'All Time',
-                              value: ep.allTimeTotal,
-                              icon: Icons.account_balance_wallet_outlined,
-                              color: AppColors.navy600,
+                          ...ep.categories.map(
+                            (c) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: AppFilterChip(
+                                label: c.name,
+                                selected: _categoryFilter == c.id,
+                                onTap: () =>
+                                    setState(() => _categoryFilter = c.id),
+                              ),
                             ),
                           ),
                         ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  SearchField(
-                    hint: 'Search description or category',
-                    onChanged: (v) => setState(() => _search = v),
-                  ),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: AppFilterChip(
-                            label: 'All',
-                            selected: _categoryFilter == null,
-                            onTap: () =>
-                                setState(() => _categoryFilter = null),
-                          ),
-                        ),
-                        ...ep.categories.map(
-                          (c) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: AppFilterChip(
-                              label: c.name,
-                              selected: _categoryFilter == c.id,
-                              onTap: () =>
-                                  setState(() => _categoryFilter = c.id),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (filtered.isEmpty)
+                      const EmptyState(
+                        icon: Icons.receipt_outlined,
+                        title: 'No expenses found',
+                      )
+                    else
+                      ...filtered.map(
+                        (e) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: AppCard(
+                            onTap: () => _openAddSheet(expense: e),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.errorBg,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.receipt_outlined,
+                                    color: AppColors.error,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        e.description.isNotEmpty
+                                            ? e.description
+                                            : e.categoryName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${e.categoryName} · ${Formatters.dateShort(e.date)}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  Formatters.currency(e.amount),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.error,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                    color: AppColors.navy300,
+                                  ),
+                                  onPressed: () async {
+                                    final provider = context
+                                        .read<ExpenseProvider>();
+                                    final confirmed =
+                                        await showDeleteConfirmDialog(context);
+                                    if (!confirmed || !mounted) return;
+                                    final ok = await provider.delete(e.id);
+                                    if (!mounted) return;
+                                    if (!ok) {
+                                      showAppSnackBar(
+                                        context,
+                                        provider.error ?? 'Delete failed',
+                                        isError: true,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (filtered.isEmpty)
-                    const EmptyState(
-                      icon: Icons.receipt_outlined,
-                      title: 'No expenses found',
-                    )
-                  else
-                    ...filtered.map(
-                      (e) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: AppCard(
-                          onTap: () => _openAddSheet(expense: e),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: AppColors.errorBg,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(
-                                  Icons.receipt_outlined,
-                                  color: AppColors.error,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      e.description.isNotEmpty
-                                          ? e.description
-                                          : e.categoryName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '${e.categoryName} · ${Formatters.dateShort(e.date)}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                Formatters.currency(e.amount),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.error,
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  size: 18,
-                                  color: AppColors.navy300,
-                                ),
-                                onPressed: () async {
-                                  final provider =
-                                      context.read<ExpenseProvider>();
-                                  final confirmed =
-                                      await showDeleteConfirmDialog(context);
-                                  if (!confirmed || !mounted) return;
-                                  final ok = await provider.delete(e.id);
-                                  if (!mounted) return;
-                                  if (!ok) {
-                                    showAppSnackBar(
-                                      context,
-                                      provider.error ?? 'Delete failed',
-                                      isError: true,
-                                    );
-                                  }
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
                       ),
-                    ),
-                  const SizedBox(height: 80),
-                ],
-              ),
+                    const SizedBox(height: 80),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -273,8 +279,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
     _amountController = TextEditingController(
       text: e != null ? e.amount.toString() : '',
     );
-    _descriptionController =
-        TextEditingController(text: e?.description ?? '');
+    _descriptionController = TextEditingController(text: e?.description ?? '');
     _date = e?.date ?? DateTime.now();
     _paymentMethod = e?.paymentMethod ?? 'CASH';
     _category = e?.category;
@@ -302,9 +307,9 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
     );
 
     final ok = await context.read<ExpenseProvider>().save(
-          expense,
-          id: widget.expense?.id,
-        );
+      expense,
+      id: widget.expense?.id,
+    );
     if (!mounted) return;
     setState(() => _saving = false);
 
@@ -312,11 +317,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
       Navigator.pop(context);
     } else {
       final err = context.read<ExpenseProvider>().error;
-      showAppSnackBar(
-        context,
-        err ?? 'Failed to save expense',
-        isError: true,
-      );
+      showAppSnackBar(context, err ?? 'Failed to save expense', isError: true);
     }
   }
 
@@ -356,8 +357,9 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _amountController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(labelText: 'Amount *'),
                 validator: (v) => Validators.positiveNumber(v, 'Amount'),
               ),
@@ -379,17 +381,15 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
-                value: _category != null &&
+                value:
+                    _category != null &&
                         categories.any((c) => c.id == _category)
                     ? _category
                     : null,
                 decoration: const InputDecoration(labelText: 'Category'),
                 items: categories
                     .map(
-                      (c) => DropdownMenuItem(
-                        value: c.id,
-                        child: Text(c.name),
-                      ),
+                      (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
                     )
                     .toList(),
                 onChanged: (v) => setState(() => _category = v),
@@ -399,26 +399,21 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                 value: AppConstants.paymentMethods.contains(_paymentMethod)
                     ? _paymentMethod
                     : 'CASH',
-                decoration:
-                    const InputDecoration(labelText: 'Payment Method'),
+                decoration: const InputDecoration(labelText: 'Payment Method'),
                 items: AppConstants.paymentMethods
                     .map(
                       (m) => DropdownMenuItem(
                         value: m,
-                        child: Text(
-                          AppConstants.paymentMethodLabels[m] ?? m,
-                        ),
+                        child: Text(AppConstants.paymentMethodLabels[m] ?? m),
                       ),
                     )
                     .toList(),
-                onChanged: (v) =>
-                    setState(() => _paymentMethod = v ?? 'CASH'),
+                onChanged: (v) => setState(() => _paymentMethod = v ?? 'CASH'),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _descriptionController,
-                decoration:
-                    const InputDecoration(labelText: 'Description'),
+                decoration: const InputDecoration(labelText: 'Description'),
                 maxLines: 2,
               ),
               const SizedBox(height: 20),

@@ -35,10 +35,17 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
 
   List<Purchase> _filtered(List<Purchase> purchases) {
     var list = purchases;
-    if (_filter != 'ALL') list = list.where((p) => p.status == _filter).toList();
+    if (_filter != 'ALL')
+      list = list.where((p) => p.status == _filter).toList();
     if (_search.isNotEmpty) {
       final q = _search.toLowerCase();
-      list = list.where((p) => p.billNumber.toLowerCase().contains(q) || p.supplierName.toLowerCase().contains(q)).toList();
+      list = list
+          .where(
+            (p) =>
+                p.billNumber.toLowerCase().contains(q) ||
+                p.supplierName.toLowerCase().contains(q),
+          )
+          .toList();
     }
     return list;
   }
@@ -51,60 +58,106 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'purchases_fab',
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const _PurchaseFormScreen())),
+        onPressed: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const _PurchaseFormScreen())),
         icon: const Icon(Icons.add),
         label: const Text('New Purchase'),
       ),
-      body: RefreshIndicator(
-        onRefresh: () => context.read<PurchaseProvider>().load(),
-        child: pp.isLoading && pp.purchases.isEmpty
-            ? const LoadingView()
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  ResponsiveGrid(
-                    columns: 2,
-                    spacing: 12,
-                    childAspectRatio: 1.35,
-                    children: [
-                      KpiCard.currency(label: 'This Month', value: pp.thisMonthTotal, icon: Icons.calendar_month_outlined, color: AppColors.orange),
-                      KpiCard.currency(label: 'Payable', value: pp.totalPayable, icon: Icons.call_made, color: AppColors.warning),
-                      KpiCard(label: 'Total Bills', value: '${pp.purchases.length}', icon: Icons.receipt_long_outlined, color: AppColors.info),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SearchField(hint: 'Search bill # or supplier', onChanged: (v) => setState(() => _search = v)),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: ['ALL', 'DRAFT', 'CONFIRMED', 'CANCELLED'].map((f) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: AppFilterChip(label: f, selected: _filter == f, onTap: () => setState(() => _filter = f)),
-                        );
-                      }).toList(),
+      body: ResponsiveBody(
+        child: RefreshIndicator(
+          onRefresh: () => context.read<PurchaseProvider>().load(),
+          child: pp.isLoading && pp.purchases.isEmpty
+              ? const LoadingView()
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    ResponsiveGrid(
+                      columns: 2,
+                      spacing: 12,
+                      childAspectRatio: 1.35,
+                      children: [
+                        KpiCard.currency(
+                          label: 'This Month',
+                          value: pp.thisMonthTotal,
+                          icon: Icons.calendar_month_outlined,
+                          color: AppColors.orange,
+                        ),
+                        KpiCard.currency(
+                          label: 'Payable',
+                          value: pp.totalPayable,
+                          icon: Icons.call_made,
+                          color: AppColors.warning,
+                        ),
+                        KpiCard(
+                          label: 'Total Bills',
+                          value: '${pp.purchases.length}',
+                          icon: Icons.receipt_long_outlined,
+                          color: AppColors.info,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (filtered.isEmpty)
-                    const EmptyState(icon: Icons.shopping_bag_outlined, title: 'No purchases found', message: 'Record your first purchase bill.')
-                  else
-                    ...filtered.map((p) => Padding(
+                    const SizedBox(height: 16),
+                    SearchField(
+                      hint: 'Search bill # or supplier',
+                      onChanged: (v) => setState(() => _search = v),
+                    ),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: ['ALL', 'DRAFT', 'CONFIRMED', 'CANCELLED']
+                            .map((f) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: AppFilterChip(
+                                  label: f,
+                                  selected: _filter == f,
+                                  onTap: () => setState(() => _filter = f),
+                                ),
+                              );
+                            })
+                            .toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (filtered.isEmpty)
+                      const EmptyState(
+                        icon: Icons.shopping_bag_outlined,
+                        title: 'No purchases found',
+                        message: 'Record your first purchase bill.',
+                      )
+                    else
+                      ...filtered.map(
+                        (p) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: AppCard(
-                            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => _PurchaseFormScreen(purchase: p))),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    _PurchaseFormScreen(purchase: p),
+                              ),
+                            ),
                             child: Row(
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(p.billNumber, style: const TextStyle(fontWeight: FontWeight.w700)),
+                                      Text(
+                                        p.billNumber,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                                       const SizedBox(height: 3),
                                       Text(
                                         '${p.supplierName.isNotEmpty ? p.supplierName : 'Unknown'} · ${Formatters.dateShort(p.purchaseDate)}',
-                                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -112,26 +165,42 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    Text(Formatters.currency(p.total), style: const TextStyle(fontWeight: FontWeight.w700)),
+                                    Text(
+                                      Formatters.currency(p.total),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
                                     StatusBadge(label: p.status),
                                   ],
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    color: AppColors.error,
+                                    size: 20,
+                                  ),
                                   onPressed: () async {
-                                    final provider = context.read<PurchaseProvider>();
-                                    final confirmed = await showDeleteConfirmDialog(context, message: 'This purchase will be moved to Recycle Bin.');
+                                    final provider = context
+                                        .read<PurchaseProvider>();
+                                    final confirmed = await showDeleteConfirmDialog(
+                                      context,
+                                      message:
+                                          'This purchase will be moved to Recycle Bin.',
+                                    );
                                     if (confirmed) provider.delete(p.id);
                                   },
                                 ),
                               ],
                             ),
                           ),
-                        )),
-                  const SizedBox(height: 80),
-                ],
-              ),
+                        ),
+                      ),
+                    const SizedBox(height: 80),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -272,28 +341,43 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                   TextFormField(
                     controller: nameController,
                     autofocus: true,
-                    decoration: const InputDecoration(labelText: 'Product Name *'),
+                    decoration: const InputDecoration(
+                      labelText: 'Product Name *',
+                    ),
                     validator: (v) => Validators.required(v, 'Name'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: priceController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Purchase Price *'),
-                    validator: (v) => Validators.positiveNumber(v, 'Price') ?? (v == null || v.isEmpty ? 'Price is required' : null),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Purchase Price *',
+                    ),
+                    validator: (v) =>
+                        Validators.positiveNumber(v, 'Price') ??
+                        (v == null || v.isEmpty ? 'Price is required' : null),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: stockController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Opening Stock (optional)'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Opening Stock (optional)',
+                    ),
                   ),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
             PrimaryButton(
               label: 'Save',
               expand: false,
@@ -302,31 +386,38 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                 if (!formKey.currentState!.validate()) return;
                 setDialogState(() => saving = true);
                 final invProvider = context.read<InventoryProvider>();
-                final created = await invProvider.quickCreate(Product(
-                      id: 0,
-                      name: nameController.text.trim(),
-                      categoryName: '',
-                      unitName: '',
-                      description: '',
-                      purchasePrice: double.tryParse(priceController.text) ?? 0,
-                      salePrice: 0,
-                      stockQuantity: double.tryParse(stockController.text) ?? 0,
-                      lowStockThreshold: 5,
-                      isLowStock: false,
-                      barcode: '',
-                      isActive: true,
-                    ));
+                final created = await invProvider.quickCreate(
+                  Product(
+                    id: 0,
+                    name: nameController.text.trim(),
+                    categoryName: '',
+                    unitName: '',
+                    description: '',
+                    purchasePrice: double.tryParse(priceController.text) ?? 0,
+                    salePrice: 0,
+                    stockQuantity: double.tryParse(stockController.text) ?? 0,
+                    lowStockThreshold: 5,
+                    isLowStock: false,
+                    barcode: '',
+                    isActive: true,
+                  ),
+                );
                 if (!dialogContext.mounted) return;
                 if (created != null) {
                   setState(() {
                     item.product = created.id;
                     item.nameController.text = created.name;
-                    item.priceController.text = created.purchasePrice.toString();
+                    item.priceController.text = created.purchasePrice
+                        .toString();
                   });
                   Navigator.pop(dialogContext);
                 } else {
                   setDialogState(() => saving = false);
-                  showAppSnackBar(dialogContext, invProvider.error ?? 'Failed to add product', isError: true);
+                  showAppSnackBar(
+                    dialogContext,
+                    invProvider.error ?? 'Failed to add product',
+                    isError: true,
+                  );
                 }
               },
             ),
@@ -338,7 +429,11 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
 
   Future<void> _save(String status) async {
     if (_items.every((i) => i.qty <= 0)) {
-      showAppSnackBar(context, 'Add at least one item with quantity', isError: true);
+      showAppSnackBar(
+        context,
+        'Add at least one item with quantity',
+        isError: true,
+      );
       return;
     }
     setState(() => _saving = true);
@@ -357,15 +452,25 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
       paymentMethod: _paymentMethod,
       status: status,
       notes: _notesController.text.trim(),
-      items: _items.where((i) => i.qty > 0).map((i) => PurchaseItem(
-            product: i.product,
-            productName: i.nameController.text.trim().isEmpty ? 'Item' : i.nameController.text.trim(),
-            quantity: i.qty,
-            unitPrice: i.price,
-            discountAmount: i.discount,
-          )).toList(),
+      items: _items
+          .where((i) => i.qty > 0)
+          .map(
+            (i) => PurchaseItem(
+              product: i.product,
+              productName: i.nameController.text.trim().isEmpty
+                  ? 'Item'
+                  : i.nameController.text.trim(),
+              quantity: i.qty,
+              unitPrice: i.price,
+              discountAmount: i.discount,
+            ),
+          )
+          .toList(),
     );
-    final result = await context.read<PurchaseProvider>().save(purchase, id: widget.purchase?.id);
+    final result = await context.read<PurchaseProvider>().save(
+      purchase,
+      id: widget.purchase?.id,
+    );
     if (!mounted) return;
     setState(() => _saving = false);
     if (result != null) {
@@ -379,129 +484,323 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.purchase != null ? 'Edit Purchase' : 'New Purchase')),
-      body: !_loaded
-          ? const LoadingView()
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-              children: [
-                AppSectionCard(children: [
-                  InkWell(
-                    onTap: _pickSupplier,
-                    child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Supplier', prefixIcon: Icon(Icons.local_shipping_outlined)),
-                      child: Text(_supplier?.name ?? 'Select supplier'),
-                    ),
+      appBar: AppBar(
+        title: Text(widget.purchase != null ? 'Edit Purchase' : 'New Purchase'),
+      ),
+      body: ResponsiveBody(
+        child: !_loaded
+            ? const LoadingView()
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                children: [
+                  AppSectionCard(
+                    children: [
+                      InkWell(
+                        onTap: _pickSupplier,
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Supplier',
+                            prefixIcon: Icon(Icons.local_shipping_outlined),
+                          ),
+                          child: Text(_supplier?.name ?? 'Select supplier'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _billNumberController,
+                        decoration: const InputDecoration(
+                          labelText: 'Bill Number',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _purchaseDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (picked != null)
+                                  setState(() => _purchaseDate = picked);
+                              },
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'Purchase Date',
+                                  isDense: true,
+                                ),
+                                child: Text(Formatters.date(_purchaseDate)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: DateTime.now(),
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (picked != null)
+                                  setState(() => _dueDate = picked);
+                              },
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'Due Date',
+                                  isDense: true,
+                                ),
+                                child: Text(
+                                  _dueDate != null
+                                      ? Formatters.date(_dueDate)
+                                      : 'Not set',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  TextField(controller: _billNumberController, decoration: const InputDecoration(labelText: 'Bill Number')),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(context: context, initialDate: _purchaseDate, firstDate: DateTime(2020), lastDate: DateTime(2100));
-                          if (picked != null) setState(() => _purchaseDate = picked);
-                        },
-                        child: InputDecorator(decoration: const InputDecoration(labelText: 'Purchase Date', isDense: true), child: Text(Formatters.date(_purchaseDate))),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
-                          if (picked != null) setState(() => _dueDate = picked);
-                        },
-                        child: InputDecorator(decoration: const InputDecoration(labelText: 'Due Date', isDense: true), child: Text(_dueDate != null ? Formatters.date(_dueDate) : 'Not set')),
-                      ),
-                    ),
-                  ]),
-                ]),
-                const SizedBox(height: 16),
-                AppSectionCard(
-                  title: 'Items',
-                  children: [
-                    ..._items.asMap().entries.map((e) => Container(
+                  const SizedBox(height: 16),
+                  AppSectionCard(
+                    title: 'Items',
+                    children: [
+                      ..._items.asMap().entries.map(
+                        (e) => Container(
                           margin: const EdgeInsets.only(bottom: 10),
                           padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: AppColors.navy50, borderRadius: BorderRadius.circular(12)),
+                          decoration: BoxDecoration(
+                            color: AppColors.navy50,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Column(
                             children: [
-                              Row(children: [
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () => _pickProduct(e.value),
-                                    child: InputDecorator(
-                                      decoration: const InputDecoration(labelText: 'Product', isDense: true),
-                                      child: Text(e.value.nameController.text.isEmpty ? 'Select product' : e.value.nameController.text, overflow: TextOverflow.ellipsis),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () => _pickProduct(e.value),
+                                      child: InputDecorator(
+                                        decoration: const InputDecoration(
+                                          labelText: 'Product',
+                                          isDense: true,
+                                        ),
+                                        child: Text(
+                                          e.value.nameController.text.isEmpty
+                                              ? 'Select product'
+                                              : e.value.nameController.text,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (_items.length > 1)
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.close,
+                                        size: 18,
+                                        color: AppColors.error,
+                                      ),
+                                      onPressed: () => setState(
+                                        () => _items.removeAt(e.key),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: e.value.qtyController,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Qty',
+                                        isDense: true,
+                                      ),
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: e.value.priceController,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Cost',
+                                        isDense: true,
+                                      ),
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: e.value.discountController,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Disc.',
+                                        isDense: true,
+                                      ),
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(
+                                    '= ${Formatters.currency(e.value.total)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ),
-                                if (_items.length > 1)
-                                  IconButton(icon: const Icon(Icons.close, size: 18, color: AppColors.error), onPressed: () => setState(() => _items.removeAt(e.key))),
-                              ]),
-                              const SizedBox(height: 8),
-                              Row(children: [
-                                Expanded(child: TextField(controller: e.value.qtyController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Qty', isDense: true), onChanged: (_) => setState(() {}))),
-                                const SizedBox(width: 8),
-                                Expanded(child: TextField(controller: e.value.priceController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Cost', isDense: true), onChanged: (_) => setState(() {}))),
-                                const SizedBox(width: 8),
-                                Expanded(child: TextField(controller: e.value.discountController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Disc.', isDense: true), onChanged: (_) => setState(() {}))),
-                              ]),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: Padding(padding: const EdgeInsets.only(top: 6), child: Text('= ${Formatters.currency(e.value.total)}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
                               ),
                             ],
                           ),
-                        )),
-                    OutlinedButton.icon(onPressed: () => setState(() => _items.add(_PurchaseItemRow())), icon: const Icon(Icons.add, size: 18), label: const Text('Add Item')),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                AppSectionCard(
-                  title: 'Payment',
-                  children: [
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      const Text('Total', style: TextStyle(fontWeight: FontWeight.w700)),
-                      Text(Formatters.currency(_subtotal), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                    ]),
-                    const SizedBox(height: 12),
-                    TextField(controller: _notesController, decoration: const InputDecoration(labelText: 'Notes (optional)'), maxLines: 2),
-                    const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(child: TextField(controller: _paidController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Amount Paid'), onChanged: (_) => setState(() {}))),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _paymentMethod,
-                          decoration: const InputDecoration(labelText: 'Method'),
-                          items: AppConstants.paymentMethods.map((m) => DropdownMenuItem(value: m, child: Text(AppConstants.paymentMethodLabels[m] ?? m))).toList(),
-                          onChanged: (v) => setState(() => _paymentMethod = v ?? 'CASH'),
                         ),
                       ),
-                    ]),
-                    const SizedBox(height: 10),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      Text(_isAdvance ? 'Advance (Overpaid)' : 'Balance Due'),
-                      Text(
-                        Formatters.currency(_isAdvance ? -_balanceDue : _balanceDue),
-                        style: TextStyle(fontWeight: FontWeight.w700, color: _balanceDue > 0 ? AppColors.error : AppColors.success),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            setState(() => _items.add(_PurchaseItemRow())),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add Item'),
                       ),
-                    ]),
-                  ],
-                ),
-              ],
-            ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  AppSectionCard(
+                    title: 'Payment',
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Total',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            Formatters.currency(_subtotal),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _notesController,
+                        decoration: const InputDecoration(
+                          labelText: 'Notes (optional)',
+                        ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _paidController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Amount Paid',
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _paymentMethod,
+                              decoration: const InputDecoration(
+                                labelText: 'Method',
+                              ),
+                              items: AppConstants.paymentMethods
+                                  .map(
+                                    (m) => DropdownMenuItem(
+                                      value: m,
+                                      child: Text(
+                                        AppConstants.paymentMethodLabels[m] ??
+                                            m,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) =>
+                                  setState(() => _paymentMethod = v ?? 'CASH'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _isAdvance ? 'Advance (Overpaid)' : 'Balance Due',
+                          ),
+                          Text(
+                            Formatters.currency(
+                              _isAdvance ? -_balanceDue : _balanceDue,
+                            ),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: _balanceDue > 0
+                                  ? AppColors.error
+                                  : AppColors.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+      ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(children: [
-            Expanded(child: OutlinedButton(onPressed: _saving ? null : () => _save('DRAFT'), child: const Text('Save as Draft'))),
-            const SizedBox(width: 12),
-            Expanded(flex: 2, child: PrimaryButton(label: 'Confirm Purchase', isLoading: _saving, onPressed: () => _save('CONFIRMED'))),
-          ]),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _saving ? null : () => _save('DRAFT'),
+                  child: const Text('Save as Draft'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: PrimaryButton(
+                  label: 'Confirm Purchase',
+                  isLoading: _saving,
+                  onPressed: () => _save('CONFIRMED'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

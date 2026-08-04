@@ -1,7 +1,8 @@
 from rest_framework import generics, filters, parsers
+from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
-from bewosy.utils import get_bid
+from bewosy.utils import get_bid, require_business
 from .models import BankAccount, BankTransaction
 from .serializers import BankAccountSerializer, BankTransactionSerializer
 
@@ -24,8 +25,7 @@ class BankAccountListCreateView(generics.ListCreateAPIView):
         return ctx
 
     def perform_create(self, serializer):
-        bid = get_bid(self.request)
-        serializer.save(business_id=bid)
+        serializer.save(business=require_business(self.request))
 
 
 class BankAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -65,6 +65,10 @@ class BankTransactionListCreateView(generics.ListCreateAPIView):
         return qs
 
     def perform_create(self, serializer):
+        business = require_business(self.request)
+        account = serializer.validated_data.get("account")
+        if account is None or account.business_id != business.id:
+            raise ValidationError({"account": "Invalid account for this business."})
         serializer.save(created_by=self.request.user)
 
 
@@ -78,3 +82,10 @@ class BankTransactionDetailView(generics.RetrieveUpdateDestroyAPIView):
             account__business__staff__user=self.request.user,
             account__business__staff__is_active=True,
         )
+
+    def perform_update(self, serializer):
+        business = require_business(self.request)
+        account = serializer.validated_data.get("account")
+        if account is not None and account.business_id != business.id:
+            raise ValidationError({"account": "Invalid account for this business."})
+        serializer.save()

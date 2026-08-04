@@ -1,4 +1,6 @@
 """Shared request-context helpers used across all apps."""
+from rest_framework.exceptions import ValidationError
+
 from accounts.models import Business
 
 
@@ -33,3 +35,15 @@ def get_business(request):
         )
         .first()
     )
+
+
+def require_business(request):
+    """
+    Like get_business(), but raises a 400 instead of returning None — for use
+    in perform_create/perform_update where a resolvable, membership-validated
+    business is mandatory before writing anything.
+    """
+    business = get_business(request)
+    if business is None:
+        raise ValidationError("No business selected or access denied.")
+    return business

@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: bewosy-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py collectstatic --noinput"
+    startCommand: "gunicorn bewosy.wsgi --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "localhost,127.0.0.1"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://bewosyapp.vercel.app"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://bewosyapp.vercel.app"
+      # Paste your Neon connection string here after creating the Blueprint
+      # (Render dashboard → this service → Environment). Must include
+      # ?sslmode=require — Neon's connection strings already do by default.
+      - key: DATABASE_URL
+        sync: false
+      # Optional — leave blank to have OTPs print to the Render log instead
+      # of sending real email.
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false

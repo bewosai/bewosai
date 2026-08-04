@@ -5,15 +5,26 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config("SECRET_KEY", default="bewosy-insecure-dev-key-change-in-production")
+_INSECURE_DEFAULT_KEY = "bewosy-insecure-dev-key-change-in-production"
+SECRET_KEY = config("SECRET_KEY", default=_INSECURE_DEFAULT_KEY)
 DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,0.0.0.0").split(",")
 
-# Railway sets RAILWAY_PUBLIC_DOMAIN on the deployed service; trust it
+# Fail loudly rather than silently serving production traffic on a publicly
+# known secret key (breaks session/JWT signing security) if SECRET_KEY was
+# never set on the host.
+if not DEBUG and SECRET_KEY == _INSECURE_DEFAULT_KEY:
+    raise RuntimeError(
+        "SECRET_KEY is not set. Generate one (e.g. "
+        "`python -c \"import secrets; print(secrets.token_urlsafe(50))\"`) "
+        "and set it as an environment variable before running with DEBUG=False."
+    )
+
+# Render sets RENDER_EXTERNAL_HOSTNAME on the deployed service; trust it
 # automatically so ALLOWED_HOSTS doesn't need manual updates after every deploy.
-_railway_domain = config("RAILWAY_PUBLIC_DOMAIN", default="")
-if _railway_domain:
-    ALLOWED_HOSTS.append(_railway_domain)
+_platform_domain = config("RENDER_EXTERNAL_HOSTNAME", default="")
+if _platform_domain:
+    ALLOWED_HOSTS.append(_platform_domain)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -176,8 +187,8 @@ CSRF_TRUSTED_ORIGINS = config(
     "CSRF_TRUSTED_ORIGINS",
     default="https://bewosyapp.vercel.app",
 ).split(",")
-if _railway_domain:
-    CSRF_TRUSTED_ORIGINS.append(f"https://{_railway_domain}")
+if _platform_domain:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{_platform_domain}")
 
 # ── Production security (Railway terminates TLS at its edge proxy, so Django
 # itself sees plain HTTP — X-Forwarded-Proto tells it the real scheme) ─────────

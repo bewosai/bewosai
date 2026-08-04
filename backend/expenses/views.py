@@ -1,7 +1,8 @@
 from rest_framework import generics, filters, parsers
+from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
-from bewosy.utils import get_bid
+from bewosy.utils import get_bid, require_business
 from .models import ExpenseCategory, Expense
 from .serializers import ExpenseCategorySerializer, ExpenseSerializer
 
@@ -18,8 +19,7 @@ class ExpenseCategoryListCreateView(generics.ListCreateAPIView):
         )
 
     def perform_create(self, serializer):
-        bid = get_bid(self.request)
-        serializer.save(business_id=bid)
+        serializer.save(business=require_business(self.request))
 
 
 class ExpenseListCreateView(generics.ListCreateAPIView):
@@ -46,8 +46,11 @@ class ExpenseListCreateView(generics.ListCreateAPIView):
         return qs
 
     def perform_create(self, serializer):
-        bid = get_bid(self.request)
-        serializer.save(business_id=bid, created_by=self.request.user)
+        business = require_business(self.request)
+        category = serializer.validated_data.get("category")
+        if category is not None and category.business_id != business.id:
+            raise ValidationError({"category": "Invalid category for this business."})
+        serializer.save(business=business, created_by=self.request.user)
 
 
 class ExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -62,6 +65,13 @@ class ExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
             business__staff__is_active=True,
             is_deleted=False,
         )
+
+    def perform_update(self, serializer):
+        business = require_business(self.request)
+        category = serializer.validated_data.get("category")
+        if category is not None and category.business_id != business.id:
+            raise ValidationError({"category": "Invalid category for this business."})
+        serializer.save()
 
     def perform_destroy(self, instance):
         from django.utils import timezone

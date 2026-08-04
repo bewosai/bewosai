@@ -11,13 +11,18 @@ import '../providers/inventory_provider.dart';
 class InventoryScreen extends StatefulWidget {
   final bool initialLowStockFilter;
   final bool openAddOnStart;
-  const InventoryScreen({super.key, this.initialLowStockFilter = false, this.openAddOnStart = false});
+  const InventoryScreen({
+    super.key,
+    this.initialLowStockFilter = false,
+    this.openAddOnStart = false,
+  });
 
   @override
   State<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProviderStateMixin {
+class _InventoryScreenState extends State<InventoryScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _search = '';
   bool _lowStockOnly = false;
@@ -47,9 +52,14 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
 
     return Scaffold(
       appBar: widget.initialLowStockFilter
-          ? AppBar(title: const Text('Low Stock Products'), actions: const [HomeLogoButton()])
+          ? AppBar(
+              title: const Text('Low Stock Products'),
+              actions: const [HomeLogoButton()],
+            )
           : null,
-      bottomNavigationBar: widget.initialLowStockFilter ? const AppBottomNav(currentIndex: 3) : null,
+      bottomNavigationBar: widget.initialLowStockFilter
+          ? const AppBottomNav(currentIndex: 3)
+          : null,
       floatingActionButton: FloatingActionButton(
         heroTag: 'inventory_fab',
         onPressed: () {
@@ -67,53 +77,85 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
         },
         child: const Icon(Icons.add),
       ),
-      body: inv.isLoading && inv.products.isEmpty
-          ? const LoadingView()
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: ResponsiveGrid(
-                    columns: kpiColumns,
-                    spacing: 10,
-                    childAspectRatio: 0.75,
-                    children: [
-                      KpiCard(label: 'Products', value: '${inv.products.length}', icon: Icons.inventory_2_outlined, color: AppColors.orange),
-                      KpiCard(
-                        label: 'Low Stock',
-                        value: '${inv.lowStock.length}',
-                        icon: Icons.warning_amber_rounded,
-                        color: inv.lowStock.isNotEmpty ? AppColors.warning : AppColors.navy300,
-                        onTap: () => setState(() => _lowStockOnly = true),
-                      ),
-                      KpiCard(label: 'Categories', value: '${inv.categories.length}', icon: Icons.category_outlined, color: AppColors.info),
-                      KpiCard(label: 'Units', value: '${inv.units.length}', icon: Icons.straighten_outlined, color: AppColors.navy600),
-                    ],
+      body: ResponsiveBody(
+        child: inv.isLoading && inv.products.isEmpty
+            ? const LoadingView()
+            : Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: ResponsiveGrid(
+                      columns: kpiColumns,
+                      spacing: 10,
+                      childAspectRatio: 0.75,
+                      children: [
+                        KpiCard(
+                          label: 'Products',
+                          value: '${inv.products.length}',
+                          icon: Icons.inventory_2_outlined,
+                          color: AppColors.orange,
+                        ),
+                        KpiCard(
+                          label: 'Low Stock',
+                          value: '${inv.lowStock.length}',
+                          icon: Icons.warning_amber_rounded,
+                          color: inv.lowStock.isNotEmpty
+                              ? AppColors.warning
+                              : AppColors.navy300,
+                          onTap: () => setState(() => _lowStockOnly = true),
+                        ),
+                        KpiCard(
+                          label: 'Categories',
+                          value: '${inv.categories.length}',
+                          icon: Icons.category_outlined,
+                          color: AppColors.info,
+                        ),
+                        KpiCard(
+                          label: 'Units',
+                          value: '${inv.units.length}',
+                          icon: Icons.straighten_outlined,
+                          color: AppColors.navy600,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                TabBar(
-                  controller: _tabController,
-                  labelColor: AppColors.orange,
-                  unselectedLabelColor: AppColors.textSecondary,
-                  indicatorColor: AppColors.orange,
-                  onTap: (_) => setState(() {}),
-                  tabs: const [Tab(text: 'Products'), Tab(text: 'Units'), Tab(text: 'Categories')],
-                ),
-                Expanded(
-                  child: TabBarView(
+                  TabBar(
                     controller: _tabController,
-                    children: [
-                      _ProductsTab(search: _search, lowStockOnly: _lowStockOnly,
-                          onSearch: (v) => setState(() => _search = v),
-                          onClearLowStock: () => setState(() => _lowStockOnly = false),
-                          onEdit: (p) => _openProductModal(context, product: p)),
-                      _UnitsTab(onEdit: (u) => _openUnitModal(context, unit: u)),
-                      _CategoriesTab(onEdit: (c) => _openCategoryModal(context, category: c)),
+                    labelColor: AppColors.orange,
+                    unselectedLabelColor: AppColors.textSecondary,
+                    indicatorColor: AppColors.orange,
+                    onTap: (_) => setState(() {}),
+                    tabs: const [
+                      Tab(text: 'Products'),
+                      Tab(text: 'Units'),
+                      Tab(text: 'Categories'),
                     ],
                   ),
-                ),
-              ],
-            ),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _ProductsTab(
+                          search: _search,
+                          lowStockOnly: _lowStockOnly,
+                          onSearch: (v) => setState(() => _search = v),
+                          onClearLowStock: () =>
+                              setState(() => _lowStockOnly = false),
+                          onEdit: (p) => _openProductModal(context, product: p),
+                        ),
+                        _UnitsTab(
+                          onEdit: (u) => _openUnitModal(context, unit: u),
+                        ),
+                        _CategoriesTab(
+                          onEdit: (c) =>
+                              _openCategoryModal(context, category: c),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 
@@ -164,7 +206,13 @@ class _ProductsTab extends StatelessWidget {
     if (lowStockOnly) products = products.where((p) => p.isLowStock).toList();
     if (search.isNotEmpty) {
       final q = search.toLowerCase();
-      products = products.where((p) => p.name.toLowerCase().contains(q) || p.barcode.toLowerCase().contains(q)).toList();
+      products = products
+          .where(
+            (p) =>
+                p.name.toLowerCase().contains(q) ||
+                p.barcode.toLowerCase().contains(q),
+          )
+          .toList();
     }
 
     return ListView(
@@ -173,49 +221,93 @@ class _ProductsTab extends StatelessWidget {
         SearchField(hint: 'Search products', onChanged: onSearch),
         if (lowStockOnly) ...[
           const SizedBox(height: 10),
-          AppFilterChip(label: 'Low Stock Only', selected: true, onTap: onClearLowStock),
+          AppFilterChip(
+            label: 'Low Stock Only',
+            selected: true,
+            onTap: onClearLowStock,
+          ),
         ],
         const SizedBox(height: 14),
         if (products.isEmpty)
-          const EmptyState(icon: Icons.inventory_2_outlined, title: 'No products found')
+          const EmptyState(
+            icon: Icons.inventory_2_outlined,
+            title: 'No products found',
+          )
         else
-          ...products.map((p) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: AppCard(
-                  onTap: () => onEdit(p),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 3),
-                            Text('${p.categoryName.isEmpty ? 'Uncategorized' : p.categoryName} · ${p.unitName}',
-                                style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+          ...products.map(
+            (p) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: AppCard(
+                onTap: () => onEdit(p),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(children: [
-                            if (p.isLowStock) const Padding(padding: EdgeInsets.only(right: 6), child: StatusBadge(label: 'LOW', color: AppColors.error)),
-                            Text('${Formatters.amount(p.stockQuantity)} ${p.unitName}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          ]),
+                          Text(
+                            p.name,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
                           const SizedBox(height: 3),
-                          Text(Formatters.currency(p.salePrice), style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          Text(
+                            '${p.categoryName.isEmpty ? 'Uncategorized' : p.categoryName} · ${p.unitName}',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.tune, size: 20, color: AppColors.navy400),
-                        tooltip: 'Adjust stock',
-                        onPressed: () => showDialog(context: context, builder: (_) => _StockAdjustDialog(product: p)),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Row(
+                          children: [
+                            if (p.isLowStock)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 6),
+                                child: StatusBadge(
+                                  label: 'LOW',
+                                  color: AppColors.error,
+                                ),
+                              ),
+                            Text(
+                              '${Formatters.amount(p.stockQuantity)} ${p.unitName}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          Formatters.currency(p.salePrice),
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.tune,
+                        size: 20,
+                        color: AppColors.navy400,
                       ),
-                    ],
-                  ),
+                      tooltip: 'Adjust stock',
+                      onPressed: () => showDialog(
+                        context: context,
+                        builder: (_) => _StockAdjustDialog(product: p),
+                      ),
+                    ),
+                  ],
                 ),
-              )),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -228,31 +320,51 @@ class _UnitsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final units = context.watch<InventoryProvider>().units;
-    if (units.isEmpty) return const EmptyState(icon: Icons.straighten_outlined, title: 'No units yet');
+    if (units.isEmpty)
+      return const EmptyState(
+        icon: Icons.straighten_outlined,
+        title: 'No units yet',
+      );
     return ListView(
       padding: const EdgeInsets.all(16),
-      children: units.map((u) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: AppCard(
-              onTap: () => onEdit(u),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${u.name}${u.abbreviation.isNotEmpty ? ' (${u.abbreviation})' : ''}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                        if (u.hasSecondary)
-                          Text('1 ${u.name} = ${Formatters.amount(u.conversionFactor)} ${u.secondaryUnit}',
-                              style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                      ],
+      children: units
+          .map(
+            (u) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: AppCard(
+                onTap: () => onEdit(u),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${u.name}${u.abbreviation.isNotEmpty ? ' (${u.abbreviation})' : ''}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          if (u.hasSecondary)
+                            Text(
+                              '1 ${u.name} = ${Formatters.amount(u.conversionFactor)} ${u.secondaryUnit}',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  if (u.hasSecondary) const StatusBadge(label: 'Dual Unit', color: AppColors.info),
-                ],
+                    if (u.hasSecondary)
+                      const StatusBadge(
+                        label: 'Dual Unit',
+                        color: AppColors.info,
+                      ),
+                  ],
+                ),
               ),
             ),
-          )).toList(),
+          )
+          .toList(),
     );
   }
 }
@@ -264,13 +376,22 @@ class _CategoriesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final categories = context.watch<InventoryProvider>().categories;
-    if (categories.isEmpty) return const EmptyState(icon: Icons.category_outlined, title: 'No categories yet');
+    if (categories.isEmpty)
+      return const EmptyState(
+        icon: Icons.category_outlined,
+        title: 'No categories yet',
+      );
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
-        children: categories.map((c) => ActionChip(label: Text(c.name), onPressed: () => onEdit(c))).toList(),
+        children: categories
+            .map(
+              (c) =>
+                  ActionChip(label: Text(c.name), onPressed: () => onEdit(c)),
+            )
+            .toList(),
       ),
     );
   }
@@ -286,13 +407,27 @@ class _ProductFormSheet extends StatefulWidget {
 
 class _ProductFormSheetState extends State<_ProductFormSheet> {
   final _formKey = GlobalKey<FormState>();
-  late final _nameController = TextEditingController(text: widget.product?.name ?? '');
-  late final _purchasePriceController = TextEditingController(text: widget.product?.purchasePrice.toString() ?? '0');
-  late final _salePriceController = TextEditingController(text: widget.product?.salePrice.toString() ?? '0');
-  late final _stockController = TextEditingController(text: widget.product?.stockQuantity.toString() ?? '0');
-  late final _thresholdController = TextEditingController(text: widget.product?.lowStockThreshold.toString() ?? '5');
-  late final _barcodeController = TextEditingController(text: widget.product?.barcode ?? '');
-  late final _descriptionController = TextEditingController(text: widget.product?.description ?? '');
+  late final _nameController = TextEditingController(
+    text: widget.product?.name ?? '',
+  );
+  late final _purchasePriceController = TextEditingController(
+    text: widget.product?.purchasePrice.toString() ?? '0',
+  );
+  late final _salePriceController = TextEditingController(
+    text: widget.product?.salePrice.toString() ?? '0',
+  );
+  late final _stockController = TextEditingController(
+    text: widget.product?.stockQuantity.toString() ?? '0',
+  );
+  late final _thresholdController = TextEditingController(
+    text: widget.product?.lowStockThreshold.toString() ?? '5',
+  );
+  late final _barcodeController = TextEditingController(
+    text: widget.product?.barcode ?? '',
+  );
+  late final _descriptionController = TextEditingController(
+    text: widget.product?.description ?? '',
+  );
   int? _category;
   int? _unit;
   bool _saving = false;
@@ -323,7 +458,10 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       barcode: _barcodeController.text.trim(),
       isActive: true,
     );
-    final ok = await context.read<InventoryProvider>().saveProduct(product, id: widget.product?.id);
+    final ok = await context.read<InventoryProvider>().saveProduct(
+      product,
+      id: widget.product?.id,
+    );
     if (!mounted) return;
     setState(() => _saving = false);
     if (ok) {
@@ -350,48 +488,131 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
     return Padding(
-      padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
       child: Form(
         key: _formKey,
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(widget.product == null ? 'New Product' : 'Edit Product', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              Text(
+                widget.product == null ? 'New Product' : 'Edit Product',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const SizedBox(height: 16),
-              TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Name *'), validator: (v) => Validators.required(v, 'Name')),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Name *'),
+                validator: (v) => Validators.required(v, 'Name'),
+              ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 initialValue: _category,
                 decoration: const InputDecoration(labelText: 'Category'),
-                items: inv.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                items: inv.categories
+                    .map(
+                      (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
+                    )
+                    .toList(),
                 onChanged: (v) => setState(() => _category = v),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 initialValue: _unit,
                 decoration: const InputDecoration(labelText: 'Unit'),
-                items: inv.units.map((u) => DropdownMenuItem(value: u.id, child: Text(u.display))).toList(),
+                items: inv.units
+                    .map(
+                      (u) =>
+                          DropdownMenuItem(value: u.id, child: Text(u.display)),
+                    )
+                    .toList(),
                 onChanged: (v) => setState(() => _unit = v),
               ),
               const SizedBox(height: 12),
-              Row(children: [
-                Expanded(child: TextFormField(controller: _purchasePriceController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Purchase Price'))),
-                const SizedBox(width: 12),
-                Expanded(child: TextFormField(controller: _salePriceController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Sale Price'))),
-              ]),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _purchasePriceController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Purchase Price',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _salePriceController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Sale Price',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
-              Row(children: [
-                Expanded(child: TextFormField(controller: _stockController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Opening Stock'))),
-                const SizedBox(width: 12),
-                Expanded(child: TextFormField(controller: _thresholdController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Low Stock Threshold'))),
-              ]),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _stockController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Opening Stock',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _thresholdController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Low Stock Threshold',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
-              TextFormField(controller: _barcodeController, decoration: const InputDecoration(labelText: 'Barcode (optional)')),
+              TextFormField(
+                controller: _barcodeController,
+                decoration: const InputDecoration(
+                  labelText: 'Barcode (optional)',
+                ),
+              ),
               const SizedBox(height: 12),
-              TextFormField(controller: _descriptionController, decoration: const InputDecoration(labelText: 'Description (optional)'), maxLines: 2),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description (optional)',
+                ),
+                maxLines: 2,
+              ),
               const SizedBox(height: 20),
-              PrimaryButton(label: 'Save Product', isLoading: _saving, onPressed: _submit),
+              PrimaryButton(
+                label: 'Save Product',
+                isLoading: _saving,
+                onPressed: _submit,
+              ),
             ],
           ),
         ),
@@ -410,11 +631,21 @@ class _UnitFormSheet extends StatefulWidget {
 
 class _UnitFormSheetState extends State<_UnitFormSheet> {
   final _formKey = GlobalKey<FormState>();
-  late final _nameController = TextEditingController(text: widget.unit?.name ?? '');
-  late final _abbrController = TextEditingController(text: widget.unit?.abbreviation ?? '');
-  late final _secondaryController = TextEditingController(text: widget.unit?.secondaryUnit ?? '');
-  late final _secondaryAbbrController = TextEditingController(text: widget.unit?.secondaryAbbreviation ?? '');
-  late final _conversionController = TextEditingController(text: widget.unit?.conversionFactor?.toString() ?? '');
+  late final _nameController = TextEditingController(
+    text: widget.unit?.name ?? '',
+  );
+  late final _abbrController = TextEditingController(
+    text: widget.unit?.abbreviation ?? '',
+  );
+  late final _secondaryController = TextEditingController(
+    text: widget.unit?.secondaryUnit ?? '',
+  );
+  late final _secondaryAbbrController = TextEditingController(
+    text: widget.unit?.secondaryAbbreviation ?? '',
+  );
+  late final _conversionController = TextEditingController(
+    text: widget.unit?.conversionFactor?.toString() ?? '',
+  );
   bool _saving = false;
 
   Future<void> _submit() async {
@@ -429,18 +660,17 @@ class _UnitFormSheetState extends State<_UnitFormSheet> {
       conversionFactor: double.tryParse(_conversionController.text),
       display: '',
     );
-    final ok = await context.read<InventoryProvider>().saveUnit(unit, id: widget.unit?.id);
+    final ok = await context.read<InventoryProvider>().saveUnit(
+      unit,
+      id: widget.unit?.id,
+    );
     if (!mounted) return;
     setState(() => _saving = false);
     if (ok) {
       Navigator.pop(context);
     } else {
       final err = context.read<InventoryProvider>().error;
-      showAppSnackBar(
-        context,
-        err ?? 'Failed to save unit',
-        isError: true,
-      );
+      showAppSnackBar(context, err ?? 'Failed to save unit', isError: true);
     }
   }
 
@@ -457,36 +687,86 @@ class _UnitFormSheetState extends State<_UnitFormSheet> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
       child: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.unit == null ? 'New Unit' : 'Edit Unit', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(
+              widget.unit == null ? 'New Unit' : 'Edit Unit',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 16),
-            Row(children: [
-              Expanded(child: TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Unit Name *'), validator: (v) => Validators.required(v, 'Name'))),
-              const SizedBox(width: 12),
-              Expanded(child: TextFormField(controller: _abbrController, decoration: const InputDecoration(labelText: 'Abbreviation'))),
-            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Unit Name *'),
+                    validator: (v) => Validators.required(v, 'Name'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _abbrController,
+                    decoration: const InputDecoration(
+                      labelText: 'Abbreviation',
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
-            Text('Secondary unit (optional, for dual-unit tracking)', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            Text(
+              'Secondary unit (optional, for dual-unit tracking)',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
             const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: TextFormField(controller: _secondaryController, decoration: const InputDecoration(labelText: 'Secondary Unit'))),
-              const SizedBox(width: 12),
-              Expanded(child: TextFormField(controller: _secondaryAbbrController, decoration: const InputDecoration(labelText: 'Abbreviation'))),
-            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _secondaryController,
+                    decoration: const InputDecoration(
+                      labelText: 'Secondary Unit',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _secondaryAbbrController,
+                    decoration: const InputDecoration(
+                      labelText: 'Abbreviation',
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _conversionController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Conversion factor (e.g. 1 Box = 12 Pieces)'),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Conversion factor (e.g. 1 Box = 12 Pieces)',
+              ),
             ),
             const SizedBox(height: 20),
-            PrimaryButton(label: 'Save Unit', isLoading: _saving, onPressed: _submit),
+            PrimaryButton(
+              label: 'Save Unit',
+              isLoading: _saving,
+              onPressed: _submit,
+            ),
           ],
         ),
       ),
@@ -504,14 +784,23 @@ class _CategoryFormSheet extends StatefulWidget {
 
 class _CategoryFormSheetState extends State<_CategoryFormSheet> {
   final _formKey = GlobalKey<FormState>();
-  late final _nameController = TextEditingController(text: widget.category?.name ?? '');
+  late final _nameController = TextEditingController(
+    text: widget.category?.name ?? '',
+  );
   bool _saving = false;
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
-    final category = Category(id: widget.category?.id ?? 0, name: _nameController.text.trim(), description: '');
-    final ok = await context.read<InventoryProvider>().saveCategory(category, id: widget.category?.id);
+    final category = Category(
+      id: widget.category?.id ?? 0,
+      name: _nameController.text.trim(),
+      description: '',
+    );
+    final ok = await context.read<InventoryProvider>().saveCategory(
+      category,
+      id: widget.category?.id,
+    );
     if (!mounted) return;
     setState(() => _saving = false);
     if (ok) Navigator.pop(context);
@@ -527,24 +816,49 @@ class _CategoryFormSheetState extends State<_CategoryFormSheet> {
   Widget build(BuildContext context) {
     final categories = context.watch<InventoryProvider>().categories;
     return SingleChildScrollView(
-      padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
       child: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.category == null ? 'New Category' : 'Edit Category', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(
+              widget.category == null ? 'New Category' : 'Edit Category',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 16),
-            TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Category Name *'), validator: (v) => Validators.required(v, 'Name')),
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Category Name *'),
+              validator: (v) => Validators.required(v, 'Name'),
+            ),
             if (categories.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Text('Existing categories', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              Text(
+                'Existing categories',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
               const SizedBox(height: 8),
-              Wrap(spacing: 6, runSpacing: 6, children: categories.map((c) => Chip(label: Text(c.name))).toList()),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: categories
+                    .map((c) => Chip(label: Text(c.name)))
+                    .toList(),
+              ),
             ],
             const SizedBox(height: 20),
-            PrimaryButton(label: 'Save Category', isLoading: _saving, onPressed: _submit),
+            PrimaryButton(
+              label: 'Save Category',
+              isLoading: _saving,
+              onPressed: _submit,
+            ),
           ],
         ),
       ),
@@ -566,7 +880,9 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
   final _noteController = TextEditingController();
   bool _saving = false;
 
-  String get _qtyLabel => ['IN', 'OPENING', 'ADJUSTMENT'].contains(_type) ? 'Quantity to add' : 'Quantity to subtract';
+  String get _qtyLabel => ['IN', 'OPENING', 'ADJUSTMENT'].contains(_type)
+      ? 'Quantity to add'
+      : 'Quantity to subtract';
 
   Future<void> _submit() async {
     final qty = double.tryParse(_qtyController.text);
@@ -606,21 +922,30 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Current stock: ${Formatters.amount(widget.product.stockQuantity)} ${widget.product.unitName}',
-                style: TextStyle(color: AppColors.textSecondary)),
+            Text(
+              'Current stock: ${Formatters.amount(widget.product.stockQuantity)} ${widget.product.unitName}',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _type,
               decoration: const InputDecoration(labelText: 'Movement Type'),
               items: AppConstants.stockMovementTypes
-                  .map((t) => DropdownMenuItem(value: t, child: Text(AppConstants.stockMovementLabels[t] ?? t)))
+                  .map(
+                    (t) => DropdownMenuItem(
+                      value: t,
+                      child: Text(AppConstants.stockMovementLabels[t] ?? t),
+                    ),
+                  )
                   .toList(),
               onChanged: (v) => setState(() => _type = v ?? 'IN'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _qtyController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(labelText: _qtyLabel),
             ),
             const SizedBox(height: 12),
@@ -633,10 +958,17 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        PrimaryButton(label: 'Save', expand: false, isLoading: _saving, onPressed: _submit),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        PrimaryButton(
+          label: 'Save',
+          expand: false,
+          isLoading: _saving,
+          onPressed: _submit,
+        ),
       ],
     );
   }
 }
-   

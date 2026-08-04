@@ -21,7 +21,9 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<SaleProvider>().load());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => context.read<SaleProvider>().load(),
+    );
   }
 
   List<Sale> _filtered(List<Sale> sales) {
@@ -33,7 +35,13 @@ class _SalesScreenState extends State<SalesScreen> {
     }
     if (_search.isNotEmpty) {
       final q = _search.toLowerCase();
-      list = list.where((s) => s.invoiceNumber.toLowerCase().contains(q) || s.customerName.toLowerCase().contains(q)).toList();
+      list = list
+          .where(
+            (s) =>
+                s.invoiceNumber.toLowerCase().contains(q) ||
+                s.customerName.toLowerCase().contains(q),
+          )
+          .toList();
     }
     return list;
   }
@@ -50,43 +58,78 @@ class _SalesScreenState extends State<SalesScreen> {
         icon: const Icon(Icons.add),
         label: const Text('New Invoice'),
       ),
-      body: RefreshIndicator(
-        onRefresh: () => context.read<SaleProvider>().load(),
-        child: sp.isLoading && sp.sales.isEmpty
-            ? const LoadingView()
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  ResponsiveGrid(
-                    columns: 2,
-                    spacing: 12,
-                    childAspectRatio: 1.35,
-                    children: [
-                      KpiCard.currency(label: 'This Month', value: sp.thisMonthTotal, icon: Icons.calendar_month_outlined, color: AppColors.orange),
-                      KpiCard.currency(label: 'Receivable', value: sp.totalReceivable, icon: Icons.call_received, color: AppColors.warning),
-                      KpiCard(label: 'Total Invoices', value: '${sp.sales.length}', icon: Icons.receipt_long_outlined, color: AppColors.info),
-                      KpiCard(label: 'Overdue', value: '${sp.overdueCount}', icon: Icons.error_outline, color: AppColors.error),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SearchField(hint: 'Search invoice # or customer', onChanged: (v) => setState(() => _search = v)),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: ['ALL', 'DRAFT', 'CONFIRMED', 'OVERDUE'].map((f) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: AppFilterChip(label: f, selected: _filter == f, onTap: () => setState(() => _filter = f)),
-                        );
-                      }).toList(),
+      body: ResponsiveBody(
+        child: RefreshIndicator(
+          onRefresh: () => context.read<SaleProvider>().load(),
+          child: sp.isLoading && sp.sales.isEmpty
+              ? const LoadingView()
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    ResponsiveGrid(
+                      columns: 2,
+                      spacing: 12,
+                      childAspectRatio: 1.35,
+                      children: [
+                        KpiCard.currency(
+                          label: 'This Month',
+                          value: sp.thisMonthTotal,
+                          icon: Icons.calendar_month_outlined,
+                          color: AppColors.orange,
+                        ),
+                        KpiCard.currency(
+                          label: 'Receivable',
+                          value: sp.totalReceivable,
+                          icon: Icons.call_received,
+                          color: AppColors.warning,
+                        ),
+                        KpiCard(
+                          label: 'Total Invoices',
+                          value: '${sp.sales.length}',
+                          icon: Icons.receipt_long_outlined,
+                          color: AppColors.info,
+                        ),
+                        KpiCard(
+                          label: 'Overdue',
+                          value: '${sp.overdueCount}',
+                          icon: Icons.error_outline,
+                          color: AppColors.error,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (filtered.isEmpty)
-                    const EmptyState(icon: Icons.receipt_long_outlined, title: 'No invoices found', message: 'Create your first invoice to get started.')
-                  else
-                    ...filtered.map((s) => Padding(
+                    const SizedBox(height: 16),
+                    SearchField(
+                      hint: 'Search invoice # or customer',
+                      onChanged: (v) => setState(() => _search = v),
+                    ),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: ['ALL', 'DRAFT', 'CONFIRMED', 'OVERDUE'].map((
+                          f,
+                        ) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: AppFilterChip(
+                              label: f,
+                              selected: _filter == f,
+                              onTap: () => setState(() => _filter = f),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (filtered.isEmpty)
+                      const EmptyState(
+                        icon: Icons.receipt_long_outlined,
+                        title: 'No invoices found',
+                        message: 'Create your first invoice to get started.',
+                      )
+                    else
+                      ...filtered.map(
+                        (s) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: AppCard(
                             onTap: () => context.push('/invoice/${s.id}'),
@@ -94,13 +137,22 @@ class _SalesScreenState extends State<SalesScreen> {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(s.invoiceNumber, style: const TextStyle(fontWeight: FontWeight.w700)),
+                                      Text(
+                                        s.invoiceNumber,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                                       const SizedBox(height: 3),
                                       Text(
                                         '${s.customerName.isNotEmpty ? s.customerName : 'Walk-in'} · ${Formatters.dateShort(s.saleDate)}',
-                                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -108,18 +160,27 @@ class _SalesScreenState extends State<SalesScreen> {
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    Text(Formatters.currency(s.total), style: const TextStyle(fontWeight: FontWeight.w700)),
+                                    Text(
+                                      Formatters.currency(s.total),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
-                                    StatusBadge(label: s.isOverdue ? 'OVERDUE' : s.status),
+                                    StatusBadge(
+                                      label: s.isOverdue ? 'OVERDUE' : s.status,
+                                    ),
                                   ],
                                 ),
                               ],
                             ),
                           ),
-                        )),
-                  const SizedBox(height: 80),
-                ],
-              ),
+                        ),
+                      ),
+                    const SizedBox(height: 80),
+                  ],
+                ),
+        ),
       ),
     );
   }

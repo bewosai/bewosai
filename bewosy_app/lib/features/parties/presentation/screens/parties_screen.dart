@@ -31,15 +31,27 @@ class _PartiesScreenState extends State<PartiesScreen> {
   }
 
   void _openAddSheet() {
-    showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => const _PartyFormSheet());
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _PartyFormSheet(),
+    );
   }
 
   List<Party> _filtered(List<Party> parties) {
     var list = parties;
-    if (_filter != 'ALL') list = list.where((p) => p.partyType == _filter).toList();
+    if (_filter != 'ALL')
+      list = list.where((p) => p.partyType == _filter).toList();
     if (_search.isNotEmpty) {
       final q = _search.toLowerCase();
-      list = list.where((p) => p.name.toLowerCase().contains(q) || p.phone.contains(q) || p.email.toLowerCase().contains(q)).toList();
+      list = list
+          .where(
+            (p) =>
+                p.name.toLowerCase().contains(q) ||
+                p.phone.contains(q) ||
+                p.email.toLowerCase().contains(q),
+          )
+          .toList();
     }
     return list;
   }
@@ -56,43 +68,78 @@ class _PartiesScreenState extends State<PartiesScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Add Party'),
       ),
-      body: RefreshIndicator(
-        onRefresh: () => context.read<PartyProvider>().load(),
-        child: pp.isLoading && pp.parties.isEmpty
-            ? const LoadingView()
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  ResponsiveGrid(
-                    columns: 4,
-                    spacing: 10,
-                    childAspectRatio: 0.75,
-                    children: [
-                      KpiCard(label: 'Total', value: '${pp.parties.length}', icon: Icons.people_outline, color: AppColors.orange),
-                      KpiCard(label: 'Customers', value: '${pp.customers.length}', icon: Icons.person_outline, color: AppColors.info),
-                      KpiCard(label: 'Suppliers', value: '${pp.suppliers.length}', icon: Icons.local_shipping_outlined, color: AppColors.navy600),
-                      KpiCard.currency(label: 'Receivable', value: pp.totalReceivable, icon: Icons.call_received, color: AppColors.warning),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SearchField(hint: 'Search name, phone, email', onChanged: (v) => setState(() => _search = v)),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: ['ALL', 'CUSTOMER', 'SUPPLIER', 'BOTH'].map((f) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: AppFilterChip(label: f, selected: _filter == f, onTap: () => setState(() => _filter = f)),
-                        );
-                      }).toList(),
+      body: ResponsiveBody(
+        child: RefreshIndicator(
+          onRefresh: () => context.read<PartyProvider>().load(),
+          child: pp.isLoading && pp.parties.isEmpty
+              ? const LoadingView()
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    ResponsiveGrid(
+                      columns: 4,
+                      spacing: 10,
+                      childAspectRatio: 0.75,
+                      children: [
+                        KpiCard(
+                          label: 'Total',
+                          value: '${pp.parties.length}',
+                          icon: Icons.people_outline,
+                          color: AppColors.orange,
+                        ),
+                        KpiCard(
+                          label: 'Customers',
+                          value: '${pp.customers.length}',
+                          icon: Icons.person_outline,
+                          color: AppColors.info,
+                        ),
+                        KpiCard(
+                          label: 'Suppliers',
+                          value: '${pp.suppliers.length}',
+                          icon: Icons.local_shipping_outlined,
+                          color: AppColors.navy600,
+                        ),
+                        KpiCard.currency(
+                          label: 'Receivable',
+                          value: pp.totalReceivable,
+                          icon: Icons.call_received,
+                          color: AppColors.warning,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (filtered.isEmpty)
-                    const EmptyState(icon: Icons.people_outline, title: 'No parties found', message: 'Add a customer or supplier to get started.')
-                  else
-                    ...filtered.map((p) => Padding(
+                    const SizedBox(height: 16),
+                    SearchField(
+                      hint: 'Search name, phone, email',
+                      onChanged: (v) => setState(() => _search = v),
+                    ),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: ['ALL', 'CUSTOMER', 'SUPPLIER', 'BOTH'].map((
+                          f,
+                        ) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: AppFilterChip(
+                              label: f,
+                              selected: _filter == f,
+                              onTap: () => setState(() => _filter = f),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (filtered.isEmpty)
+                      const EmptyState(
+                        icon: Icons.people_outline,
+                        title: 'No parties found',
+                        message: 'Add a customer or supplier to get started.',
+                      )
+                    else
+                      ...filtered.map(
+                        (p) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: AppCard(
                             child: Column(
@@ -101,40 +148,73 @@ class _PartiesScreenState extends State<PartiesScreen> {
                                 Row(
                                   children: [
                                     Container(
-                                      width: 40, height: 40,
+                                      width: 40,
+                                      height: 40,
                                       decoration: BoxDecoration(
-                                        color: p.partyType == 'SUPPLIER' ? AppColors.infoBg : AppColors.orangeLight,
+                                        color: p.partyType == 'SUPPLIER'
+                                            ? AppColors.infoBg
+                                            : AppColors.orangeLight,
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Icon(
-                                        p.partyType == 'SUPPLIER' ? Icons.local_shipping_outlined : Icons.person_outline,
-                                        color: p.partyType == 'SUPPLIER' ? AppColors.info : AppColors.orangeDark,
+                                        p.partyType == 'SUPPLIER'
+                                            ? Icons.local_shipping_outlined
+                                            : Icons.person_outline,
+                                        color: p.partyType == 'SUPPLIER'
+                                            ? AppColors.info
+                                            : AppColors.orangeDark,
                                         size: 20,
                                       ),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                          if (p.phone.isNotEmpty) Text(p.phone, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                          Text(
+                                            p.name,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          if (p.phone.isNotEmpty)
+                                            Text(
+                                              p.phone,
+                                              style: TextStyle(
+                                                color: AppColors.textSecondary,
+                                                fontSize: 12,
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),
                                     Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
                                       children: [
                                         Text(
                                           Formatters.currency(p.balance.abs()),
                                           style: TextStyle(
                                             fontWeight: FontWeight.w800,
-                                            color: p.balance > 0 ? AppColors.error : (p.balance < 0 ? AppColors.success : AppColors.textSecondary),
+                                            color: p.balance > 0
+                                                ? AppColors.error
+                                                : (p.balance < 0
+                                                      ? AppColors.success
+                                                      : AppColors
+                                                            .textSecondary),
                                           ),
                                         ),
                                         Text(
-                                          p.balance > 0 ? 'Receivable' : (p.balance < 0 ? 'Payable' : 'Settled'),
-                                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                          p.balance > 0
+                                              ? 'Receivable'
+                                              : (p.balance < 0
+                                                    ? 'Payable'
+                                                    : 'Settled'),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.textSecondary,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -145,22 +225,48 @@ class _PartiesScreenState extends State<PartiesScreen> {
                                   children: [
                                     Expanded(
                                       child: OutlinedButton.icon(
-                                        onPressed: () => context.push('/party-ledger/${p.id}'),
-                                        icon: const Icon(Icons.receipt_long_outlined, size: 16),
-                                        label: const Text('Ledger', style: TextStyle(fontSize: 12)),
-                                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 8)),
+                                        onPressed: () => context.push(
+                                          '/party-ledger/${p.id}',
+                                        ),
+                                        icon: const Icon(
+                                          Icons.receipt_long_outlined,
+                                          size: 16,
+                                        ),
+                                        label: const Text(
+                                          'Ledger',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 8,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
                                     IconButton(
-                                      icon: const Icon(Icons.edit_outlined, size: 20),
-                                      onPressed: () => showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => _PartyFormSheet(party: p)),
+                                      icon: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 20,
+                                      ),
+                                      onPressed: () => showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        builder: (_) =>
+                                            _PartyFormSheet(party: p),
+                                      ),
                                     ),
                                     IconButton(
-                                      icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.error),
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 20,
+                                        color: AppColors.error,
+                                      ),
                                       onPressed: () async {
                                         if (p.balance != 0) {
-                                          final direction = p.balance > 0 ? 'owed to you' : 'you owe them';
+                                          final direction = p.balance > 0
+                                              ? 'owed to you'
+                                              : 'you owe them';
                                           showAppSnackBar(
                                             context,
                                             "Cannot delete '${p.name}' — outstanding balance of ${Formatters.currency(p.balance.abs())} ($direction) must be settled first.",
@@ -168,12 +274,24 @@ class _PartiesScreenState extends State<PartiesScreen> {
                                           );
                                           return;
                                         }
-                                        final provider = context.read<PartyProvider>();
-                                        final confirmed = await showDeleteConfirmDialog(context, message: 'This will remove all associated records to the recycle bin.');
+                                        final provider = context
+                                            .read<PartyProvider>();
+                                        final confirmed =
+                                            await showDeleteConfirmDialog(
+                                              context,
+                                              message:
+                                                  'This will remove all associated records to the recycle bin.',
+                                            );
                                         if (!confirmed) return;
                                         final ok = await provider.delete(p.id);
                                         if (!context.mounted) return;
-                                        if (!ok) showAppSnackBar(context, provider.error ?? 'Failed to delete party', isError: true);
+                                        if (!ok)
+                                          showAppSnackBar(
+                                            context,
+                                            provider.error ??
+                                                'Failed to delete party',
+                                            isError: true,
+                                          );
                                       },
                                     ),
                                   ],
@@ -181,10 +299,12 @@ class _PartiesScreenState extends State<PartiesScreen> {
                               ],
                             ),
                           ),
-                        )),
-                  const SizedBox(height: 80),
-                ],
-              ),
+                        ),
+                      ),
+                    const SizedBox(height: 80),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -200,12 +320,24 @@ class _PartyFormSheet extends StatefulWidget {
 
 class _PartyFormSheetState extends State<_PartyFormSheet> {
   final _formKey = GlobalKey<FormState>();
-  late final _nameController = TextEditingController(text: widget.party?.name ?? '');
-  late final _phoneController = TextEditingController(text: widget.party?.phone ?? '');
-  late final _emailController = TextEditingController(text: widget.party?.email ?? '');
-  late final _addressController = TextEditingController(text: widget.party?.address ?? '');
-  late final _openingBalanceController = TextEditingController(text: widget.party?.openingBalance.toString() ?? '0');
-  late final _notesController = TextEditingController(text: widget.party?.notes ?? '');
+  late final _nameController = TextEditingController(
+    text: widget.party?.name ?? '',
+  );
+  late final _phoneController = TextEditingController(
+    text: widget.party?.phone ?? '',
+  );
+  late final _emailController = TextEditingController(
+    text: widget.party?.email ?? '',
+  );
+  late final _addressController = TextEditingController(
+    text: widget.party?.address ?? '',
+  );
+  late final _openingBalanceController = TextEditingController(
+    text: widget.party?.openingBalance.toString() ?? '0',
+  );
+  late final _notesController = TextEditingController(
+    text: widget.party?.notes ?? '',
+  );
   late String _partyType = widget.party?.partyType ?? 'CUSTOMER';
   bool _saving = false;
 
@@ -227,7 +359,10 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
       notes: _notesController.text.trim(),
       isActive: true,
     );
-    final ok = await context.read<PartyProvider>().save(party, id: widget.party?.id);
+    final ok = await context.read<PartyProvider>().save(
+      party,
+      id: widget.party?.id,
+    );
     if (!mounted) return;
     setState(() => _saving = false);
     if (ok) {
@@ -241,16 +376,31 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
       child: Form(
         key: _formKey,
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(widget.party == null ? 'Add Party' : 'Edit Party', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              Text(
+                widget.party == null ? 'Add Party' : 'Edit Party',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const SizedBox(height: 16),
-              TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Name *'), validator: (v) => Validators.required(v, 'Name')),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Name *'),
+                validator: (v) => Validators.required(v, 'Name'),
+              ),
               const SizedBox(height: 14),
               Row(
                 children: AppConstants.partyTypes.map((t) {
@@ -261,29 +411,75 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
                       child: OutlinedButton(
                         onPressed: () => setState(() => _partyType = t),
                         style: OutlinedButton.styleFrom(
-                          backgroundColor: selected ? AppColors.orangeLight : null,
-                          side: BorderSide(color: selected ? AppColors.orange : AppColors.navy200),
+                          backgroundColor: selected
+                              ? AppColors.orangeLight
+                              : null,
+                          side: BorderSide(
+                            color: selected
+                                ? AppColors.orange
+                                : AppColors.navy200,
+                          ),
                         ),
-                        child: Text(t, style: TextStyle(fontSize: 12, color: selected ? AppColors.orangeDark : AppColors.textSecondary)),
+                        child: Text(
+                          t,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: selected
+                                ? AppColors.orangeDark
+                                : AppColors.textSecondary,
+                          ),
+                        ),
                       ),
                     ),
                   );
                 }).toList(),
               ),
               const SizedBox(height: 14),
-              Row(children: [
-                Expanded(child: TextFormField(controller: _phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Phone'))),
-                const SizedBox(width: 12),
-                Expanded(child: TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email'))),
-              ]),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(labelText: 'Phone'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
-              TextFormField(controller: _addressController, decoration: const InputDecoration(labelText: 'Address'), maxLines: 2),
+              TextFormField(
+                controller: _addressController,
+                decoration: const InputDecoration(labelText: 'Address'),
+                maxLines: 2,
+              ),
               const SizedBox(height: 12),
-              TextFormField(controller: _openingBalanceController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Opening Balance')),
+              TextFormField(
+                controller: _openingBalanceController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(labelText: 'Opening Balance'),
+              ),
               const SizedBox(height: 12),
-              TextFormField(controller: _notesController, decoration: const InputDecoration(labelText: 'Notes'), maxLines: 2),
+              TextFormField(
+                controller: _notesController,
+                decoration: const InputDecoration(labelText: 'Notes'),
+                maxLines: 2,
+              ),
               const SizedBox(height: 20),
-              PrimaryButton(label: 'Save Party', isLoading: _saving, onPressed: _submit),
+              PrimaryButton(
+                label: 'Save Party',
+                isLoading: _saving,
+                onPressed: _submit,
+              ),
             ],
           ),
         ),

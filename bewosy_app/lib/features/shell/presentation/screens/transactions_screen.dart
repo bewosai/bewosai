@@ -14,7 +14,8 @@ class TransactionsScreen extends StatefulWidget {
   State<TransactionsScreen> createState() => _TransactionsScreenState();
 }
 
-class _TransactionsScreenState extends State<TransactionsScreen> with SingleTickerProviderStateMixin {
+class _TransactionsScreenState extends State<TransactionsScreen>
+    with SingleTickerProviderStateMixin {
   late final _tabController = TabController(length: 2, vsync: this);
 
   @override
@@ -40,9 +41,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> with SingleTick
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [SalesScreen(), PurchasesScreen()],
+      body: ResponsiveBody(
+        child: TabBarView(
+          controller: _tabController,
+          children: const [SalesScreen(), PurchasesScreen()],
+        ),
       ),
     );
   }

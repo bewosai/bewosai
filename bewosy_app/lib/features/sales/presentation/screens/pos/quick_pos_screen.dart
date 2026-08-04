@@ -92,7 +92,9 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     _vatEnabled = sale.taxRate > 0;
     _paidController.text = sale.paidAmount.toString();
     _notesController.text = sale.notes;
-    _discountPctController.text = sale.subtotal > 0 ? ((sale.discount / sale.subtotal) * 100).toStringAsFixed(2) : '0';
+    _discountPctController.text = sale.subtotal > 0
+        ? ((sale.discount / sale.subtotal) * 100).toStringAsFixed(2)
+        : '0';
     if (sale.customer != null) {
       final match = partyProvider.parties.where((p) => p.id == sale.customer);
       if (match.isNotEmpty) _customer = match.first;
@@ -144,7 +146,8 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
         title: 'Select Product',
         items: products,
         labelBuilder: (p) => p.name,
-        subtitleBuilder: (p) => '${Formatters.currency(p.salePrice)} · Stock: ${Formatters.amount(p.stockQuantity)}',
+        subtitleBuilder: (p) =>
+            '${Formatters.currency(p.salePrice)} · Stock: ${Formatters.amount(p.stockQuantity)}',
         onSelected: (p) {
           setState(() {
             item.product = p.id;
@@ -179,28 +182,43 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                   TextFormField(
                     controller: nameController,
                     autofocus: true,
-                    decoration: const InputDecoration(labelText: 'Product Name *'),
+                    decoration: const InputDecoration(
+                      labelText: 'Product Name *',
+                    ),
                     validator: (v) => Validators.required(v, 'Name'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: priceController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Sale Price *'),
-                    validator: (v) => Validators.positiveNumber(v, 'Price') ?? (v == null || v.isEmpty ? 'Price is required' : null),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Sale Price *',
+                    ),
+                    validator: (v) =>
+                        Validators.positiveNumber(v, 'Price') ??
+                        (v == null || v.isEmpty ? 'Price is required' : null),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: stockController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Opening Stock (optional)'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Opening Stock (optional)',
+                    ),
                   ),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
             PrimaryButton(
               label: 'Save',
               expand: false,
@@ -209,20 +227,22 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                 if (!formKey.currentState!.validate()) return;
                 setDialogState(() => saving = true);
                 final invProvider = context.read<InventoryProvider>();
-                final created = await invProvider.quickCreate(Product(
-                      id: 0,
-                      name: nameController.text.trim(),
-                      categoryName: '',
-                      unitName: '',
-                      description: '',
-                      purchasePrice: 0,
-                      salePrice: double.tryParse(priceController.text) ?? 0,
-                      stockQuantity: double.tryParse(stockController.text) ?? 0,
-                      lowStockThreshold: 5,
-                      isLowStock: false,
-                      barcode: '',
-                      isActive: true,
-                    ));
+                final created = await invProvider.quickCreate(
+                  Product(
+                    id: 0,
+                    name: nameController.text.trim(),
+                    categoryName: '',
+                    unitName: '',
+                    description: '',
+                    purchasePrice: 0,
+                    salePrice: double.tryParse(priceController.text) ?? 0,
+                    stockQuantity: double.tryParse(stockController.text) ?? 0,
+                    lowStockThreshold: 5,
+                    isLowStock: false,
+                    barcode: '',
+                    isActive: true,
+                  ),
+                );
                 if (!dialogContext.mounted) return;
                 if (created != null) {
                   setState(() {
@@ -233,7 +253,11 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                   Navigator.pop(dialogContext);
                 } else {
                   setDialogState(() => saving = false);
-                  showAppSnackBar(dialogContext, invProvider.error ?? 'Failed to add product', isError: true);
+                  showAppSnackBar(
+                    dialogContext,
+                    invProvider.error ?? 'Failed to add product',
+                    isError: true,
+                  );
                 }
               },
             ),
@@ -282,21 +306,28 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                   TextFormField(
                     controller: nameController,
                     autofocus: true,
-                    decoration: const InputDecoration(labelText: 'Customer Name *'),
+                    decoration: const InputDecoration(
+                      labelText: 'Customer Name *',
+                    ),
                     validator: (v) => Validators.required(v, 'Name'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: phoneController,
                     keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(labelText: 'Phone (optional)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Phone (optional)',
+                    ),
                   ),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
             PrimaryButton(
               label: 'Save',
               expand: false,
@@ -305,28 +336,34 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                 if (!formKey.currentState!.validate()) return;
                 setDialogState(() => saving = true);
                 final partyProvider = context.read<PartyProvider>();
-                final created = await partyProvider.quickCreate(Party(
-                      id: 0,
-                      name: nameController.text.trim(),
-                      partyType: 'CUSTOMER',
-                      customerType: '',
-                      phone: phoneController.text.trim(),
-                      email: '',
-                      address: '',
-                      panNumber: '',
-                      vatNumber: '',
-                      openingBalance: 0,
-                      balance: 0,
-                      notes: '',
-                      isActive: true,
-                    ));
+                final created = await partyProvider.quickCreate(
+                  Party(
+                    id: 0,
+                    name: nameController.text.trim(),
+                    partyType: 'CUSTOMER',
+                    customerType: '',
+                    phone: phoneController.text.trim(),
+                    email: '',
+                    address: '',
+                    panNumber: '',
+                    vatNumber: '',
+                    openingBalance: 0,
+                    balance: 0,
+                    notes: '',
+                    isActive: true,
+                  ),
+                );
                 if (!dialogContext.mounted) return;
                 if (created != null) {
                   setState(() => _customer = created);
                   Navigator.pop(dialogContext);
                 } else {
                   setDialogState(() => saving = false);
-                  showAppSnackBar(dialogContext, partyProvider.error ?? 'Failed to add customer', isError: true);
+                  showAppSnackBar(
+                    dialogContext,
+                    partyProvider.error ?? 'Failed to add customer',
+                    isError: true,
+                  );
                 }
               },
             ),
@@ -338,7 +375,11 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
 
   Future<void> _save(String status) async {
     if (_items.every((i) => i.qty <= 0)) {
-      showAppSnackBar(context, 'Add at least one item with quantity', isError: true);
+      showAppSnackBar(
+        context,
+        'Add at least one item with quantity',
+        isError: true,
+      );
       return;
     }
     setState(() => _saving = true);
@@ -361,13 +402,20 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       status: status,
       saleType: 'SALE',
       notes: _notesController.text.trim(),
-      items: _items.where((i) => i.qty > 0).map((i) => SaleItem(
-            product: i.product,
-            productName: i.nameController.text.trim().isEmpty ? 'Item' : i.nameController.text.trim(),
-            quantity: i.qty,
-            unitPrice: i.price,
-            discountAmount: i.discount,
-          )).toList(),
+      items: _items
+          .where((i) => i.qty > 0)
+          .map(
+            (i) => SaleItem(
+              product: i.product,
+              productName: i.nameController.text.trim().isEmpty
+                  ? 'Item'
+                  : i.nameController.text.trim(),
+              quantity: i.qty,
+              unitPrice: i.price,
+              discountAmount: i.discount,
+            ),
+          )
+          .toList(),
     );
 
     final result = await context.read<SaleProvider>().save(sale, id: _editId);
@@ -388,127 +436,191 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_editId != null ? 'Edit Invoice' : 'New Invoice'), actions: const [HomeLogoButton()]),
-      body: !_loaded
-          ? const LoadingView()
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-              children: [
-                AppSectionCard(children: [
-                  InkWell(
-                    onTap: _pickCustomer,
-                    child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Customer', prefixIcon: Icon(Icons.person_outline)),
-                      child: Text(_customer?.name ?? 'Walk-in Customer'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _invoiceController,
-                    decoration: const InputDecoration(labelText: 'Invoice Number'),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
+      appBar: AppBar(
+        title: Text(_editId != null ? 'Edit Invoice' : 'New Invoice'),
+        actions: const [HomeLogoButton()],
+      ),
+      body: ResponsiveBody(
+        child: !_loaded
+            ? const LoadingView()
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                children: [
+                  AppSectionCard(
                     children: [
-                      Expanded(child: _DatePickerField(label: 'Invoice Date', date: _saleDate, onPick: (d) => setState(() => _saleDate = d))),
-                      const SizedBox(width: 12),
-                      Expanded(child: _DatePickerField(label: 'Due Date', date: _dueDate, onPick: (d) => setState(() => _dueDate = d), optional: true)),
-                    ],
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                AppSectionCard(
-                  title: 'Items',
-                  children: [
-                    ..._items.asMap().entries.map((e) => _LineItemRow(
-                          item: e.value,
-                          onPickProduct: () => _pickProduct(e.value),
-                          onRemove: _items.length > 1 ? () => setState(() => _items.removeAt(e.key)) : null,
-                          onChanged: () => setState(() {}),
-                        )),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => setState(() => _items.add(_LineItem())),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Add Item'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                AppSectionCard(children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _discountPctController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(labelText: 'Discount (%)'),
-                          onChanged: (_) => setState(() {}),
+                      InkWell(
+                        onTap: _pickCustomer,
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Customer',
+                            prefixIcon: Icon(Icons.person_outline),
+                          ),
+                          child: Text(_customer?.name ?? 'Walk-in Customer'),
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _invoiceController,
+                        decoration: const InputDecoration(
+                          labelText: 'Invoice Number',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
                         children: [
-                          Text('VAT 13%', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                          Switch(
-                            value: _vatEnabled,
-                            activeThumbColor: AppColors.orange,
-                            onChanged: (v) => setState(() => _vatEnabled = v),
+                          Expanded(
+                            child: _DatePickerField(
+                              label: 'Invoice Date',
+                              date: _saleDate,
+                              onPick: (d) => setState(() => _saleDate = d),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _DatePickerField(
+                              label: 'Due Date',
+                              date: _dueDate,
+                              onPick: (d) => setState(() => _dueDate = d),
+                              optional: true,
+                            ),
                           ),
                         ],
                       ),
                     ],
                   ),
-                  TextField(
-                    controller: _notesController,
-                    decoration: const InputDecoration(labelText: 'Notes (optional)'),
-                    maxLines: 2,
+                  const SizedBox(height: 16),
+                  AppSectionCard(
+                    title: 'Items',
+                    children: [
+                      ..._items.asMap().entries.map(
+                        (e) => _LineItemRow(
+                          item: e.value,
+                          onPickProduct: () => _pickProduct(e.value),
+                          onRemove: _items.length > 1
+                              ? () => setState(() => _items.removeAt(e.key))
+                              : null,
+                          onChanged: () => setState(() {}),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            setState(() => _items.add(_LineItem())),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add Item'),
+                      ),
+                    ],
                   ),
-                ]),
-                const SizedBox(height: 16),
-                AppSectionCard(
-                  title: 'Payment',
-                  children: [
-                    _totalsRow('Subtotal', _subtotal),
-                    _totalsRow('Discount', -_discountAmount),
-                    if (_vatEnabled) _totalsRow('VAT (13%)', _taxAmount),
-                    const Divider(height: 20),
-                    _totalsRow('Grand Total', _total, bold: true),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _paidController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(labelText: 'Amount Paid'),
-                            onChanged: (_) => setState(() {}),
+                  const SizedBox(height: 16),
+                  AppSectionCard(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _discountPctController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Discount (%)',
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _paymentMethod,
-                            decoration: const InputDecoration(labelText: 'Method'),
-                            items: AppConstants.paymentMethods
-                                .map((m) => DropdownMenuItem(value: m, child: Text(AppConstants.paymentMethodLabels[m] ?? m)))
-                                .toList(),
-                            onChanged: (v) => setState(() => _paymentMethod = v ?? 'CASH'),
+                          const SizedBox(width: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'VAT 13%',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              Switch(
+                                value: _vatEnabled,
+                                activeThumbColor: AppColors.orange,
+                                onChanged: (v) =>
+                                    setState(() => _vatEnabled = v),
+                              ),
+                            ],
                           ),
+                        ],
+                      ),
+                      TextField(
+                        controller: _notesController,
+                        decoration: const InputDecoration(
+                          labelText: 'Notes (optional)',
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _totalsRow(
-                      _isAdvance ? 'Advance (Overpaid)' : 'Balance Due',
-                      _isAdvance ? -_balanceDue : _balanceDue,
-                      color: _balanceDue > 0 ? AppColors.error : AppColors.success,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                        maxLines: 2,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  AppSectionCard(
+                    title: 'Payment',
+                    children: [
+                      _totalsRow('Subtotal', _subtotal),
+                      _totalsRow('Discount', -_discountAmount),
+                      if (_vatEnabled) _totalsRow('VAT (13%)', _taxAmount),
+                      const Divider(height: 20),
+                      _totalsRow('Grand Total', _total, bold: true),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _paidController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Amount Paid',
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _paymentMethod,
+                              decoration: const InputDecoration(
+                                labelText: 'Method',
+                              ),
+                              items: AppConstants.paymentMethods
+                                  .map(
+                                    (m) => DropdownMenuItem(
+                                      value: m,
+                                      child: Text(
+                                        AppConstants.paymentMethodLabels[m] ??
+                                            m,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) =>
+                                  setState(() => _paymentMethod = v ?? 'CASH'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _totalsRow(
+                        _isAdvance ? 'Advance (Overpaid)' : 'Balance Due',
+                        _isAdvance ? -_balanceDue : _balanceDue,
+                        color: _balanceDue > 0
+                            ? AppColors.error
+                            : AppColors.success,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+      ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -527,7 +639,11 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     flex: 2,
-                    child: PrimaryButton(label: 'Confirm Invoice', isLoading: _saving, onPressed: () => _save('CONFIRMED')),
+                    child: PrimaryButton(
+                      label: 'Confirm Invoice',
+                      isLoading: _saving,
+                      onPressed: () => _save('CONFIRMED'),
+                    ),
                   ),
                 ],
               ),
@@ -539,16 +655,31 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     );
   }
 
-  Widget _totalsRow(String label, double value, {bool bold = false, Color? color}) {
+  Widget _totalsRow(
+    String label,
+    double value, {
+    bool bold = false,
+    Color? color,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontWeight: bold ? FontWeight.w700 : FontWeight.w400, fontSize: bold ? 15 : 13)),
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+              fontSize: bold ? 15 : 13,
+            ),
+          ),
           Text(
             Formatters.currency(value),
-            style: TextStyle(fontWeight: bold ? FontWeight.w800 : FontWeight.w600, fontSize: bold ? 16 : 13, color: color ?? AppColors.textPrimary),
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+              fontSize: bold ? 16 : 13,
+              color: color ?? AppColors.textPrimary,
+            ),
           ),
         ],
       ),
@@ -562,14 +693,22 @@ class _LineItemRow extends StatelessWidget {
   final VoidCallback? onRemove;
   final VoidCallback onChanged;
 
-  const _LineItemRow({required this.item, required this.onPickProduct, required this.onRemove, required this.onChanged});
+  const _LineItemRow({
+    required this.item,
+    required this.onPickProduct,
+    required this.onRemove,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: AppColors.navy50, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: AppColors.navy50,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         children: [
           Row(
@@ -578,13 +717,28 @@ class _LineItemRow extends StatelessWidget {
                 child: InkWell(
                   onTap: onPickProduct,
                   child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Product', isDense: true),
-                    child: Text(item.nameController.text.isEmpty ? 'Select product' : item.nameController.text, overflow: TextOverflow.ellipsis),
+                    decoration: const InputDecoration(
+                      labelText: 'Product',
+                      isDense: true,
+                    ),
+                    child: Text(
+                      item.nameController.text.isEmpty
+                          ? 'Select product'
+                          : item.nameController.text,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ),
               if (onRemove != null)
-                IconButton(icon: const Icon(Icons.close, size: 18, color: AppColors.error), onPressed: onRemove),
+                IconButton(
+                  icon: const Icon(
+                    Icons.close,
+                    size: 18,
+                    color: AppColors.error,
+                  ),
+                  onPressed: onRemove,
+                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -593,8 +747,13 @@ class _LineItemRow extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: item.qtyController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Qty', isDense: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Qty',
+                    isDense: true,
+                  ),
                   onChanged: (_) => onChanged(),
                 ),
               ),
@@ -602,8 +761,13 @@ class _LineItemRow extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: item.priceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Price', isDense: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Price',
+                    isDense: true,
+                  ),
                   onChanged: (_) => onChanged(),
                 ),
               ),
@@ -611,8 +775,13 @@ class _LineItemRow extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: item.discountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Disc.', isDense: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Disc.',
+                    isDense: true,
+                  ),
                   onChanged: (_) => onChanged(),
                 ),
               ),
@@ -622,7 +791,13 @@ class _LineItemRow extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text('= ${Formatters.currency(item.total)}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+              child: Text(
+                '= ${Formatters.currency(item.total)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
             ),
           ),
         ],
@@ -637,7 +812,12 @@ class _DatePickerField extends StatelessWidget {
   final ValueChanged<DateTime> onPick;
   final bool optional;
 
-  const _DatePickerField({required this.label, required this.date, required this.onPick, this.optional = false});
+  const _DatePickerField({
+    required this.label,
+    required this.date,
+    required this.onPick,
+    this.optional = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -653,7 +833,9 @@ class _DatePickerField extends StatelessWidget {
       },
       child: InputDecorator(
         decoration: InputDecoration(labelText: label, isDense: true),
-        child: Text(date != null ? Formatters.date(date) : (optional ? 'Not set' : '-')),
+        child: Text(
+          date != null ? Formatters.date(date) : (optional ? 'Not set' : '-'),
+        ),
       ),
     );
   }

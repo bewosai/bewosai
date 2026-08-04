@@ -82,84 +82,167 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         title: Text(s?.invoiceNumber ?? 'Invoice'),
         actions: [
           if (s != null) ...[
-            IconButton(icon: const Icon(Icons.share_outlined), onPressed: _shareWhatsApp),
+            IconButton(
+              icon: const Icon(Icons.share_outlined),
+              onPressed: _shareWhatsApp,
+            ),
             if (s.status != 'CANCELLED')
-              IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => context.push('/pos?edit=${s.id}').then((_) => _load())),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () =>
+                    context.push('/pos?edit=${s.id}').then((_) => _load()),
+              ),
           ],
           const HomeLogoButton(),
         ],
       ),
       bottomNavigationBar: const AppBottomNav(currentIndex: 1),
-      body: _loading
-          ? const LoadingView()
-          : _error != null
-              ? EmptyState(icon: Icons.error_outline, title: 'Could not load invoice', message: _error, action: PrimaryButton(label: 'Retry', expand: false, onPressed: _load))
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    AppSectionCard(children: [
+      body: ResponsiveBody(
+        child: _loading
+            ? const LoadingView()
+            : _error != null
+            ? EmptyState(
+                icon: Icons.error_outline,
+                title: 'Could not load invoice',
+                message: _error,
+                action: PrimaryButton(
+                  label: 'Retry',
+                  expand: false,
+                  onPressed: _load,
+                ),
+              )
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  AppSectionCard(
+                    children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(s!.invoiceNumber, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                          StatusBadge(label: s.isOverdue ? 'OVERDUE' : s.status),
+                          Text(
+                            s!.invoiceNumber,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          StatusBadge(
+                            label: s.isOverdue ? 'OVERDUE' : s.status,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text(s.customerName.isNotEmpty ? s.customerName : 'Walk-in Customer', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      if (s.partyPhone.isNotEmpty) Text(s.partyPhone, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                      const SizedBox(height: 6),
-                      Text('Date: ${Formatters.date(s.saleDate)}${s.dueDate != null ? ' · Due: ${Formatters.date(s.dueDate)}' : ''}',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                    ]),
-                    const SizedBox(height: 16),
-                    AppSectionCard(
-                      title: 'Items',
-                      children: s.items.map((item) {
-                        final isLast = item == s.items.last;
-                        return Padding(
-                          padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item.productName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                    Text('${Formatters.amount(item.quantity)} × ${Formatters.currency(item.unitPrice)}',
-                                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                                  ],
-                                ),
-                              ),
-                              Text(Formatters.currency(item.total), style: const TextStyle(fontWeight: FontWeight.w700)),
-                            ],
+                      Text(
+                        s.customerName.isNotEmpty
+                            ? s.customerName
+                            : 'Walk-in Customer',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      if (s.partyPhone.isNotEmpty)
+                        Text(
+                          s.partyPhone,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
                           ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 16),
-                    AppSectionCard(children: [
+                        ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Date: ${Formatters.date(s.saleDate)}${s.dueDate != null ? ' · Due: ${Formatters.date(s.dueDate)}' : ''}',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  AppSectionCard(
+                    title: 'Items',
+                    children: s.items.map((item) {
+                      final isLast = item == s.items.last;
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.productName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${Formatters.amount(item.quantity)} × ${Formatters.currency(item.unitPrice)}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              Formatters.currency(item.total),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  AppSectionCard(
+                    children: [
                       _row('Subtotal', Formatters.currency(s.subtotal)),
                       _row('Discount', '- ${Formatters.currency(s.discount)}'),
-                      if (s.taxAmount > 0) _row('VAT (${Formatters.amount(s.taxRate)}%)', Formatters.currency(s.taxAmount)),
+                      if (s.taxAmount > 0)
+                        _row(
+                          'VAT (${Formatters.amount(s.taxRate)}%)',
+                          Formatters.currency(s.taxAmount),
+                        ),
                       const Divider(height: 20),
                       _row('Total', Formatters.currency(s.total), bold: true),
                       _row('Paid', Formatters.currency(s.paidAmount)),
-                      _row('Balance Due', Formatters.currency(s.dueAmount), color: s.dueAmount > 0 ? AppColors.error : AppColors.success),
+                      _row(
+                        'Balance Due',
+                        Formatters.currency(s.dueAmount),
+                        color: s.dueAmount > 0
+                            ? AppColors.error
+                            : AppColors.success,
+                      ),
                       const SizedBox(height: 8),
-                      Row(children: [Text('Payment Method: ', style: TextStyle(color: AppColors.textSecondary)), Text(s.paymentMethod)]),
-                    ]),
-                    if (s.notes.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      AppSectionCard(title: 'Notes', children: [Text(s.notes)]),
+                      Row(
+                        children: [
+                          Text(
+                            'Payment Method: ',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                          Text(s.paymentMethod),
+                        ],
+                      ),
                     ],
-                    if (s.status != 'CANCELLED') ...[
-                      const SizedBox(height: 20),
-                      DangerButton(label: 'Cancel Invoice', onPressed: _cancelInvoice),
-                    ],
-                    const SizedBox(height: 24),
+                  ),
+                  if (s.notes.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    AppSectionCard(title: 'Notes', children: [Text(s.notes)]),
                   ],
-                ),
+                  if (s.status != 'CANCELLED') ...[
+                    const SizedBox(height: 20),
+                    DangerButton(
+                      label: 'Cancel Invoice',
+                      onPressed: _cancelInvoice,
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                ],
+              ),
+      ),
     );
   }
 
@@ -169,8 +252,19 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
-          Text(value, style: TextStyle(fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: color ?? AppColors.textPrimary)),
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+              color: color ?? AppColors.textPrimary,
+            ),
+          ),
         ],
       ),
     );

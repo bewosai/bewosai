@@ -16,28 +16,42 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<RecycleBinProvider>().load());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => context.read<RecycleBinProvider>().load(),
+    );
   }
 
   IconData _iconFor(String type) {
     switch (type) {
-      case 'sale': return Icons.receipt_long_outlined;
-      case 'purchase': return Icons.shopping_bag_outlined;
-      case 'party': return Icons.people_outline;
-      case 'expense': return Icons.receipt_outlined;
-      case 'product': return Icons.inventory_2_outlined;
-      default: return Icons.delete_outline;
+      case 'sale':
+        return Icons.receipt_long_outlined;
+      case 'purchase':
+        return Icons.shopping_bag_outlined;
+      case 'party':
+        return Icons.people_outline;
+      case 'expense':
+        return Icons.receipt_outlined;
+      case 'product':
+        return Icons.inventory_2_outlined;
+      default:
+        return Icons.delete_outline;
     }
   }
 
   Color _colorFor(String type) {
     switch (type) {
-      case 'sale': return AppColors.orange;
-      case 'purchase': return AppColors.info;
-      case 'party': return AppColors.navy600;
-      case 'expense': return AppColors.error;
-      case 'product': return AppColors.warning;
-      default: return AppColors.navy400;
+      case 'sale':
+        return AppColors.orange;
+      case 'purchase':
+        return AppColors.info;
+      case 'party':
+        return AppColors.navy600;
+      case 'expense':
+        return AppColors.error;
+      case 'product':
+        return AppColors.warning;
+      default:
+        return AppColors.navy400;
     }
   }
 
@@ -46,61 +60,112 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
     final rb = context.watch<RecycleBinProvider>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Recycle Bin'), actions: const [HomeLogoButton()]),
+      appBar: AppBar(
+        title: const Text('Recycle Bin'),
+        actions: const [HomeLogoButton()],
+      ),
       bottomNavigationBar: const AppBottomNav(currentIndex: 4),
-      body: rb.isLoading && rb.items.isEmpty
-          ? const LoadingView()
-          : RefreshIndicator(
-              onRefresh: () => context.read<RecycleBinProvider>().load(),
-              child: rb.items.isEmpty
-                  ? const EmptyState(icon: Icons.delete_outline, title: 'Recycle bin is empty')
-                  : ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: rb.items.map((item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: AppCard(
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 40, height: 40,
-                                    decoration: BoxDecoration(color: _colorFor(item.type).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                                    child: Icon(_iconFor(item.type), color: _colorFor(item.type), size: 20),
+      body: ResponsiveBody(
+        child: rb.isLoading && rb.items.isEmpty
+            ? const LoadingView()
+            : RefreshIndicator(
+                onRefresh: () => context.read<RecycleBinProvider>().load(),
+                child: rb.items.isEmpty
+                    ? const EmptyState(
+                        icon: Icons.delete_outline,
+                        title: 'Recycle bin is empty',
+                      )
+                    : ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: rb.items
+                            .map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: AppCard(
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: _colorFor(
+                                            item.type,
+                                          ).withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          _iconFor(item.type),
+                                          color: _colorFor(item.type),
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item.label,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            Text(
+                                              'Deleted ${Formatters.dateShort(item.deletedAt)}',
+                                              style: TextStyle(
+                                                color: AppColors.textSecondary,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.restore,
+                                          color: AppColors.success,
+                                        ),
+                                        tooltip: 'Restore',
+                                        onPressed: () => context
+                                            .read<RecycleBinProvider>()
+                                            .restore(item.type, item.id),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.delete_forever,
+                                          color: AppColors.error,
+                                        ),
+                                        tooltip: 'Delete Forever',
+                                        onPressed: () async {
+                                          final provider = context
+                                              .read<RecycleBinProvider>();
+                                          final confirmed =
+                                              await showDeleteConfirmDialog(
+                                                context,
+                                                title: 'Delete permanently?',
+                                                message:
+                                                    'This cannot be undone.',
+                                                confirmLabel: 'Delete Forever',
+                                              );
+                                          if (confirmed)
+                                            provider.permanentlyDelete(
+                                              item.type,
+                                              item.id,
+                                            );
+                                        },
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(item.label, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                        Text('Deleted ${Formatters.dateShort(item.deletedAt)}', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                                      ],
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.restore, color: AppColors.success),
-                                    tooltip: 'Restore',
-                                    onPressed: () => context.read<RecycleBinProvider>().restore(item.type, item.id),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_forever, color: AppColors.error),
-                                    tooltip: 'Delete Forever',
-                                    onPressed: () async {
-                                      final provider = context.read<RecycleBinProvider>();
-                                      final confirmed = await showDeleteConfirmDialog(
-                                        context,
-                                        title: 'Delete permanently?',
-                                        message: 'This cannot be undone.',
-                                        confirmLabel: 'Delete Forever',
-                                      );
-                                      if (confirmed) provider.permanentlyDelete(item.type, item.id);
-                                    },
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                          )).toList(),
-                    ),
-            ),
+                            )
+                            .toList(),
+                      ),
+              ),
+      ),
     );
   }
 }

@@ -2,10 +2,11 @@ from decimal import Decimal
 from rest_framework import generics, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
 from bewosy.permissions import IsPremiumBusiness
-from bewosy.utils import get_bid
+from bewosy.utils import get_bid, get_business
 from .models import Party, PartyPayment
 from .serializers import PartySerializer, PartyPaymentSerializer
 
@@ -27,8 +28,10 @@ class PartyListCreateView(generics.ListCreateAPIView):
         )
 
     def perform_create(self, serializer):
-        bid = get_bid(self.request)
-        serializer.save(business_id=bid)
+        business = get_business(self.request)
+        if business is None:
+            raise ValidationError("No business selected or access denied.")
+        serializer.save(business=business)
 
 
 class PartyDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -79,6 +82,12 @@ class PartyPaymentListCreateView(generics.ListCreateAPIView):
         return qs
 
     def perform_create(self, serializer):
+        business = get_business(self.request)
+        if business is None:
+            raise ValidationError("No business selected or access denied.")
+        party = serializer.validated_data.get("party")
+        if party is None or party.business_id != business.id:
+            raise ValidationError({"party": "Invalid party for this business."})
         payment = serializer.save(created_by=self.request.user)
         self._reconcile_payment(payment)
 
@@ -128,6 +137,15 @@ class PartyPaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
             party__business__staff__user=self.request.user,
             party__business__staff__is_active=True,
         )
+
+    def perform_update(self, serializer):
+        business = get_business(self.request)
+        if business is None:
+            raise ValidationError("No business selected or access denied.")
+        party = serializer.validated_data.get("party")
+        if party is not None and party.business_id != business.id:
+            raise ValidationError({"party": "Invalid party for this business."})
+        serializer.save()
 
 
 class PartyLedgerView(APIView):

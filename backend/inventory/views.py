@@ -1,13 +1,23 @@
 from rest_framework import generics, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import F
 
 from bewosy.permissions import IsPremiumBusiness
-from bewosy.utils import get_bid
+from bewosy.utils import get_bid, require_business
 from .models import Category, Unit, Product, StockMovement
 from .serializers import CategorySerializer, UnitSerializer, ProductSerializer, StockMovementSerializer
+
+
+def _validate_category_unit(validated_data, business):
+    category = validated_data.get("category")
+    if category is not None and category.business_id != business.id:
+        raise ValidationError({"category": "Invalid category for this business."})
+    unit = validated_data.get("unit")
+    if unit is not None and unit.business_id != business.id:
+        raise ValidationError({"unit": "Invalid unit for this business."})
 
 
 class CategoryListCreateView(generics.ListCreateAPIView):
@@ -24,8 +34,7 @@ class CategoryListCreateView(generics.ListCreateAPIView):
         )
 
     def perform_create(self, serializer):
-        bid = get_bid(self.request)
-        serializer.save(business_id=bid)
+        serializer.save(business=require_business(self.request))
 
 
 class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -52,8 +61,7 @@ class UnitListCreateView(generics.ListCreateAPIView):
         )
 
     def perform_create(self, serializer):
-        bid = get_bid(self.request)
-        serializer.save(business_id=bid)
+        serializer.save(business=require_business(self.request))
 
 
 class UnitDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -88,8 +96,9 @@ class ProductListCreateView(generics.ListCreateAPIView):
         return qs
 
     def perform_create(self, serializer):
-        bid = get_bid(self.request)
-        serializer.save(business_id=bid)
+        business = require_business(self.request)
+        _validate_category_unit(serializer.validated_data, business)
+        serializer.save(business=business)
 
 
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -103,6 +112,11 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
             business__staff__is_active=True,
             is_deleted=False,
         )
+
+    def perform_update(self, serializer):
+        business = require_business(self.request)
+        _validate_category_unit(serializer.validated_data, business)
+        serializer.save()
 
     def perform_destroy(self, instance):
         from django.utils import timezone
@@ -126,8 +140,12 @@ class StockMovementListCreateView(generics.ListCreateAPIView):
         ).select_related("product", "created_by")
 
     def perform_create(self, serializer):
+        business = require_business(self.request)
+        product = serializer.validated_data.get("product")
+        if product is None or product.business_id != business.id:
+            raise ValidationError({"product": "Invalid product for this business."})
+
         movement = serializer.save(created_by=self.request.user)
-        product = movement.product
         mt = movement.movement_type
 
         if mt in (StockMovement.STOCK_IN, StockMovement.OPENING):
@@ -177,20 +195,3 @@ class ProductBulkImportView(APIView):
                 skipped.append({"row": row, "reason": str(e)})
 
         return Response({"created": len(created), "skipped": len(skipped), "skipped_details": skipped})
-
-    def perform_create(self, serializer):
-        movement = serializer.save(created_by=self.request.user)
-        product = movement.product
-        mt = movement.movement_type
-
-        if mt == StockMovement.STOCK_IN or mt == StockMovement.OPENING:
-            product.stock_quantity = product.stock_quantity + movement.quantity
-        elif mt == StockMovement.STOCK_OUT:
-            product.stock_quantity = max(0, product.stock_quantity - movement.quantity)
-        elif mt in (StockMovement.DAMAGE, StockMovement.LOST, StockMovement.TRANSFER):
-            product.stock_quantity = max(0, product.stock_quantity - movement.quantity)
-        elif mt == StockMovement.ADJUSTMENT:
-            # Absolute adjustment — sets stock to the specified quantity
-            product.stock_quantity = movement.quantity
-
-        product.save(update_fields=["stock_quantity"])

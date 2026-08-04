@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 
-from bewosy.utils import get_bid
+from bewosy.utils import get_bid, require_business
 from .models import Sale, SaleItem, SaleReturn, Quotation
 from .serializers import SaleSerializer, SaleReturnSerializer, QuotationSerializer
 
@@ -33,8 +33,8 @@ def _next_quotation_number(business_id):
 
 class SaleNextNumberView(APIView):
     def get(self, request):
-        bid = get_bid(request)
-        return Response({"next_number": _next_invoice_number(bid)})
+        business = require_business(request)
+        return Response({"next_number": _next_invoice_number(business.id)})
 
 
 class SaleListCreateView(generics.ListCreateAPIView):
@@ -79,6 +79,7 @@ class SaleDetailView(generics.RetrieveUpdateDestroyAPIView):
             business_id=bid,
             business__staff__user=self.request.user,
             business__staff__is_active=True,
+            is_deleted=False,
         ).select_related("customer")
 
     def perform_destroy(self, instance):

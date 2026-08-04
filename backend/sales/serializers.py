@@ -1,6 +1,7 @@
 from decimal import Decimal
 from django.db.models import Sum
 from rest_framework import serializers
+from bewosy.utils import require_business
 from inventory.models import Product
 from .models import Sale, SaleItem, SaleReturn, SaleReturnItem, Quotation
 
@@ -32,6 +33,17 @@ class SaleSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "tax_amount", "total", "due_amount", "created_at",
                             "customer_name", "party_name", "party_phone")
+
+    def validate(self, data):
+        business = require_business(self.context["request"])
+        customer = data.get("customer")
+        if customer is not None and customer.business_id != business.id:
+            raise serializers.ValidationError({"customer": "Invalid customer for this business."})
+        for item in data.get("items", []):
+            product = item.get("product")
+            if product is not None and product.business_id != business.id:
+                raise serializers.ValidationError({"items": "Invalid product for this business."})
+        return data
 
     def create(self, validated_data):
         items_data = validated_data.pop("items")
@@ -119,8 +131,17 @@ class SaleReturnSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "created_at", "invoice_number")
 
     def validate(self, data):
+        business = require_business(self.context["request"])
+        original_sale = data.get("original_sale")
+        if original_sale is not None and original_sale.business_id != business.id:
+            raise serializers.ValidationError({"original_sale": "Invalid sale for this business."})
         for item in data.get("items", []):
             sale_item = item.get("sale_item")
+            product = item.get("product")
+            if sale_item is not None and sale_item.sale.business_id != business.id:
+                raise serializers.ValidationError({"items": "Invalid sale item for this business."})
+            if product is not None and product.business_id != business.id:
+                raise serializers.ValidationError({"items": "Invalid product for this business."})
             qty = item.get("quantity") or Decimal("0")
             if sale_item:
                 already_returned = SaleReturnItem.objects.filter(sale_item=sale_item).aggregate(
@@ -162,3 +183,10 @@ class QuotationSerializer(serializers.ModelSerializer):
             "status", "notes", "created_at",
         )
         read_only_fields = ("id", "created_at", "customer_name", "quotation_number")
+
+    def validate(self, data):
+        business = require_business(self.context["request"])
+        customer = data.get("customer")
+        if customer is not None and customer.business_id != business.id:
+            raise serializers.ValidationError({"customer": "Invalid customer for this business."})
+        return data

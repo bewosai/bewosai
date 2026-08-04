@@ -1,5 +1,6 @@
 from decimal import Decimal
 from rest_framework import serializers
+from bewosy.utils import require_business
 from inventory.models import Product
 from .models import Purchase, PurchaseItem, PurchaseReturn
 
@@ -28,6 +29,17 @@ class PurchaseSerializer(serializers.ModelSerializer):
                   "payment_method", "status", "notes", "bill_image", "bill_image_url",
                   "is_deleted", "items", "created_at"]
         read_only_fields = ["due_amount", "created_at", "bill_image_url"]
+
+    def validate(self, data):
+        business = require_business(self.context["request"])
+        supplier = data.get("supplier")
+        if supplier is not None and supplier.business_id != business.id:
+            raise serializers.ValidationError({"supplier": "Invalid supplier for this business."})
+        for item in data.get("items", []):
+            product = item.get("product")
+            if product is not None and product.business_id != business.id:
+                raise serializers.ValidationError({"items": "Invalid product for this business."})
+        return data
 
     def get_bill_image_url(self, obj):
         if not obj.bill_image:
@@ -99,3 +111,10 @@ class PurchaseReturnSerializer(serializers.ModelSerializer):
         fields = ["id", "original_purchase", "original_purchase_number",
                   "return_date", "reason", "amount", "created_at"]
         read_only_fields = ["id", "created_at", "original_purchase_number"]
+
+    def validate(self, data):
+        business = require_business(self.context["request"])
+        original_purchase = data.get("original_purchase")
+        if original_purchase is not None and original_purchase.business_id != business.id:
+            raise serializers.ValidationError({"original_purchase": "Invalid purchase for this business."})
+        return data
