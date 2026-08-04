@@ -1,3 +1,9 @@
+databases:
+  - name: bewosy-db
+    plan: free
+    databaseName: bewosy
+    user: bewosy
+
 services:
   - type: web
     name: bewosy-backend
@@ -19,11 +25,12 @@ services:
         value: "https://bewosyapp.vercel.app"
       - key: CSRF_TRUSTED_ORIGINS
         value: "https://bewosyapp.vercel.app"
-      # Paste your Neon connection string here after creating the Blueprint
-      # (Render dashboard → this service → Environment). Must include
-      # ?sslmode=require — Neon's connection strings already do by default.
+      # Auto-provisioned and wired by the "bewosy-db" database above — no
+      # manual DATABASE_URL entry needed.
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: bewosy-db
+          property: connectionString
       # Optional — leave blank to have OTPs print to the Render log instead
       # of sending real email.
       - key: EMAIL_HOST_USER
