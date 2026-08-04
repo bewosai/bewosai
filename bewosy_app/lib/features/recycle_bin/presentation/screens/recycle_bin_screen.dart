@@ -109,8 +109,9 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
                                           children: [
                                             Text(
                                               item.label,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontWeight: FontWeight.w700,
+                                                color: AppColors.textPrimary,
                                               ),
                                             ),
                                             Text(

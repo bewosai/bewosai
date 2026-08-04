@@ -5,8 +5,7 @@ from rest_framework.response import Response
 from django.db.models import Sum, Count, F
 from django.db.models.functions import TruncDay
 
-from accounts.models import Business
-from bewosy.utils import get_bid, get_business
+from bewosy.utils import get_business
 from sales.models import Sale, SaleItem
 from expenses.models import Expense
 from inventory.models import Product

@@ -191,8 +191,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                             : e.categoryName,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w700,
+                                          color: AppColors.textPrimary,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
@@ -205,6 +206,16 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                           fontSize: 12,
                                         ),
                                       ),
+                                      if (e.createdAt != null)
+                                        Text(
+                                          'Added ${Formatters.dateShort(e.createdAt)}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: AppColors.textSecondary,
+                                            fontSize: 10.5,
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),

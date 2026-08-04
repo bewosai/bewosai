@@ -1,7 +1,9 @@
 __pycache__/
 *.pyc
 *.pyo
+*.sqlite3
 *.sqlite3-journal
 .env
 media/*
 !media/.gitkeep
+staticfiles/

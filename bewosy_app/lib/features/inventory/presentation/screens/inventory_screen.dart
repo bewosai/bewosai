@@ -275,8 +275,9 @@ class _ProductsTab extends StatelessWidget {
                               ),
                             Text(
                               '${Formatters.amount(p.stockQuantity)} ${p.unitName}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                           ],

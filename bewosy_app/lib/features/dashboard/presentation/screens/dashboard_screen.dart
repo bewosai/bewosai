@@ -140,8 +140,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     Formatters.currency(
                                       d.topItems[i].totalRevenue,
                                     ),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
                                     ),
                                   ),
                                 ],
@@ -186,8 +187,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         children: [
                                           Text(
                                             d.recentSales[i].invoiceNumber,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontWeight: FontWeight.w700,
+                                              color: AppColors.textPrimary,
                                             ),
                                           ),
                                           Text(
@@ -209,8 +211,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       Formatters.currency(
                                         d.recentSales[i].total,
                                       ),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w700,
+                                        color: AppColors.textPrimary,
                                       ),
                                     ),
                                     const SizedBox(width: 10),

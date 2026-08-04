@@ -187,8 +187,9 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                             ),
                             Text(
                               Formatters.currency(item.total),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                           ],

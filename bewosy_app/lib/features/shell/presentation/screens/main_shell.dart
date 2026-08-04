@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_mode.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../dashboard/presentation/screens/dashboard_screen.dart';
 import '../../../inventory/presentation/screens/inventory_screen.dart';
@@ -24,10 +25,14 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    // Keying by the calendar preference forces the tabs to fully remount
-    // (instead of staying cached in the IndexedStack) whenever it changes,
-    // so every date on screen re-renders in the newly selected calendar.
+    // Keying by the calendar + theme preference forces the tabs to fully
+    // remount (instead of staying cached in the IndexedStack) whenever
+    // either changes, so every date/color on screen — which read the
+    // mutable Formatters/AppColors globals directly rather than
+    // Theme.of(context) — re-renders with the newly selected value instead
+    // of staying frozen at whatever it was on last build.
     final useNepaliCalendar = context.select<SettingsProvider, bool>((s) => s.settings.showNepaliCalendar);
+    final themeMode = context.select<SettingsProvider, AppThemeMode>((s) => s.settings.themeMode);
     final screens = [
       const DashboardScreen(),
       const TransactionsScreen(),
@@ -73,7 +78,7 @@ class _MainShellState extends State<MainShell> {
             )
           : null,
       body: IndexedStack(
-        key: ValueKey(useNepaliCalendar),
+        key: ValueKey('$useNepaliCalendar-$themeMode'),
         index: _index,
         children: screens,
       ),

@@ -84,8 +84,9 @@ class _StaffScreenState extends State<StaffScreen> {
                                               s.userName.isNotEmpty
                                                   ? s.userName
                                                   : s.userEmail,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontWeight: FontWeight.w700,
+                                                color: AppColors.textPrimary,
                                               ),
                                             ),
                                             Text(

@@ -147,8 +147,9 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                                     children: [
                                       Text(
                                         p.billNumber,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w700,
+                                          color: AppColors.textPrimary,
                                         ),
                                       ),
                                       const SizedBox(height: 3),
@@ -159,6 +160,14 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                                           fontSize: 12,
                                         ),
                                       ),
+                                      if (p.createdAt != null)
+                                        Text(
+                                          'Added ${Formatters.dateShort(p.createdAt)}',
+                                          style: TextStyle(
+                                            color: AppColors.textSecondary,
+                                            fontSize: 10.5,
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -167,8 +176,9 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                                   children: [
                                     Text(
                                       Formatters.currency(p.total),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w700,
+                                        color: AppColors.textPrimary,
                                       ),
                                     ),
                                     const SizedBox(height: 4),

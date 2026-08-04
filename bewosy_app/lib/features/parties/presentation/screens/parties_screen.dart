@@ -174,8 +174,9 @@ class _PartiesScreenState extends State<PartiesScreen> {
                                         children: [
                                           Text(
                                             p.name,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontWeight: FontWeight.w700,
+                                              color: AppColors.textPrimary,
                                             ),
                                           ),
                                           if (p.phone.isNotEmpty)
@@ -237,6 +238,7 @@ class _PartiesScreenState extends State<PartiesScreen> {
                                           style: TextStyle(fontSize: 12),
                                         ),
                                         style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppColors.textPrimary,
                                           padding: const EdgeInsets.symmetric(
                                             vertical: 8,
                                           ),
