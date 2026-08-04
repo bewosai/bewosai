@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # MERN OTP Auth (Real SMS OTP to Mobile Number)
 
 This project uses:
@@ -114,3 +115,6 @@ npm run dev
 ## Notes
 - This project sends **real SMS OTP**, not fake frontend-generated OTP
 - For production, add rate limiting, logging, country restrictions, and stronger abuse protection
+=======
+# bewosyapp
+>>>>>>> 776348f1fe8b5a2c776645cb70a42dc8858736a4
