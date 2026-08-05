@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useTranslation } from "../../utils/translations";
 import { useOfflineSync } from "../../utils/offlineQueue";
 import api from "../../api/index";
-import bewosyLogo from "@assets/images/bewosy.jpeg";
+import bewosaiLogo from "@assets/images/bewosai.png";
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Truck,
   Wallet, Receipt, BarChart3, X, Building2, ChevronDown,
@@ -139,9 +139,9 @@ export default function Sidebar({ open, setOpen }) {
         {/* Logo */}
         <div className="flex items-center justify-between border-b border-navy-800 px-4 py-4">
           <div className="flex items-center gap-3">
-            <img src={bewosyLogo} alt="Bewosy" className="h-9 w-9 rounded-xl object-cover ring-2 ring-orange-500/30" />
+            <img src={bewosaiLogo} alt="Bewosai" className="h-9 w-9 rounded-xl object-cover ring-2 ring-orange-500/30" />
             <div>
-              <h1 className="text-base font-bold text-white">Bewosy</h1>
+              <h1 className="text-base font-bold text-white">Bewosai</h1>
               <p className="text-[10px] text-navy-500">Business Suite</p>
             </div>
           </div>
@@ -240,7 +240,7 @@ export default function Sidebar({ open, setOpen }) {
           <div className="flex items-center gap-2 rounded-xl bg-orange-500/10 px-3 py-2.5">
             <div className={`h-2 w-2 shrink-0 rounded-full ${isOnline ? "bg-green-500" : "bg-red-500"}`} />
             <div className="min-w-0">
-              <p className="text-xs font-bold text-orange-500">Bewosy</p>
+              <p className="text-xs font-bold text-orange-500">Bewosai</p>
               <p className="text-[10px] text-navy-500">
                 {isOnline ? "Online · " : "Offline · "}Sales · Reports
               </p>

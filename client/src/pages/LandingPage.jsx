@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import bewosyLogo from "../assessts/images/bewosy.jpeg";
+import bewosaiLogo from "../assessts/images/bewosai.png";
 import {
   ShoppingCart, Users, Package, BarChart3, Monitor, UserCheck,
   Image, MessageCircle, Building2, Shield, Upload, FileText,
@@ -158,8 +158,8 @@ export default function LandingPage() {
       <nav className="sticky top-0 z-50 border-b border-navy-800 bg-navy-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
-            <img src={bewosyLogo} alt="Bewosy" className="h-9 w-9 rounded-xl object-cover" />
-            <span className="text-xl font-bold tracking-tight text-white">Bewosy</span>
+            <img src={bewosaiLogo} alt="Bewosai" className="h-9 w-9 rounded-xl object-cover" />
+            <span className="text-xl font-bold tracking-tight text-white">Bewosai</span>
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -191,7 +191,7 @@ export default function LandingPage() {
           </div>
 
           <div className="mb-6 flex justify-center">
-            <img src={bewosyLogo} alt="Bewosy" className="h-20 w-20 rounded-3xl object-cover shadow-2xl shadow-orange-500/20" />
+            <img src={bewosaiLogo} alt="Bewosai" className="h-20 w-20 rounded-3xl object-cover shadow-2xl shadow-orange-500/20" />
           </div>
 
           <h1 className="text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl">
@@ -313,11 +313,11 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-2">
-              <img src={bewosyLogo} alt="Bewosy" className="h-7 w-7 rounded-lg object-cover" />
-              <span className="font-bold text-white">Bewosy</span>
+              <img src={bewosaiLogo} alt="Bewosai" className="h-7 w-7 rounded-lg object-cover" />
+              <span className="font-bold text-white">Bewosai</span>
             </div>
             <p className="text-sm text-navy-400">
-              © 2026 Bewosy. Built for Nepal.
+              © 2026 Bewosai. Built for Nepal.
             </p>
           </div>
         </div>

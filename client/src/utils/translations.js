@@ -285,7 +285,7 @@ const T = {
     reorder: "Reorder",
 
     // Auth
-    loginTitle: "Sign in to Bewosy",
+    loginTitle: "Sign in to Bewosai",
     enterEmail: "Enter your email",
     sendOTP: "Send OTP",
     enterOTP: "Enter OTP",
@@ -610,7 +610,7 @@ const T = {
     reorder: "पुन: अर्डर",
 
     // Auth
-    loginTitle: "Bewosy मा साइन इन गर्नुहोस्",
+    loginTitle: "Bewosai मा साइन इन गर्नुहोस्",
     enterEmail: "इमेल प्रविष्ट गर्नुहोस्",
     sendOTP: "OTP पठाउनुहोस्",
     enterOTP: "OTP प्रविष्ट गर्नुहोस्",

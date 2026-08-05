@@ -2,7 +2,7 @@ from rest_framework import generics, filters, parsers
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
-from bewosy.utils import get_bid, require_business
+from bewosai.utils import get_bid, require_business
 from .models import BankAccount, BankTransaction
 from .serializers import BankAccountSerializer, BankTransactionSerializer
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import bewosyLogo from "../assessts/images/bewosy.jpeg";
+import bewosaiLogo from "../assessts/images/bewosai.png";
 import { User, Building2, ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { ProfileCard, Steps } from "../components/auth/AuthWidgets";
 
@@ -23,8 +23,8 @@ export default function ChooseProfilePage() {
           <div className="mb-8 flex flex-col items-center gap-3 text-center">
             <div className="relative">
               <img
-                src={bewosyLogo}
-                alt="Bewosy"
+                src={bewosaiLogo}
+                alt="Bewosai"
                 className="h-18 w-18 rounded-3xl object-cover shadow-xl shadow-orange-500/20 ring-2 ring-orange-500/30"
                 style={{ height: 72, width: 72 }}
               />
@@ -33,7 +33,7 @@ export default function ChooseProfilePage() {
               </div>
             </div>
             <div>
-              <h1 className="text-2xl font-extrabold text-white">Bewosy</h1>
+              <h1 className="text-2xl font-extrabold text-white">Bewosai</h1>
               <p className="text-xs text-navy-400 mt-0.5">Smart Business Suite</p>
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function ChooseProfilePage() {
           </div>
 
           <p className="mt-5 text-center text-xs text-navy-500">
-            By continuing you agree to Bewosy's Terms of Service
+            By continuing you agree to Bewosai's Terms of Service
           </p>
         </div>
       </div>

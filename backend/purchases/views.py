@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.utils import timezone
 
-from bewosy.utils import get_business
+from bewosai.utils import get_business
 from .models import Purchase, PurchaseReturn
 from .serializers import PurchaseSerializer, PurchaseReturnSerializer
 

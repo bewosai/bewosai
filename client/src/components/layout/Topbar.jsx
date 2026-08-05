@@ -100,7 +100,7 @@ export default function Topbar({ onMenuClick }) {
           {installPrompt && !installed && (
             <button
               onClick={handleInstall}
-              title="Install Bewosy app"
+              title="Install Bewosai app"
               className="hidden items-center gap-1.5 rounded-xl border border-navy-800 bg-navy-900 px-2.5 py-2 text-xs font-semibold text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400 sm:flex"
             >
               <Download className="h-3.5 w-3.5" />

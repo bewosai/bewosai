@@ -1,11 +1,11 @@
-# Bewosy — Business Management App
+# Bewosai — Business Management App
 
 Small business management app (Nepal) with billing, inventory, parties, purchases, expenses, banking, and reports.
 
 ## Stack
 - **Backend**: Django + Django REST Framework, JWT auth (`rest_framework_simplejwt`), SQLite (dev) / Postgres (prod)
-- **Web frontend**: React + Vite, deployed at `bewosyapp.vercel.app`
-- **Mobile/desktop frontend**: Flutter (`bewosy_app/`)
+- **Web frontend**: React + Vite, deployed at `bewosaiapp.vercel.app`
+- **Mobile/desktop frontend**: Flutter (`bewosai_app/`)
 
 Both frontends talk to the same Django API.
 
@@ -14,7 +14,7 @@ Both frontends talk to the same Django API.
 bepar-mern/
   backend/      Django REST API
   client/       React + Vite web app
-  bewosy_app/   Flutter app (mobile/desktop/web)
+  bewosai_app/   Flutter app (mobile/desktop/web)
 ```
 
 ## 1. Backend setup
@@ -39,7 +39,7 @@ Runs at `http://localhost:5173`.
 
 ## 3. Flutter app setup
 ```bash
-cd bewosy_app
+cd bewosai_app
 flutter pub get
 flutter run -d chrome   # or a connected device/emulator
 ```

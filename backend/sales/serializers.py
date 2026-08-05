@@ -1,7 +1,7 @@
 from decimal import Decimal
 from django.db.models import Sum
 from rest_framework import serializers
-from bewosy.utils import require_business
+from bewosai.utils import require_business
 from inventory.models import Product
 from .models import Sale, SaleItem, SaleReturn, SaleReturnItem, Quotation
 

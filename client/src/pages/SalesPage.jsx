@@ -224,12 +224,11 @@ function SaleModal({ onClose, onSaved, editData }) {
           discount_amount: it.discount_amount || 0,
         })),
       };
-      if (editData?.id) {
-        await salesApi.update(editData.id, payload);
-      } else {
-        await salesApi.create(payload);
-      }
-      onSaved();
+      const isNew = !editData?.id;
+      const res = isNew
+        ? await salesApi.create(payload)
+        : await salesApi.update(editData.id, payload);
+      onSaved(res.data, isNew);
     } catch (e) {
       const data = e.response?.data;
       const msg = data?.detail ||
@@ -455,6 +454,42 @@ function SaleModal({ onClose, onSaved, editData }) {
   );
 }
 
+/* ─── Post-save confirmation ─── */
+function SavedModal({ sale, onPrint, onShare, onNew, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-sm rounded-2xl bg-navy-900 border border-navy-800 shadow-2xl p-6 text-center space-y-5">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-500/10">
+          <Check size={28} className="text-green-400" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-white">Invoice Saved</h2>
+          <p className="mt-1 text-sm text-navy-400">
+            #{sale.invoice_number || sale.id} · {sale.customer_name || sale.party_name || "Walk-in"} · Rs. {parseFloat(sale.total ?? sale.total_amount ?? 0).toLocaleString()}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={onPrint}
+            className="flex items-center justify-center gap-2 rounded-lg border border-navy-700 px-3 py-2.5 text-sm font-medium text-white hover:bg-navy-800">
+            <Printer size={15} /> Print
+          </button>
+          <button onClick={onShare}
+            className="flex items-center justify-center gap-2 rounded-lg border border-navy-700 px-3 py-2.5 text-sm font-medium text-white hover:bg-navy-800">
+            <Share2 size={15} /> Share
+          </button>
+        </div>
+        <button onClick={onNew}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">
+          <Plus size={15} /> New Invoice
+        </button>
+        <button onClick={onClose} className="text-xs text-navy-500 hover:text-white">
+          Done, back to list
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Delete Confirm ─── */
 function ConfirmDialog({ message, onConfirm, onCancel }) {
   return (
@@ -484,6 +519,7 @@ export default function SalesPage() {
   const [editSale, setEditSale] = useState(null);
   const [printSale, setPrintSale] = useState(null);
   const [deleteSale, setDeleteSale] = useState(null);
+  const [confirmSale, setConfirmSale] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -542,6 +578,13 @@ export default function SalesPage() {
       setEditSale({ ...sale, id: undefined, status: "DRAFT", paid_amount: 0 });
       setShowModal(true);
     }
+  };
+
+  const handleSaved = (sale, isNew) => {
+    setShowModal(false);
+    setEditSale(null);
+    load();
+    if (isNew) setConfirmSale(sale);
   };
 
   const shareWhatsApp = (sale) => {
@@ -690,10 +733,19 @@ export default function SalesPage() {
         <SaleModal
           editData={editSale}
           onClose={() => { setShowModal(false); setEditSale(null); }}
-          onSaved={() => { setShowModal(false); setEditSale(null); load(); }}
+          onSaved={handleSaved}
         />
       )}
       {printSale && <PrintModal sale={printSale} onClose={() => setPrintSale(null)} />}
+      {confirmSale && (
+        <SavedModal
+          sale={confirmSale}
+          onPrint={() => { setPrintSale(confirmSale); setConfirmSale(null); }}
+          onShare={() => shareWhatsApp(confirmSale)}
+          onNew={() => { setConfirmSale(null); setEditSale(null); setShowModal(true); }}
+          onClose={() => setConfirmSale(null)}
+        />
+      )}
       {deleteSale && (
         <ConfirmDialog
           message={`Delete invoice #${deleteSale.invoice_number || deleteSale.id}? This action cannot be undone.`}

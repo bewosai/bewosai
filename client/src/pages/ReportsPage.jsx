@@ -1,14 +1,27 @@
 import { useState, useEffect } from "react";
-import { Printer, TrendingUp, TrendingDown, DollarSign, Package, Download, FileText, Calendar } from "lucide-react";
+import {
+  Printer, TrendingUp, TrendingDown, DollarSign, Package, Download, FileText, Calendar,
+  Boxes, ListChecks, BookOpen, Users, Wallet, Landmark, Receipt, ChevronRight, Search, ArrowLeft,
+} from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from "recharts";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext";
-import { reports as reportsApi, sales as salesApi, expenses as expensesApi, purchases as purchasesApi } from "../api/index.js";
+import {
+  reports as reportsApi, sales as salesApi, expenses as expensesApi, purchases as purchasesApi,
+  parties as partiesApi,
+} from "../api/index.js";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/* Local calendar date as YYYY-MM-DD — unlike `.toISOString().slice(0,10)`, this doesn't
+   shift to the previous day for timezones ahead of UTC (e.g. Nepal, UTC+5:45). */
+function localISODate(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 /* ── CSV export helper ── */
 function exportCSV(headers, rows, filename) {
@@ -52,8 +65,8 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
 
   // Date range filter
-  const thisMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const thisMonthStart = localISODate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const todayStr = localISODate(new Date());
   const [dateFrom, setDateFrom] = useState(thisMonthStart);
   const [dateTo, setDateTo] = useState(todayStr);
   const [activeReport, setActiveReport] = useState("overview");
@@ -68,6 +81,34 @@ export default function ReportsPage() {
   const [dayBookDate, setDayBookDate] = useState(todayStr);
   const [dayBookData, setDayBookData] = useState(null);
   const [dayBookLoading, setDayBookLoading] = useState(false);
+
+  // Stock report (full per-product valuation) — new
+  const [stockReport, setStockReport] = useState(null);
+  const [stockReportLoading, setStockReportLoading] = useState(false);
+
+  // All Transactions tab
+  const [allTxData, setAllTxData] = useState(null);
+  const [allTxLoading, setAllTxLoading] = useState(false);
+  const [allTxType, setAllTxType] = useState("");
+
+  // Party Statement tab
+  const [partyList, setPartyList] = useState([]);
+  const [partyListLoading, setPartyListLoading] = useState(false);
+  const [partySearch, setPartySearch] = useState("");
+  const [selectedParty, setSelectedParty] = useState(null);
+  const [partyLedger, setPartyLedger] = useState(null);
+  const [partyLedgerLoading, setPartyLedgerLoading] = useState(false);
+
+  // Cash In Hand tab
+  const [cashHandData, setCashHandData] = useState(null);
+  const [cashHandLoading, setCashHandLoading] = useState(false);
+
+  // Bank Statement tab
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [bankAccountsLoading, setBankAccountsLoading] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [bankStatement, setBankStatement] = useState(null);
+  const [bankStatementLoading, setBankStatementLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -121,6 +162,76 @@ export default function ReportsPage() {
       .catch(() => setDayBookData(null))
       .finally(() => setDayBookLoading(false));
   }, [activeReport, dayBookDate]);
+
+  // Stock report — full per-product valuation list, fetched alongside the Stock tab's summary
+  useEffect(() => {
+    if (activeReport !== "stock" || stockReport) return;
+    setStockReportLoading(true);
+    reportsApi.stock()
+      .then((res) => setStockReport(res.data))
+      .catch(() => setStockReport(null))
+      .finally(() => setStockReportLoading(false));
+  }, [activeReport, stockReport]);
+
+  // All Transactions tab — refetch on date range / type filter change
+  useEffect(() => {
+    if (activeReport !== "all-transactions") return;
+    setAllTxLoading(true);
+    reportsApi.allTransactions({ date_from: dateFrom, date_to: dateTo, type: allTxType || undefined })
+      .then((res) => setAllTxData(res.data))
+      .catch(() => setAllTxData(null))
+      .finally(() => setAllTxLoading(false));
+  }, [activeReport, dateFrom, dateTo, allTxType]);
+
+  // Party Statement tab — load party list once when first opened
+  useEffect(() => {
+    if (activeReport !== "party-statement" || partyList.length || partyListLoading) return;
+    setPartyListLoading(true);
+    partiesApi.list()
+      .then((res) => setPartyList(res.data.results ?? res.data))
+      .catch(() => setPartyList([]))
+      .finally(() => setPartyListLoading(false));
+  }, [activeReport, partyList.length, partyListLoading]);
+
+  // Party Statement tab — load ledger whenever a party is selected
+  useEffect(() => {
+    if (!selectedParty) { setPartyLedger(null); return; }
+    setPartyLedgerLoading(true);
+    partiesApi.ledger(selectedParty.id)
+      .then((res) => setPartyLedger(res.data))
+      .catch(() => setPartyLedger(null))
+      .finally(() => setPartyLedgerLoading(false));
+  }, [selectedParty]);
+
+  // Cash In Hand tab — refetch on date range change
+  useEffect(() => {
+    if (activeReport !== "cash-in-hand") return;
+    setCashHandLoading(true);
+    reportsApi.cashInHand({ date_from: dateFrom, date_to: dateTo })
+      .then((res) => setCashHandData(res.data))
+      .catch(() => setCashHandData(null))
+      .finally(() => setCashHandLoading(false));
+  }, [activeReport, dateFrom, dateTo]);
+
+  // Bank Statement tab — load account list once when first opened
+  useEffect(() => {
+    if (activeReport !== "bank-statement" || bankAccounts.length || bankAccountsLoading) return;
+    setBankAccountsLoading(true);
+    reportsApi.bankStatement()
+      .then((res) => setBankAccounts(res.data.accounts ?? []))
+      .catch(() => setBankAccounts([]))
+      .finally(() => setBankAccountsLoading(false));
+  }, [activeReport, bankAccounts.length, bankAccountsLoading]);
+
+  // Bank Statement tab — load statement whenever an account is selected (or date range changes)
+  useEffect(() => {
+    if (!selectedAccount) { setBankStatement(null); return; }
+    setBankStatementLoading(true);
+    reportsApi.bankStatement({ account: selectedAccount.id, date_from: dateFrom, date_to: dateTo })
+      .then((res) => setBankStatement(res.data))
+      .catch(() => setBankStatement(null))
+      .finally(() => setBankStatementLoading(false));
+  }, [selectedAccount, dateFrom, dateTo]);
 
   // Filter by date range
   const inRange = (dateStr) => {
@@ -191,6 +302,36 @@ export default function ReportsPage() {
     exportPurchases();
   };
 
+  const exportStockReport = () => exportCSV(
+    ["Product", "Category", "Unit", "Stock Qty", "Purchase Price", "Sale Price", "Stock Value"],
+    (stockReport?.items || []).map(p => [p.name, p.category, p.unit, p.stock_quantity, p.purchase_price, p.sale_price, p.stock_value]),
+    `stock_report.csv`
+  );
+
+  const exportAllTransactions = () => exportCSV(
+    ["Date", "Type", "Ref", "Party", "Amount", "Paid", "Due", "Method"],
+    (allTxData?.entries || []).map(e => [e.date, e.type, e.ref, e.party, e.amount, e.paid, e.due, e.method]),
+    `all_transactions_${dateFrom}_${dateTo}.csv`
+  );
+
+  const exportCashInHand = () => exportCSV(
+    ["Date", "Type", "Ref", "Party", "In", "Out", "Balance"],
+    (cashHandData?.entries || []).map(e => [e.date, e.type, e.ref, e.party, e.debit, e.credit, e.balance]),
+    `cash_in_hand_${dateFrom}_${dateTo}.csv`
+  );
+
+  const exportBankStatement = () => exportCSV(
+    ["Date", "Type", "Description", "Reference", "Debit", "Credit", "Balance"],
+    (bankStatement?.entries || []).map(e => [e.date, e.type, e.description, e.reference, e.debit, e.credit, e.balance]),
+    `bank_statement_${selectedAccount?.account_name || ""}_${dateFrom}_${dateTo}.csv`
+  );
+
+  const exportPartyStatement = () => exportCSV(
+    ["Date", "Type", "Ref", "Debit", "Credit", "Balance", "Note"],
+    (partyLedger?.entries || []).map(e => [e.date, e.type, e.ref, e.debit, e.credit, e.balance, e.note]),
+    `party_statement_${selectedParty?.name || ""}.csv`
+  );
+
   const handlePrint = () => {
     document.body.classList.add("print-mode");
     window.print();
@@ -206,7 +347,40 @@ export default function ReportsPage() {
     { key: "expenses", label: "Expenses" },
     { key: "purchases", label: "Purchases" },
     { key: "daybook", label: "Day Book" },
+    { key: "all-transactions", label: "All Transactions" },
+    { key: "party-statement", label: "Party Statement" },
+    { key: "cash-in-hand", label: "Cash In Hand" },
+    { key: "bank-statement", label: "Bank Statement" },
   ];
+
+  /* ── Popular Reports (quick-access tiles) ── */
+  const POPULAR_REPORTS = [
+    { key: "stock", label: "Stock Report", desc: "Product-wise stock valuation", icon: Boxes },
+    { key: "sales", label: "Sales Report", desc: "Detailed invoice list", icon: TrendingUp },
+    { key: "daybook", label: "Day Book", desc: "Daily cash register", icon: BookOpen },
+    { key: "all-transactions", label: "All Transaction Report", desc: "Every transaction, one feed", icon: ListChecks },
+    { key: "profit", label: "Profit & Loss Report", desc: "Revenue, COGS, net profit", icon: DollarSign },
+    { key: "party-statement", label: "Party Statement", desc: "Per-party running ledger", icon: Users },
+    { key: "cash-in-hand", label: "Cash In Hand Statement", desc: "Running cash balance", icon: Wallet },
+    { key: "bank-statement", label: "Bank Statement", desc: "Per-account running balance", icon: Landmark },
+  ];
+
+  /* ── Browse All Reports (categories) ── */
+  const REPORT_CATEGORIES = [
+    { label: "Transaction Report", items: ["all-transactions", "sales", "purchases", "daybook"] },
+    { label: "Parties Report", items: ["party-statement", "aging"] },
+    { label: "Inventory Report", items: ["stock"] },
+    { label: "Income & Expenses Report", items: ["profit", "expenses"] },
+    { label: "Business Status Report", items: ["overview", "cash-in-hand"] },
+  ];
+  const [openCategory, setOpenCategory] = useState(null);
+
+  const goToReport = (key) => {
+    setActiveReport(key);
+    requestAnimationFrame(() => {
+      document.getElementById("report-content")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   return (
     <div>
@@ -227,6 +401,64 @@ export default function ReportsPage() {
           </button>
         </div>
       </div>
+
+      {/* Popular Reports */}
+      <div className="mb-5">
+        <h2 className="mb-3 text-sm font-semibold text-white">Popular Reports</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {POPULAR_REPORTS.map(({ key, label, desc, icon: Icon }) => (
+            <button key={key} onClick={() => goToReport(key)}
+              className={`flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition ${
+                activeReport === key ? "border-orange-500 bg-orange-500/10" : "border-navy-800 bg-navy-900 hover:border-navy-700"
+              }`}>
+              <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${activeReport === key ? "bg-orange-500/20" : "bg-navy-800"}`}>
+                <Icon className={`h-4.5 w-4.5 ${activeReport === key ? "text-orange-400" : "text-navy-400"}`} />
+              </div>
+              <p className="text-sm font-semibold text-white">{label}</p>
+              <p className="text-xs text-navy-500">{desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Browse All Reports */}
+      <div className="mb-5">
+        <h2 className="mb-3 text-sm font-semibold text-white">Browse All Reports</h2>
+        <div className="space-y-2">
+          {REPORT_CATEGORIES.map((cat) => {
+            const isOpen = openCategory === cat.label;
+            return (
+              <div key={cat.label} className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                <button
+                  onClick={() => setOpenCategory(isOpen ? null : cat.label)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left"
+                >
+                  <span className="text-sm font-semibold text-white">{cat.label}</span>
+                  <ChevronRight className={`h-4 w-4 text-navy-400 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                </button>
+                {isOpen && (
+                  <div className="flex flex-wrap gap-2 border-t border-navy-800 px-4 py-3">
+                    {cat.items.map((key) => {
+                      const tab = TABS.find(t => t.key === key);
+                      if (!tab) return null;
+                      return (
+                        <button key={key} onClick={() => goToReport(key)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                            activeReport === key ? "bg-orange-500 text-white" : "bg-navy-800 text-navy-300 hover:bg-navy-700 hover:text-white"
+                          }`}>
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div id="report-content" />
 
       {/* Date range filter */}
       <div className="mb-5 flex items-center gap-3 rounded-2xl border border-navy-800 bg-navy-900 px-4 py-3">
@@ -463,6 +695,48 @@ export default function ReportsPage() {
                         <div className="col-span-2 text-right text-navy-400">Rs. {parseFloat(p.selling_price || p.sale_price || 0).toLocaleString()}</div>
                       </div>
                     ))}
+                  </>
+                )}
+              </div>
+
+              {/* Full per-product stock valuation */}
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
+                  <h3 className="text-sm font-semibold text-white">All Products ({stockReport?.items?.length || 0})</h3>
+                  <button onClick={exportStockReport}
+                    className="flex items-center gap-1.5 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/20 transition">
+                    <Download className="h-3.5 w-3.5" /> Download CSV
+                  </button>
+                </div>
+                {stockReportLoading ? (
+                  <div className="py-10 text-center text-sm text-navy-400">Loading…</div>
+                ) : !stockReport || stockReport.items.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-navy-400">No products found</div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                      <div className="col-span-4">Product</div>
+                      <div className="col-span-2">Category</div>
+                      <div className="col-span-2 text-right">Qty</div>
+                      <div className="col-span-2 text-right">Purchase Price</div>
+                      <div className="col-span-2 text-right">Stock Value</div>
+                    </div>
+                    {stockReport.items.map(p => (
+                      <div key={p.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                        <div className="col-span-4 text-white truncate">
+                          {p.name}
+                          {p.is_low_stock && <span className="ml-1.5 rounded bg-yellow-500/10 px-1.5 py-0.5 text-[10px] text-yellow-400">Low</span>}
+                        </div>
+                        <div className="col-span-2 text-navy-400 truncate">{p.category || "—"}</div>
+                        <div className="col-span-2 text-right text-navy-300">{p.stock_quantity} {p.unit}</div>
+                        <div className="col-span-2 text-right text-navy-400">Rs. {p.purchase_price.toLocaleString()}</div>
+                        <div className="col-span-2 text-right text-blue-400 font-semibold">Rs. {p.stock_value.toLocaleString()}</div>
+                      </div>
+                    ))}
+                    <div className="border-t border-navy-800 bg-navy-900/80 px-4 py-3 grid grid-cols-12 gap-2 text-xs font-bold">
+                      <div className="col-span-8 text-navy-400">Total ({stockReport.total_products} products, {stockReport.total_quantity} units)</div>
+                      <div className="col-span-4 text-right text-blue-400">Rs. {Math.round(stockReport.total_stock_value).toLocaleString()}</div>
+                    </div>
                   </>
                 )}
               </div>
@@ -716,6 +990,398 @@ export default function ReportsPage() {
                   </>
                 )}
               </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* All Transactions Tab — combined feed across the date range */}
+      {activeReport === "all-transactions" && (
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { key: "", label: "All" },
+              { key: "SALE", label: "Sales" },
+              { key: "PURCHASE", label: "Purchases" },
+              { key: "EXPENSE", label: "Expenses" },
+              { key: "PAYMENT", label: "Payments" },
+              { key: "BANK", label: "Bank" },
+            ].map(f => (
+              <button key={f.key} onClick={() => setAllTxType(f.key)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  allTxType === f.key ? "bg-orange-500 text-white" : "bg-navy-800 text-navy-300 hover:bg-navy-700 hover:text-white"
+                }`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {allTxLoading ? (
+            <div className="flex h-48 items-center justify-center text-sm text-navy-400">Loading…</div>
+          ) : !allTxData ? (
+            <div className="rounded-xl border border-navy-800 bg-navy-900 py-10 text-center text-sm text-navy-400">
+              Could not load transaction data
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Total Sales</p>
+                  <p className="mt-1 text-lg font-bold text-orange-400">
+                    {maskAmount(allTxData.summary.total_sales, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Total Purchases</p>
+                  <p className="mt-1 text-lg font-bold text-blue-400">
+                    {maskAmount(allTxData.summary.total_purchases, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Total Expenses</p>
+                  <p className="mt-1 text-lg font-bold text-red-400">
+                    {maskAmount(allTxData.summary.total_expenses, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
+                  <h3 className="text-sm font-semibold text-white">Transactions ({allTxData.count})</h3>
+                  <button onClick={exportAllTransactions}
+                    className="flex items-center gap-1.5 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/20 transition">
+                    <Download className="h-3.5 w-3.5" /> Download CSV
+                  </button>
+                </div>
+                {allTxData.entries.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-navy-400">No transactions in selected range</div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                      <div className="col-span-2">Date</div>
+                      <div className="col-span-2">Type</div>
+                      <div className="col-span-2">Ref</div>
+                      <div className="col-span-3">Party</div>
+                      <div className="col-span-2 text-right">Amount</div>
+                      <div className="col-span-1 text-right">Due</div>
+                    </div>
+                    {allTxData.entries.map((e, i) => (
+                      <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                        <div className="col-span-2 text-navy-400">{e.date}</div>
+                        <div className="col-span-2 text-navy-300">{e.type}</div>
+                        <div className="col-span-2 text-navy-400 truncate">{e.ref}</div>
+                        <div className="col-span-3 text-white truncate">{e.party}</div>
+                        <div className="col-span-2 text-right text-white font-semibold">Rs. {e.amount.toLocaleString()}</div>
+                        <div className="col-span-1 text-right text-red-400">{e.due ? `Rs. ${e.due.toLocaleString()}` : "—"}</div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Party Statement Tab — pick a party, view running ledger */}
+      {activeReport === "party-statement" && (
+        <div className="space-y-5">
+          {!selectedParty ? (
+            <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-navy-800 px-4 py-3">
+                <Search className="h-4 w-4 text-navy-500" />
+                <input value={partySearch} onChange={e => setPartySearch(e.target.value)}
+                  placeholder="Search parties…"
+                  className="w-full bg-transparent text-sm text-white outline-none placeholder:text-navy-500" />
+              </div>
+              {partyListLoading ? (
+                <div className="py-10 text-center text-sm text-navy-400">Loading…</div>
+              ) : (
+                <>
+                  {partyList
+                    .filter(p => p.name.toLowerCase().includes(partySearch.toLowerCase()))
+                    .map(p => {
+                      const balance = parseFloat(p.balance ?? p.opening_balance ?? 0);
+                      return (
+                        <button key={p.id} onClick={() => setSelectedParty(p)}
+                          className="flex w-full items-center justify-between px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-left transition">
+                          <div>
+                            <p className="text-sm font-medium text-white">{p.name}</p>
+                            <p className="text-xs text-navy-500">{p.party_type}</p>
+                          </div>
+                          <p className={`text-sm font-semibold ${balance > 0 ? "text-red-400" : balance < 0 ? "text-green-400" : "text-navy-400"}`}>
+                            {maskAmount(Math.abs(balance), v => `Rs. ${v.toLocaleString()}`)}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  {partyList.length === 0 && (
+                    <div className="py-10 text-center text-sm text-navy-400">No parties found</div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              <button onClick={() => setSelectedParty(null)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-navy-400 hover:text-white transition">
+                <ArrowLeft className="h-3.5 w-3.5" /> Back to parties
+              </button>
+
+              {partyLedgerLoading ? (
+                <div className="flex h-48 items-center justify-center text-sm text-navy-400">Loading…</div>
+              ) : !partyLedger ? (
+                <div className="rounded-xl border border-navy-800 bg-navy-900 py-10 text-center text-sm text-navy-400">
+                  Could not load party statement
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                      <p className="text-xs text-navy-500">Total Debit</p>
+                      <p className="mt-1 text-lg font-bold text-red-400">
+                        {maskAmount(partyLedger.total_debit, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                      <p className="text-xs text-navy-500">Total Credit</p>
+                      <p className="mt-1 text-lg font-bold text-green-400">
+                        {maskAmount(partyLedger.total_credit, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                      <p className="text-xs text-navy-500">Closing Balance</p>
+                      <p className={`mt-1 text-lg font-bold ${partyLedger.closing_balance > 0 ? "text-red-400" : partyLedger.closing_balance < 0 ? "text-green-400" : "text-white"}`}>
+                        {maskAmount(Math.abs(partyLedger.closing_balance), v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
+                      <h3 className="text-sm font-semibold text-white">{selectedParty.name} — Statement</h3>
+                      <button onClick={exportPartyStatement}
+                        className="flex items-center gap-1.5 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/20 transition">
+                        <Download className="h-3.5 w-3.5" /> Download CSV
+                      </button>
+                    </div>
+                    {partyLedger.entries.length === 0 ? (
+                      <div className="py-10 text-center text-sm text-navy-400">No transactions yet</div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                          <div className="col-span-2">Date</div>
+                          <div className="col-span-2">Type</div>
+                          <div className="col-span-3">Ref</div>
+                          <div className="col-span-2 text-right">Debit</div>
+                          <div className="col-span-2 text-right">Credit</div>
+                          <div className="col-span-1 text-right">Balance</div>
+                        </div>
+                        {partyLedger.entries.map((e, i) => (
+                          <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                            <div className="col-span-2 text-navy-400">{e.date}</div>
+                            <div className="col-span-2 text-navy-300">{e.type}</div>
+                            <div className="col-span-3 text-navy-400 truncate">{e.ref}{e.note ? ` · ${e.note}` : ""}</div>
+                            <div className="col-span-2 text-right text-red-400">{e.debit ? `Rs. ${e.debit.toLocaleString()}` : "—"}</div>
+                            <div className="col-span-2 text-right text-green-400">{e.credit ? `Rs. ${e.credit.toLocaleString()}` : "—"}</div>
+                            <div className="col-span-1 text-right text-white font-semibold">Rs. {e.balance.toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Cash In Hand Tab — running cash balance over the date range */}
+      {activeReport === "cash-in-hand" && (
+        <div className="space-y-5">
+          {cashHandLoading ? (
+            <div className="flex h-48 items-center justify-center text-sm text-navy-400">Loading…</div>
+          ) : !cashHandData ? (
+            <div className="rounded-xl border border-navy-800 bg-navy-900 py-10 text-center text-sm text-navy-400">
+              Could not load cash in hand data
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Opening Balance</p>
+                  <p className="mt-1 text-lg font-bold text-white">
+                    {maskAmount(cashHandData.opening_balance, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Cash In</p>
+                  <p className="mt-1 text-lg font-bold text-green-400">
+                    {maskAmount(cashHandData.total_in, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Cash Out</p>
+                  <p className="mt-1 text-lg font-bold text-red-400">
+                    {maskAmount(cashHandData.total_out, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                  <p className="text-xs text-navy-500">Closing Balance</p>
+                  <p className={`mt-1 text-lg font-bold ${cashHandData.closing_balance >= 0 ? "text-white" : "text-red-400"}`}>
+                    {maskAmount(cashHandData.closing_balance, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
+                  <h3 className="text-sm font-semibold text-white">Entries ({cashHandData.entries?.length || 0})</h3>
+                  <button onClick={exportCashInHand}
+                    className="flex items-center gap-1.5 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/20 transition">
+                    <Download className="h-3.5 w-3.5" /> Download CSV
+                  </button>
+                </div>
+                {(cashHandData.entries || []).length === 0 ? (
+                  <div className="py-10 text-center text-sm text-navy-400">No cash transactions in selected range</div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                      <div className="col-span-2">Date</div>
+                      <div className="col-span-2">Type</div>
+                      <div className="col-span-3">Party</div>
+                      <div className="col-span-2 text-right">In</div>
+                      <div className="col-span-2 text-right">Out</div>
+                      <div className="col-span-1 text-right">Balance</div>
+                    </div>
+                    {cashHandData.entries.map((e, i) => (
+                      <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                        <div className="col-span-2 text-navy-400">{e.date}</div>
+                        <div className="col-span-2 text-navy-300">{e.type}</div>
+                        <div className="col-span-3 text-white truncate">{e.party}</div>
+                        <div className="col-span-2 text-right text-green-400">{e.debit ? `Rs. ${e.debit.toLocaleString()}` : "—"}</div>
+                        <div className="col-span-2 text-right text-red-400">{e.credit ? `Rs. ${e.credit.toLocaleString()}` : "—"}</div>
+                        <div className="col-span-1 text-right text-white font-semibold">Rs. {e.balance.toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Bank Statement Tab — pick an account, view running balance */}
+      {activeReport === "bank-statement" && (
+        <div className="space-y-5">
+          {!selectedAccount ? (
+            <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+              <div className="px-4 py-3 border-b border-navy-800">
+                <h3 className="text-sm font-semibold text-white">Select an Account</h3>
+              </div>
+              {bankAccountsLoading ? (
+                <div className="py-10 text-center text-sm text-navy-400">Loading…</div>
+              ) : bankAccounts.length === 0 ? (
+                <div className="py-10 text-center text-sm text-navy-400">No bank accounts found</div>
+              ) : (
+                bankAccounts.map(a => (
+                  <button key={a.id} onClick={() => setSelectedAccount(a)}
+                    className="flex w-full items-center justify-between px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-left transition">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy-800">
+                        <Landmark className="h-4 w-4 text-navy-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white">{a.account_name}</p>
+                        <p className="text-xs text-navy-500">{a.bank_name || a.account_type}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-white">
+                      {maskAmount(a.balance, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                    </p>
+                  </button>
+                ))
+              )}
+            </div>
+          ) : (
+            <>
+              <button onClick={() => setSelectedAccount(null)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-navy-400 hover:text-white transition">
+                <ArrowLeft className="h-3.5 w-3.5" /> Back to accounts
+              </button>
+
+              {bankStatementLoading ? (
+                <div className="flex h-48 items-center justify-center text-sm text-navy-400">Loading…</div>
+              ) : !bankStatement ? (
+                <div className="rounded-xl border border-navy-800 bg-navy-900 py-10 text-center text-sm text-navy-400">
+                  Could not load bank statement
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                      <p className="text-xs text-navy-500">Opening Balance</p>
+                      <p className="mt-1 text-lg font-bold text-white">
+                        {maskAmount(bankStatement.opening_balance, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                      <p className="text-xs text-navy-500">Total Credit</p>
+                      <p className="mt-1 text-lg font-bold text-green-400">
+                        {maskAmount(bankStatement.total_credit, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                      <p className="text-xs text-navy-500">Total Debit</p>
+                      <p className="mt-1 text-lg font-bold text-red-400">
+                        {maskAmount(bankStatement.total_debit, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
+                      <p className="text-xs text-navy-500">Closing Balance</p>
+                      <p className={`mt-1 text-lg font-bold ${bankStatement.closing_balance >= 0 ? "text-white" : "text-red-400"}`}>
+                        {maskAmount(bankStatement.closing_balance, v => `Rs. ${Math.round(v).toLocaleString()}`)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
+                      <h3 className="text-sm font-semibold text-white">{bankStatement.account.account_name} — Statement</h3>
+                      <button onClick={exportBankStatement}
+                        className="flex items-center gap-1.5 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/20 transition">
+                        <Download className="h-3.5 w-3.5" /> Download CSV
+                      </button>
+                    </div>
+                    {bankStatement.entries.length === 0 ? (
+                      <div className="py-10 text-center text-sm text-navy-400">No transactions in selected range</div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                          <div className="col-span-2">Date</div>
+                          <div className="col-span-2">Type</div>
+                          <div className="col-span-3">Description</div>
+                          <div className="col-span-2 text-right">Debit</div>
+                          <div className="col-span-2 text-right">Credit</div>
+                          <div className="col-span-1 text-right">Balance</div>
+                        </div>
+                        {bankStatement.entries.map((e, i) => (
+                          <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                            <div className="col-span-2 text-navy-400">{e.date}</div>
+                            <div className="col-span-2 text-navy-300">{e.type}</div>
+                            <div className="col-span-3 text-navy-400 truncate">{e.description || e.reference || "—"}</div>
+                            <div className="col-span-2 text-right text-red-400">{e.debit ? `Rs. ${e.debit.toLocaleString()}` : "—"}</div>
+                            <div className="col-span-2 text-right text-green-400">{e.credit ? `Rs. ${e.credit.toLocaleString()}` : "—"}</div>
+                            <div className="col-span-1 text-right text-white font-semibold">Rs. {e.balance.toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { auth as authApi } from "../api";
-import bewosyLogo from "../assessts/images/bewosy.jpeg";
+import bewosaiLogo from "../assessts/images/bewosai.png";
 import { Building2, ArrowRight } from "lucide-react";
 
 export default function CreateBusinessPage() {
@@ -33,7 +33,7 @@ export default function CreateBusinessPage() {
     <div className="flex min-h-screen items-center justify-center bg-navy-950 px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <img src={bewosyLogo} alt="Bewosy" className="h-14 w-14 rounded-2xl object-cover shadow-lg shadow-orange-500/20" />
+          <img src={bewosaiLogo} alt="Bewosai" className="h-14 w-14 rounded-2xl object-cover shadow-lg shadow-orange-500/20" />
           <h1 className="text-2xl font-extrabold text-white">Set up your business</h1>
           <p className="text-sm text-navy-400">Create your first business profile to get started.</p>
         </div>

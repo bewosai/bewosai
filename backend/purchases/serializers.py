@@ -1,6 +1,6 @@
 from decimal import Decimal
 from rest_framework import serializers
-from bewosy.utils import require_business
+from bewosai.utils import require_business
 from inventory.models import Product
 from .models import Purchase, PurchaseItem, PurchaseReturn
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import bewosyLogo from "../assessts/images/bewosy.jpeg";
+import bewosaiLogo from "../assessts/images/bewosai.png";
 import { Mail, ArrowRight, TrendingUp, Package, Users, BarChart3, Check } from "lucide-react";
 import { Steps } from "../components/auth/AuthWidgets";
 
@@ -53,8 +53,8 @@ export default function LoginPage() {
           <div className="mb-8 flex flex-col items-center gap-3 text-center">
             <div className="relative">
               <img
-                src={bewosyLogo}
-                alt="Bewosy"
+                src={bewosaiLogo}
+                alt="Bewosai"
                 className="h-18 w-18 rounded-3xl object-cover shadow-xl shadow-orange-500/20 ring-2 ring-orange-500/30"
                 style={{ height: 72, width: 72 }}
               />
@@ -63,7 +63,7 @@ export default function LoginPage() {
               </div>
             </div>
             <div>
-              <h1 className="text-2xl font-extrabold text-white">Bewosy</h1>
+              <h1 className="text-2xl font-extrabold text-white">Bewosai</h1>
               <p className="text-xs text-navy-400 mt-0.5">Smart Business Suite</p>
             </div>
           </div>
@@ -148,14 +148,14 @@ export default function LoginPage() {
                   onClick={() => navigate("/choose-profile")}
                   className="mt-5 block w-full text-center text-sm font-semibold text-orange-400 hover:text-orange-300 transition"
                 >
-                  New to Bewosy? Get Started
+                  New to Bewosai? Get Started
                 </button>
               )}
             </form>
           </div>
 
           <p className="mt-5 text-center text-xs text-navy-500">
-            By continuing you agree to Bewosy's Terms of Service
+            By continuing you agree to Bewosai's Terms of Service
           </p>
         </div>
       </div>

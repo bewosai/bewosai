@@ -32,8 +32,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "robots.txt"],
       manifest: {
-        name: "Bewosy – Business Management",
-        short_name: "Bewosy",
+        name: "Bewosai – Business Management",
+        short_name: "Bewosai",
         description: "Sales, inventory, expenses, staff and reports for small businesses",
         theme_color: "#f59e0b",
         background_color: "#ffffff",

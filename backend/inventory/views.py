@@ -5,8 +5,8 @@ from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import F
 
-from bewosy.permissions import IsPremiumBusiness
-from bewosy.utils import get_bid, require_business
+from bewosai.permissions import IsPremiumBusiness
+from bewosai.utils import get_bid, require_business
 from .models import Category, Unit, Product, StockMovement
 from .serializers import CategorySerializer, UnitSerializer, ProductSerializer, StockMovementSerializer
 

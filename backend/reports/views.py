@@ -5,12 +5,13 @@ from rest_framework.response import Response
 from django.db.models import Sum, Count, F
 from django.db.models.functions import TruncDay
 
-from bewosy.utils import get_business
+from bewosai.utils import get_business
 from sales.models import Sale, SaleItem
 from expenses.models import Expense
 from inventory.models import Product
 from parties.models import PartyPayment
 from purchases.models import Purchase
+from banking.models import BankAccount
 
 
 class DashboardSummaryView(APIView):
@@ -58,9 +59,12 @@ class DashboardSummaryView(APIView):
             business=biz, purchase_date=today, is_deleted=False
         ).aggregate(total=Sum("total"))["total"] or 0
 
+        # Matches Product.is_low_stock / inventory app's own ?low_stock= filter —
+        # min_stock_level defaults to 0 and is unused by any UI, so filtering on it
+        # here (as this used to) silently hid every low-stock product from the dashboard.
         low_stock_count = Product.objects.filter(
-            business=biz, is_active=True, is_deleted=False, min_stock_level__gt=0,
-            stock_quantity__lte=F("min_stock_level"),
+            business=biz, is_active=True, is_deleted=False,
+            stock_quantity__lte=F("low_stock_threshold"),
         ).count()
 
         cash_in = Sale.objects.filter(
@@ -201,9 +205,7 @@ class InventoryReportView(APIView):
             return Response({"error": "Business not found."}, status=404)
 
         products = Product.objects.filter(business=biz, is_active=True, is_deleted=False)
-        low_stock = products.filter(
-            min_stock_level__gt=0, stock_quantity__lte=F("min_stock_level")
-        )
+        low_stock = products.filter(stock_quantity__lte=F("low_stock_threshold"))
         out_of_stock = products.filter(stock_quantity__lte=0)
 
         # stock_value = sum(purchase_price * stock_quantity) — correct field name
@@ -527,4 +529,299 @@ class CashFlowView(APIView):
                 "total": round(total_out, 2),
             },
             "net_cash_flow": round(total_in - total_out, 2),
+        })
+
+
+class StockReportView(APIView):
+    """Full per-product stock valuation list (all active products, not just low-stock alerts)."""
+
+    def get(self, request):
+        biz = get_business(request)
+        if not biz:
+            return Response({"error": "Business not found."}, status=404)
+
+        products = Product.objects.filter(
+            business=biz, item_type=Product.PRODUCT, is_active=True, is_deleted=False,
+        ).select_related("category", "unit").order_by("name")
+
+        items = []
+        total_qty = 0.0
+        total_value = 0.0
+        for p in products:
+            qty = float(p.stock_quantity)
+            value = round(qty * float(p.purchase_price), 2)
+            total_qty += qty
+            total_value += value
+            items.append({
+                "id": p.id,
+                "name": p.name,
+                "category": p.category.name if p.category else "",
+                "unit": (p.unit.abbreviation or p.unit.name) if p.unit else "",
+                "stock_quantity": qty,
+                "purchase_price": float(p.purchase_price),
+                "sale_price": float(p.sale_price),
+                "stock_value": value,
+                "is_low_stock": p.is_low_stock,
+            })
+
+        return Response({
+            "items": items,
+            "total_products": len(items),
+            "total_quantity": round(total_qty, 3),
+            "total_stock_value": round(total_value, 2),
+        })
+
+
+class CashInHandView(APIView):
+    """Cash-in-hand ledger: running balance of all CASH-payment-method transactions."""
+
+    @staticmethod
+    def _cash_entries(biz, date_range=None, date_lt=None):
+        sales_qs = Sale.objects.filter(
+            business=biz, status="CONFIRMED", is_deleted=False,
+            payment_method="CASH", paid_amount__gt=0,
+        ).select_related("customer")
+        purchases_qs = Purchase.objects.filter(
+            business=biz, status="CONFIRMED", is_deleted=False,
+            payment_method="CASH", paid_amount__gt=0,
+        ).select_related("supplier")
+        expenses_qs = Expense.objects.filter(
+            business=biz, is_deleted=False, payment_method="CASH",
+        ).select_related("category")
+        payments_qs = PartyPayment.objects.filter(
+            party__business=biz, payment_method="CASH",
+        ).select_related("party")
+
+        if date_range:
+            sales_qs = sales_qs.filter(sale_date__range=date_range)
+            purchases_qs = purchases_qs.filter(purchase_date__range=date_range)
+            expenses_qs = expenses_qs.filter(date__range=date_range)
+            payments_qs = payments_qs.filter(date__range=date_range)
+        elif date_lt:
+            sales_qs = sales_qs.filter(sale_date__lt=date_lt)
+            purchases_qs = purchases_qs.filter(purchase_date__lt=date_lt)
+            expenses_qs = expenses_qs.filter(date__lt=date_lt)
+            payments_qs = payments_qs.filter(date__lt=date_lt)
+
+        entries = []
+        for s in sales_qs:
+            entries.append({
+                "date": str(s.sale_date), "type": "SALE", "ref": s.invoice_number,
+                "party": s.customer.name if s.customer else "Walk-in",
+                "debit": float(s.paid_amount), "credit": 0.0,
+            })
+        for p in purchases_qs:
+            entries.append({
+                "date": str(p.purchase_date), "type": "PURCHASE", "ref": p.bill_number,
+                "party": p.supplier.name if p.supplier else "Supplier",
+                "debit": 0.0, "credit": float(p.paid_amount),
+            })
+        for e in expenses_qs:
+            entries.append({
+                "date": str(e.date), "type": "EXPENSE", "ref": f"EXP-{e.id}",
+                "party": e.category.name if e.category else "",
+                "debit": 0.0, "credit": float(e.amount),
+            })
+        for pay in payments_qs:
+            is_in = pay.payment_type == "IN"
+            entries.append({
+                "date": str(pay.date), "type": "PAYMENT_IN" if is_in else "PAYMENT_OUT",
+                "ref": f"PMT-{pay.id}", "party": pay.party.name,
+                "debit": float(pay.amount) if is_in else 0.0,
+                "credit": 0.0 if is_in else float(pay.amount),
+            })
+        return entries
+
+    def get(self, request):
+        biz = get_business(request)
+        if not biz:
+            return Response({"error": "Business not found."}, status=404)
+
+        date_from = request.query_params.get("date_from", date.today().replace(day=1).isoformat())
+        date_to = request.query_params.get("date_to", date.today().isoformat())
+
+        opening_entries = self._cash_entries(biz, date_lt=date_from)
+        opening_balance = sum(e["debit"] - e["credit"] for e in opening_entries)
+
+        entries = self._cash_entries(biz, date_range=[date_from, date_to])
+        entries.sort(key=lambda x: x["date"])
+
+        balance = opening_balance
+        for e in entries:
+            balance += e["debit"] - e["credit"]
+            e["balance"] = round(balance, 2)
+
+        total_in = sum(e["debit"] for e in entries)
+        total_out = sum(e["credit"] for e in entries)
+
+        return Response({
+            "date_from": date_from,
+            "date_to": date_to,
+            "opening_balance": round(opening_balance, 2),
+            "entries": entries,
+            "total_in": round(total_in, 2),
+            "total_out": round(total_out, 2),
+            "closing_balance": round(balance, 2),
+        })
+
+
+class BankStatementView(APIView):
+    """Without ?account=: list of bank accounts with current balances (for the picker).
+    With ?account=<id>: running-balance statement for that account over a date range."""
+
+    def get(self, request):
+        biz = get_business(request)
+        if not biz:
+            return Response({"error": "Business not found."}, status=404)
+
+        accounts_qs = BankAccount.objects.filter(business=biz, is_active=True)
+        account_id = request.query_params.get("account")
+
+        if not account_id:
+            accounts = [{
+                "id": a.id, "account_name": a.account_name, "bank_name": a.bank_name,
+                "account_type": a.account_type, "opening_balance": float(a.opening_balance),
+                "balance": float(a.balance),
+            } for a in accounts_qs]
+            return Response({"accounts": accounts})
+
+        try:
+            account = accounts_qs.get(pk=account_id)
+        except BankAccount.DoesNotExist:
+            return Response({"error": "Bank account not found."}, status=404)
+
+        date_from = request.query_params.get("date_from", date.today().replace(day=1).isoformat())
+        date_to = request.query_params.get("date_to", date.today().isoformat())
+
+        prior_credit = account.transactions.filter(
+            date__lt=date_from, transaction_type="CREDIT"
+        ).aggregate(t=Sum("amount"))["t"] or 0
+        prior_debit = account.transactions.filter(
+            date__lt=date_from, transaction_type="DEBIT"
+        ).aggregate(t=Sum("amount"))["t"] or 0
+        opening = float(account.opening_balance) + float(prior_credit) - float(prior_debit)
+
+        txns = account.transactions.filter(date__range=[date_from, date_to]).order_by("date", "created_at")
+
+        entries = []
+        balance = opening
+        for t in txns:
+            is_credit = t.transaction_type == "CREDIT"
+            balance += float(t.amount) if is_credit else -float(t.amount)
+            entries.append({
+                "date": str(t.date), "type": t.transaction_type,
+                "description": t.description, "reference": t.reference,
+                "debit": float(t.amount) if not is_credit else 0.0,
+                "credit": float(t.amount) if is_credit else 0.0,
+                "balance": round(balance, 2),
+            })
+
+        total_credit = sum(e["credit"] for e in entries)
+        total_debit = sum(e["debit"] for e in entries)
+
+        return Response({
+            "account": {
+                "id": account.id, "account_name": account.account_name,
+                "bank_name": account.bank_name, "account_type": account.account_type,
+            },
+            "date_from": date_from,
+            "date_to": date_to,
+            "opening_balance": round(opening, 2),
+            "entries": entries,
+            "total_credit": round(total_credit, 2),
+            "total_debit": round(total_debit, 2),
+            "closing_balance": round(balance, 2),
+        })
+
+
+class AllTransactionsView(APIView):
+    """Combined feed of sales, purchases, expenses, party payments, and bank transactions
+    across a date range — the 'All Transaction Report'."""
+
+    def get(self, request):
+        biz = get_business(request)
+        if not biz:
+            return Response({"error": "Business not found."}, status=404)
+
+        date_from = request.query_params.get("date_from", (date.today() - timedelta(days=30)).isoformat())
+        date_to = request.query_params.get("date_to", date.today().isoformat())
+        type_filter = (request.query_params.get("type") or "").upper()
+
+        entries = []
+
+        if not type_filter or type_filter == "SALE":
+            for s in Sale.objects.filter(
+                business=biz, status="CONFIRMED", is_deleted=False,
+                sale_date__range=[date_from, date_to],
+            ).select_related("customer"):
+                entries.append({
+                    "date": str(s.sale_date), "type": "SALE", "ref": s.invoice_number,
+                    "party": s.customer.name if s.customer else "Walk-in",
+                    "amount": float(s.total), "paid": float(s.paid_amount), "due": float(s.due_amount),
+                    "method": s.payment_method,
+                })
+
+        if not type_filter or type_filter == "PURCHASE":
+            for p in Purchase.objects.filter(
+                business=biz, status="CONFIRMED", is_deleted=False,
+                purchase_date__range=[date_from, date_to],
+            ).select_related("supplier"):
+                entries.append({
+                    "date": str(p.purchase_date), "type": "PURCHASE", "ref": p.bill_number,
+                    "party": p.supplier.name if p.supplier else "Supplier",
+                    "amount": float(p.total), "paid": float(p.paid_amount), "due": float(p.due_amount),
+                    "method": p.payment_method,
+                })
+
+        if not type_filter or type_filter == "EXPENSE":
+            for e in Expense.objects.filter(
+                business=biz, is_deleted=False, date__range=[date_from, date_to],
+            ).select_related("category"):
+                entries.append({
+                    "date": str(e.date), "type": "EXPENSE", "ref": f"EXP-{e.id}",
+                    "party": e.category.name if e.category else "",
+                    "amount": float(e.amount), "paid": float(e.amount), "due": 0.0,
+                    "method": e.payment_method,
+                })
+
+        if not type_filter or type_filter == "PAYMENT":
+            for pay in PartyPayment.objects.filter(
+                party__business=biz, date__range=[date_from, date_to],
+            ).select_related("party"):
+                is_in = pay.payment_type == "IN"
+                entries.append({
+                    "date": str(pay.date), "type": "PAYMENT_IN" if is_in else "PAYMENT_OUT",
+                    "ref": f"PMT-{pay.id}", "party": pay.party.name,
+                    "amount": float(pay.amount), "paid": float(pay.amount), "due": 0.0,
+                    "method": pay.payment_method,
+                })
+
+        if not type_filter or type_filter == "BANK":
+            from banking.models import BankTransaction
+            for t in BankTransaction.objects.filter(
+                account__business=biz, date__range=[date_from, date_to],
+            ).select_related("account"):
+                entries.append({
+                    "date": str(t.date), "type": f"BANK_{t.transaction_type}",
+                    "ref": t.reference or f"TXN-{t.id}", "party": t.account.account_name,
+                    "amount": float(t.amount), "paid": float(t.amount), "due": 0.0,
+                    "method": t.account.account_type,
+                })
+
+        entries.sort(key=lambda x: x["date"], reverse=True)
+
+        total_sales = sum(e["amount"] for e in entries if e["type"] == "SALE")
+        total_purchases = sum(e["amount"] for e in entries if e["type"] == "PURCHASE")
+        total_expenses = sum(e["amount"] for e in entries if e["type"] == "EXPENSE")
+
+        return Response({
+            "date_from": date_from,
+            "date_to": date_to,
+            "entries": entries,
+            "count": len(entries),
+            "summary": {
+                "total_sales": round(total_sales, 2),
+                "total_purchases": round(total_purchases, 2),
+                "total_expenses": round(total_expenses, 2),
+            },
         })

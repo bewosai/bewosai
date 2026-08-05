@@ -1,17 +1,17 @@
 databases:
-  - name: bewosy-db
+  - name: bewosai-db
     plan: free
-    databaseName: bewosy
-    user: bewosy
+    databaseName: bewosai
+    user: bewosai
 
 services:
   - type: web
-    name: bewosy-backend
+    name: bewosai-backend
     runtime: python
     plan: free
     rootDir: backend
     buildCommand: "pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py collectstatic --noinput"
-    startCommand: "gunicorn bewosy.wsgi --bind 0.0.0.0:$PORT"
+    startCommand: "gunicorn bewosai.wsgi --bind 0.0.0.0:$PORT"
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
@@ -22,14 +22,14 @@ services:
       - key: ALLOWED_HOSTS
         value: "localhost,127.0.0.1"
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://bewosyapp.vercel.app"
+        value: "https://bewosaiapp.vercel.app"
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://bewosyapp.vercel.app"
-      # Auto-provisioned and wired by the "bewosy-db" database above — no
+        value: "https://bewosaiapp.vercel.app"
+      # Auto-provisioned and wired by the "bewosai-db" database above — no
       # manual DATABASE_URL entry needed.
       - key: DATABASE_URL
         fromDatabase:
-          name: bewosy-db
+          name: bewosai-db
           property: connectionString
       # Optional — leave blank to have OTPs print to the Render log instead
       # of sending real email.

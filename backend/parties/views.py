@@ -5,8 +5,8 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
-from bewosy.permissions import IsPremiumBusiness
-from bewosy.utils import get_bid, get_business
+from bewosai.permissions import IsPremiumBusiness
+from bewosai.utils import get_bid, get_business
 from .models import Party, PartyPayment
 from .serializers import PartySerializer, PartyPaymentSerializer
 

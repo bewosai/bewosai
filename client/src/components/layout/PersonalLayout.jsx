@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import bewosyLogo from "../../assessts/images/bewosy.jpeg";
+import bewosaiLogo from "../../assessts/images/bewosai.png";
 import {
   LayoutDashboard, TrendingDown, TrendingUp, BarChart3,
   Settings, LogOut, Menu, X, Bell, User,
@@ -28,9 +28,9 @@ function PersonalSidebar({ open, setOpen }) {
         {/* Logo */}
         <div className="flex items-center justify-between border-b border-navy-800 px-4 py-4">
           <div className="flex items-center gap-2.5">
-            <img src={bewosyLogo} alt="Bewosy" className="h-8 w-8 rounded-xl object-cover" />
+            <img src={bewosaiLogo} alt="Bewosai" className="h-8 w-8 rounded-xl object-cover" />
             <div>
-              <p className="text-sm font-bold text-white">Bewosy</p>
+              <p className="text-sm font-bold text-white">Bewosai</p>
               <p className="text-[10px] text-navy-400">Personal Finance</p>
             </div>
           </div>

@@ -166,6 +166,10 @@ export const reports = {
   receivableAging: () => api.get("/reports/receivable-aging/"),
   dayBook: (p) => api.get("/reports/day-book/", { params: p }),
   cashFlow: (p) => api.get("/reports/cash-flow/", { params: p }),
+  stock: () => api.get("/reports/stock/"),
+  cashInHand: (p) => api.get("/reports/cash-in-hand/", { params: p }),
+  bankStatement: (p) => api.get("/reports/bank-statement/", { params: p }),
+  allTransactions: (p) => api.get("/reports/all-transactions/", { params: p }),
   staffActivity: (p) => api.get("/auth/staff-activity/", { params: p }),
 };
 

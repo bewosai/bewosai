@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { useTranslation } from "../utils/translations";
 import { useAuth } from "../context/AuthContext";
 import { auth as authApi } from "../api";
 import {
   Sun, Moon, Globe, Eye, EyeOff, Calendar, Building2,
-  Upload, Save, Bell, Shield, Palette, User, Check, FileText,
+  Upload, Save, Bell, Shield, Palette, User, Check, FileText, BarChart3, ChevronRight,
 } from "lucide-react";
 
 function SettingCard({ title, icon: Icon, children }) {
@@ -68,6 +69,7 @@ export default function SettingsPage() {
           setTheme, setLanguage, setDateMode, setCurrency } = useAppSettings();
   const { t } = useTranslation();
   const { currentBusiness, user, selectBusiness } = useAuth();
+  const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: user?.name || "", phone: user?.phone || "" });
@@ -142,6 +144,26 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
+        {/* View Report */}
+        <SettingCard title={language === "ne" ? "प्रतिवेदन" : "Reports"} icon={BarChart3}>
+          <button
+            onClick={() => navigate(user?.account_type === "personal" ? "/personal/reports" : "/reports")}
+            className="flex w-full items-center justify-between rounded-xl border border-navy-800 bg-navy-950 px-4 py-3 text-left transition hover:border-orange-500/50"
+          >
+            <div>
+              <p className="text-sm font-medium text-white">
+                {language === "ne" ? "प्रतिवेदन हेर्नुहोस्" : "View Report"}
+              </p>
+              <p className="text-xs text-navy-500 mt-0.5">
+                {language === "ne"
+                  ? "स्टक, बिक्री, नगद, बैंक र थप प्रतिवेदनहरू"
+                  : "Stock, sales, cash, bank statements & more"}
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-navy-500 shrink-0" />
+          </button>
+        </SettingCard>
+
         {/* Appearance */}
         <SettingCard title={language === "ne" ? "रूप र थिम" : "Appearance & Theme"} icon={Palette}>
           <SelectRow
@@ -420,14 +442,14 @@ export default function SettingsPage() {
       <div className="rounded-2xl border border-navy-800 bg-navy-900 p-5">
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-semibold text-white">Bewosy Business Suite</p>
+            <p className="font-semibold text-white">Bewosai Business Suite</p>
             <p className="text-xs text-navy-500 mt-1">Version 2.0 · {language === "ne" ? "सबै अधिकार सुरक्षित" : "All rights reserved"}</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-navy-500">
               {language === "ne" ? "निर्मित" : "Made with"} ❤️ {language === "ne" ? "नेपालमा" : "in Nepal"}
             </p>
-            <p className="text-xs text-orange-500 mt-1">bewosy.com</p>
+            <p className="text-xs text-orange-500 mt-1">bewosai.com</p>
           </div>
         </div>
       </div>

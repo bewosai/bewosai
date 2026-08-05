@@ -11,4 +11,8 @@ urlpatterns = [
     path("receivable-aging/", views.ReceivableAgingView.as_view()),
     path("day-book/", views.DayBookView.as_view()),
     path("cash-flow/", views.CashFlowView.as_view()),
+    path("stock/", views.StockReportView.as_view()),
+    path("cash-in-hand/", views.CashInHandView.as_view()),
+    path("bank-statement/", views.BankStatementView.as_view()),
+    path("all-transactions/", views.AllTransactionsView.as_view()),
 ]
