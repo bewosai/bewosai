@@ -42,3 +42,8 @@ services:
       # variable": cloudinary://<api_key>:<api_secret>@<cloud_name>
       - key: CLOUDINARY_URL
         sync: false
+      # Optional — leave blank to keep Google Sign-In disabled. Set to the
+      # OAuth 2.0 *Web* client ID from Google Cloud Console (must match the
+      # GOOGLE_WEB_CLIENT_ID the Flutter app is built with).
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
