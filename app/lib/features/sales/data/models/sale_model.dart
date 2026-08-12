@@ -56,11 +56,20 @@ class Sale {
   final double paidAmount;
   final double dueAmount;
   final String paymentMethod;
+  final int? bankAccount;
   final String status;
   final String saleType;
   final String notes;
+  final bool reminderEnabled;
+  final DateTime? reminderAt;
   final List<SaleItem> items;
   final DateTime? createdAt;
+
+  /// True for a sale created while offline and still waiting in the local
+  /// outbox — see [SyncService]. Never comes from/goes to the API; purely a
+  /// local UI signal ("Pending Sync" chip) until the real sync round-trip
+  /// replaces this row with the server's version.
+  final bool pendingSync;
 
   Sale({
     required this.id,
@@ -78,11 +87,15 @@ class Sale {
     required this.paidAmount,
     required this.dueAmount,
     required this.paymentMethod,
+    this.bankAccount,
     required this.status,
     required this.saleType,
     required this.notes,
+    this.reminderEnabled = false,
+    this.reminderAt,
     required this.items,
     this.createdAt,
+    this.pendingSync = false,
   });
 
   factory Sale.fromJson(Map<String, dynamic> json) => Sale(
@@ -101,9 +114,12 @@ class Sale {
         paidAmount: Formatters.toDouble(json['paid_amount']),
         dueAmount: Formatters.toDouble(json['due_amount']),
         paymentMethod: json['payment_method'] as String? ?? 'CASH',
+        bankAccount: json['bank_account'] as int?,
         status: json['status'] as String? ?? 'CONFIRMED',
         saleType: json['sale_type'] as String? ?? 'SALE',
         notes: json['notes'] as String? ?? '',
+        reminderEnabled: json['reminder_enabled'] as bool? ?? false,
+        reminderAt: Formatters.parseDate(json['reminder_at'] as String?),
         items: (json['items'] as List? ?? [])
             .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -119,9 +135,12 @@ class Sale {
         'tax_rate': taxRate,
         'paid_amount': paidAmount,
         'payment_method': paymentMethod,
+        'bank_account': bankAccount,
         'status': status,
         'sale_type': saleType,
         'notes': notes,
+        'reminder_enabled': reminderEnabled,
+        if (reminderAt != null) 'reminder_at': reminderAt!.toIso8601String(),
         'items': items.map((e) => e.toJson()).toList(),
       };
 

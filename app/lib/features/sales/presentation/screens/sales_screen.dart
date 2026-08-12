@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/i18n/translations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/widgets/app_widgets.dart';
@@ -132,7 +133,9 @@ class _SalesScreenState extends State<SalesScreen> {
                         (s) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: AppCard(
-                            onTap: () => context.push('/invoice/${s.id}'),
+                            onTap: s.pendingSync
+                                ? () => showAppSnackBar(context, t('syncingPending'))
+                                : () => context.push('/invoice/${s.id}'),
                             child: Row(
                               children: [
                                 Expanded(
@@ -178,7 +181,9 @@ class _SalesScreenState extends State<SalesScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     StatusBadge(
-                                      label: s.isOverdue ? 'OVERDUE' : s.status,
+                                      label: s.pendingSync
+                                          ? t('pendingSync')
+                                          : (s.isOverdue ? 'OVERDUE' : s.status),
                                     ),
                                   ],
                                 ),

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'core/features/feature_provider.dart';
+import 'core/notifications/notification_service.dart';
+import 'core/offline/sync_service.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode.dart';
@@ -18,7 +22,7 @@ import 'features/settings/settings_dependencies.dart';
 import 'features/staff/presentation/providers/staff_provider.dart';
 import 'router/app_router.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -28,6 +32,7 @@ void main() {
     systemNavigationBarIconBrightness: Brightness.dark,
   ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  await NotificationService.instance.init();
   runApp(const BewosaiApp());
 }
 
@@ -41,7 +46,15 @@ class BewosaiApp extends StatefulWidget {
 class _BewosaiAppState extends State<BewosaiApp> {
   final _authProvider = AuthProvider();
   final _settingsProvider = createSettingsProvider()..load();
+  final _saleProvider = SaleProvider();
   late final _router = buildAppRouter(_authProvider);
+
+  @override
+  void initState() {
+    super.initState();
+    SyncService.instance.onSynced = () => _saleProvider.load();
+    SyncService.instance.init();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +63,7 @@ class _BewosaiAppState extends State<BewosaiApp> {
         ChangeNotifierProvider.value(value: _authProvider),
         ChangeNotifierProvider(create: (_) => PartyProvider()),
         ChangeNotifierProvider(create: (_) => InventoryProvider()),
-        ChangeNotifierProvider(create: (_) => SaleProvider()),
+        ChangeNotifierProvider.value(value: _saleProvider),
         ChangeNotifierProvider(create: (_) => PurchaseProvider()),
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
         ChangeNotifierProvider(create: (_) => BankingProvider()),
@@ -58,6 +71,13 @@ class _BewosaiAppState extends State<BewosaiApp> {
         ChangeNotifierProvider(create: (_) => StaffProvider()),
         ChangeNotifierProvider(create: (_) => RecycleBinProvider()),
         ChangeNotifierProvider.value(value: _settingsProvider),
+        ChangeNotifierProxyProvider<AuthProvider, FeatureProvider>(
+          create: (_) => FeatureProvider(),
+          update: (_, auth, featureProvider) {
+            featureProvider!.syncBusiness(auth.currentBusiness?.id);
+            return featureProvider;
+          },
+        ),
       ],
       // Consumer (not context.watch) because AppColors.isDark must be set
       // *before* AppTheme.light/.dark and the rest of the tree are built —
@@ -65,10 +85,7 @@ class _BewosaiAppState extends State<BewosaiApp> {
       child: Consumer<SettingsProvider>(
         builder: (context, settings, _) {
           final mode = settings.settings.themeMode;
-          final resolvedDark = mode == AppThemeMode.system
-              ? WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark
-              : mode == AppThemeMode.dark;
-          AppColors.isDark = resolvedDark;
+          AppColors.isDark = mode == AppThemeMode.dark;
 
           return MaterialApp.router(
             title: 'Bewosai',
@@ -76,6 +93,19 @@ class _BewosaiAppState extends State<BewosaiApp> {
             theme: AppTheme.light,
             darkTheme: AppTheme.dark,
             themeMode: mode.materialThemeMode,
+            // Nepali locale so Material's own widgets (date pickers, default
+            // buttons) read/format in Nepali too, and so Android's IME has a
+            // per-field language hint to suggest a Devanagari layout — the
+            // OS keyboard's actual active language is still the user's own
+            // choice (tap the globe key / add the Nepali keyboard in system
+            // settings), which no app can force from here.
+            locale: Locale(settings.settings.language),
+            supportedLocales: const [Locale('en'), Locale('ne')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
             routerConfig: _router,
           );
         },

@@ -269,12 +269,15 @@ class _StatGrid extends StatelessWidget {
         _StatCard(
           value: Formatters.currency(d.salesMonth),
           label: 'Sales (This Month)',
-          onTap: () => context.push('/sales'),
+          // Sales/Purchases aren't standalone routes — they're sub-tabs of
+          // the "Transactions" shell tab (see TransactionsScreen). go()
+          // (not push()) replaces the stack, same as tapping the bottom nav.
+          onTap: () => context.go('/dashboard?tab=1&subtab=0'),
         ),
         _StatCard(
           value: Formatters.currency(purchaseMonth),
           label: 'Purchase (This Month)',
-          onTap: () => context.push('/purchases'),
+          onTap: () => context.go('/dashboard?tab=1&subtab=1'),
         ),
         _StatCard(
           value: Formatters.currency(d.expensesMonth),
@@ -603,10 +606,7 @@ void _openShortcutsSheet(BuildContext context) {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Quick Entry',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-          ),
+          SheetHeader(title: 'Quick Entry'),
           SizedBox(height: 16),
           _ShortcutsGrid(),
         ],
@@ -639,18 +639,18 @@ class _ShortcutsGrid extends StatelessWidget {
       ),
       _ShortcutItem(
         Icons.call_received,
-        'Payment In',
+        'Receive',
         () => showPartyPaymentForm(context, paymentType: 'IN'),
       ),
       _ShortcutItem(
         Icons.call_made,
-        'Payment Out',
+        'Give',
         () => showPartyPaymentForm(context, paymentType: 'OUT'),
       ),
       _ShortcutItem(
         Icons.shopping_bag_outlined,
         'Purchase',
-        () => context.push('/purchases'),
+        () => context.go('/dashboard?tab=1&subtab=1'),
       ),
       _ShortcutItem(
         Icons.inventory_2_outlined,

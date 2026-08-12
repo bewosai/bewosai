@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/token_storage.dart';
 import '../../data/models/business_model.dart';
 import '../../data/models/user_model.dart';
+import '../../data/services/auth_service.dart' show VerifyOtpResult;
 import '../../domain/usecases/auth_usecases.dart';
 import '../../domain/usecases/business_usecases.dart';
 
@@ -28,6 +31,14 @@ class AuthProvider extends ChangeNotifier {
   final _authUseCases = AuthUseCases();
   final _businessUseCases = BusinessUseCases();
   final _storage = TokenStorage.instance;
+  final _googleSignIn = GoogleSignIn(
+    scopes: const ['email'],
+    serverClientId: AppConstants.googleWebClientId.isEmpty ? null : AppConstants.googleWebClientId,
+  );
+
+  /// False when GOOGLE_WEB_CLIENT_ID wasn't provided at build time — the
+  /// login screen hides the Google button rather than let it fail every tap.
+  bool get googleSignInAvailable => AppConstants.googleWebClientId.isNotEmpty;
 
   AuthStatus status = AuthStatus.unknown;
   AppUser? user;
@@ -118,29 +129,50 @@ class AuthProvider extends ChangeNotifier {
           remember: remember,
           name: name,
         );
-
-        await _storage.saveTokens(access: result.access, refresh: result.refresh);
-        await _storage.saveUser(result.user.toJson());
-        user = result.user;
-        businesses = result.businesses;
-        await _storage.saveBusinesses(
-          businesses.map((e) => e.toRawJson()).toList(),
-        );
-
-        if (result.isNewUser || (user?.accountType.isEmpty ?? true)) {
-          try {
-            await _authUseCases.setAccountType('business');
-          } catch (_) {}
-        }
-
-        if (businesses.length == 1) {
-          await selectBusiness(businesses.first);
-        } else {
-          currentBusiness = null;
-          status = AuthStatus.needsBusiness;
-        }
+        await _finishLogin(result);
         return true;
       });
+
+  /// Native Google sign-in → exchanges the ID token with the backend for our
+  /// own JWT pair via the same finalization path as OTP login. Returns false
+  /// (with no [error] set) if the user cancels the Google account picker.
+  Future<bool> signInWithGoogle({bool remember = true}) => _guard(() async {
+        final account = await _googleSignIn.signIn();
+        if (account == null) return false;
+
+        final googleAuth = await account.authentication;
+        final idToken = googleAuth.idToken;
+        if (idToken == null) {
+          throw ApiException("Google didn't return a sign-in token. Please try again.");
+        }
+
+        final result = await _authUseCases.googleLogin(idToken, remember: remember);
+        await _finishLogin(result);
+        return true;
+      });
+
+  Future<void> _finishLogin(VerifyOtpResult result) async {
+    await _storage.saveTokens(access: result.access, refresh: result.refresh);
+    await _storage.saveUser(result.user.toJson());
+    user = result.user;
+    businesses = result.businesses;
+    await _storage.saveBusinesses(
+      businesses.map((e) => e.toRawJson()).toList(),
+    );
+
+    if (result.isNewUser || (user?.accountType.isEmpty ?? true)) {
+      try {
+        await _authUseCases.setAccountType('business');
+      } catch (_) {}
+    }
+
+    if (businesses.length == 1) {
+      await selectBusiness(businesses.first);
+    } else {
+      currentBusiness = null;
+      status = AuthStatus.needsBusiness;
+    }
+  }
 
   // ── Business selection / CRUD ─────────────────────────────────────────────
 
@@ -251,6 +283,7 @@ class AuthProvider extends ChangeNotifier {
                 vatNumber: b.vatNumber,
                 currency: b.currency,
                 fiscalYearStart: b.fiscalYearStart,
+                defaultTaxRate: b.defaultTaxRate,
                 plan: b.plan,
                 status: 'ARCHIVED',
                 owner: b.owner,
@@ -277,6 +310,9 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     final refresh = await _storage.refreshToken;
     await _authUseCases.logout(refresh);
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
     await _storage.clear();
     user = null;
     businesses = [];

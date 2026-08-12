@@ -1,6 +1,8 @@
 from decimal import Decimal
+from django.db.models import F
+from django.db.models.functions import Greatest
 from rest_framework import serializers
-from bewosai.utils import require_business
+from bewosai.utils import require_business, sync_bank_transaction
 from inventory.models import Product
 from .models import Purchase, PurchaseItem, PurchaseReturn
 
@@ -25,21 +27,36 @@ class PurchaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Purchase
         fields = ["id", "bill_number", "supplier", "supplier_name", "purchase_date", "due_date",
-                  "subtotal", "discount", "total", "paid_amount", "due_amount",
-                  "payment_method", "status", "notes", "bill_image", "bill_image_url",
+                  "subtotal", "discount", "tax_rate", "tax_amount", "total", "paid_amount", "due_amount",
+                  "payment_method", "bank_account", "status", "notes", "bill_image", "bill_image_url",
                   "is_deleted", "items", "created_at"]
-        read_only_fields = ["due_amount", "created_at", "bill_image_url"]
+        read_only_fields = ["tax_amount", "total", "due_amount", "created_at", "bill_image_url"]
 
     def validate(self, data):
         business = require_business(self.context["request"])
         supplier = data.get("supplier")
         if supplier is not None and supplier.business_id != business.id:
             raise serializers.ValidationError({"supplier": "Invalid supplier for this business."})
+        bank_account = data.get("bank_account")
+        if bank_account is not None and bank_account.business_id != business.id:
+            raise serializers.ValidationError({"bank_account": "Invalid account for this business."})
         for item in data.get("items", []):
             product = item.get("product")
             if product is not None and product.business_id != business.id:
                 raise serializers.ValidationError({"items": "Invalid product for this business."})
         return data
+
+    @staticmethod
+    def _sync_bank(purchase):
+        sync_bank_transaction(
+            reference=f"PURCHASE-{purchase.id}",
+            bank_account=purchase.bank_account if purchase.payment_method != "CASH" else None,
+            transaction_type="DEBIT",
+            amount=purchase.paid_amount,
+            date=purchase.purchase_date,
+            description=f"Purchase {purchase.bill_number}" + (f" — {purchase.supplier.name}" if purchase.supplier_id else ""),
+            created_by=purchase.created_by,
+        )
 
     def get_bill_image_url(self, obj):
         if not obj.bill_image:
@@ -58,12 +75,12 @@ class PurchaseSerializer(serializers.ModelSerializer):
             item.save()                     # computes item.total
             subtotal += item.total
             if item.product_id:
-                product = item.product
-                product.stock_quantity = (product.stock_quantity or Decimal("0")) + item.quantity
-                product.save(update_fields=["stock_quantity"])
+                Product.objects.filter(pk=item.product_id).update(
+                    stock_quantity=F("stock_quantity") + item.quantity
+                )
         purchase.subtotal = subtotal
-        purchase.total    = subtotal - purchase.discount
-        purchase.save()                     # computes due_amount
+        purchase.save()                     # model.save() recomputes tax_amount, total, due_amount
+        self._sync_bank(purchase)
         return purchase
 
     def update(self, instance, validated_data):
@@ -73,12 +90,9 @@ class PurchaseSerializer(serializers.ModelSerializer):
         if items_data is not None:
             for old_item in instance.items.all():
                 if old_item.product_id:
-                    product = old_item.product
-                    product.stock_quantity = max(
-                        Decimal("0"),
-                        product.stock_quantity - old_item.quantity,
+                    Product.objects.filter(pk=old_item.product_id).update(
+                        stock_quantity=Greatest(F("stock_quantity") - old_item.quantity, Decimal("0"))
                     )
-                    product.save(update_fields=["stock_quantity"])
             instance.items.all().delete()
 
         for attr, value in validated_data.items():
@@ -91,13 +105,14 @@ class PurchaseSerializer(serializers.ModelSerializer):
                 item.save()
                 subtotal += item.total
                 if item.product_id:
-                    product = item.product
-                    product.stock_quantity = (product.stock_quantity or Decimal("0")) + item.quantity
-                    product.save(update_fields=["stock_quantity"])
+                    Product.objects.filter(pk=item.product_id).update(
+                        stock_quantity=F("stock_quantity") + item.quantity
+                    )
             instance.subtotal = subtotal
-            instance.total    = subtotal - instance.discount
+            # model.save() recomputes tax_amount, total, due_amount
 
         instance.save()
+        self._sync_bank(instance)
         return instance
 
 

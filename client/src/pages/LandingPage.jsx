@@ -1,10 +1,11 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import bewosaiLogo from "../assessts/images/bewosai.png";
 import {
   ShoppingCart, Users, Package, BarChart3, Monitor, UserCheck,
-  Image, MessageCircle, Building2, Shield, Upload, FileText,
-  Bell, WifiOff, Heart, CreditCard, Share2, Globe, Cloud,
-  ArrowRight, CheckCircle2, Star,
+  Image, MessageCircle, Building2, ShieldCheck, Upload, FileText,
+  Bell, WifiOff, Share2, Globe, Cloud,
+  ArrowRight, CheckCircle2, Download, Smartphone,
 } from "lucide-react";
 
 const features = [
@@ -45,8 +46,8 @@ const features = [
   },
   {
     icon: MessageCircle,
-    title: "Send Payment Reminders",
-    desc: "Send reminders via WhatsApp & SMS. Reduce overdue payments automatically.",
+    title: "Share Bills on WhatsApp",
+    desc: "Send any invoice straight to WhatsApp in one tap. No printer needed to keep customers informed.",
   },
   {
     icon: Building2,
@@ -56,12 +57,12 @@ const features = [
   {
     icon: Globe,
     title: "Multi Business",
-    desc: "Manage multiple stores in one place. Switch between businesses instantly.",
+    desc: "Manage multiple shops from one login. Switch between businesses instantly.",
   },
   {
-    icon: Shield,
-    title: "Enhanced Security",
-    desc: "Enable app lock & privacy mode. PIN protection and role-based access.",
+    icon: ShieldCheck,
+    title: "Private Mode & Staff Roles",
+    desc: "Hide amounts on screen with one tap. Give staff owner, manager, cashier, or viewer access.",
   },
   {
     icon: Upload,
@@ -84,19 +85,9 @@ const features = [
     desc: "Use the app even without internet. Data syncs automatically when reconnected.",
   },
   {
-    icon: Heart,
-    title: "Greeting Cards",
-    desc: "Share beautiful posts with customers. Build relationships beyond transactions.",
-  },
-  {
-    icon: CreditCard,
-    title: "Create Business Card",
-    desc: "Share professional business cards. Make a strong first impression digitally.",
-  },
-  {
     icon: Share2,
-    title: "Share Transactions",
-    desc: "Send transaction link/pdf with contacts. PDF invoices, A4 & thermal printing.",
+    title: "Print & Share Invoices",
+    desc: "Print a clean invoice straight from your browser, or share it as a link — no extra software.",
   },
   {
     icon: Globe,
@@ -106,7 +97,7 @@ const features = [
   {
     icon: Cloud,
     title: "Data Backup & Security",
-    desc: "All data is securely stored in the cloud. Auto backup, restore anytime.",
+    desc: "All data is securely stored in the cloud. Deleted items go to Recycle Bin, restore anytime.",
   },
 ];
 
@@ -142,16 +133,37 @@ const plans = [
       "Unlimited Transactions & Reports",
       "Multiple Bank Accounts",
       "Bill & Product Image Upload",
-      "Barcode Generation",
+      "Barcode Field for Products",
       "Excel Import & Export",
-      "Thermal Printer Support",
-      "Custom Invoice Templates",
-      "App Lock & Cloud Backup",
+      "Quotations & WhatsApp Sharing",
+      "Private Mode & Cloud Backup",
     ],
   },
 ];
 
 export default function LandingPage() {
+  // PWA install prompt — same mechanism the in-app Topbar uses, so "Download"
+  // here is a real install, not a link to a store listing that doesn't exist.
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", () => { setInstalled(true); setInstallPrompt(null); });
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) {
+      document.getElementById("download")?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") { setInstallPrompt(null); setInstalled(true); }
+  };
+
   return (
     <div className="min-h-screen bg-navy-950 text-white">
       {/* Navbar */}
@@ -162,6 +174,15 @@ export default function LandingPage() {
             <span className="text-xl font-bold tracking-tight text-white">Bewosai</span>
           </div>
           <div className="flex items-center gap-3">
+            {!installed && (
+              <button
+                onClick={handleInstall}
+                className="hidden items-center gap-1.5 rounded-xl border border-navy-700 px-4 py-2 text-sm font-medium text-white transition hover:border-orange-500 hover:text-orange-400 sm:flex"
+              >
+                <Download className="h-4 w-4" />
+                Download App
+              </button>
+            )}
             <Link
               to="/login"
               className="rounded-xl border border-navy-700 px-4 py-2 text-sm font-medium text-white transition hover:border-orange-500 hover:text-orange-400"
@@ -229,8 +250,58 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Download */}
+      <section id="download" className="py-16 sm:py-20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <div className="rounded-3xl border border-navy-800 bg-navy-900/70 p-8 sm:p-12">
+            <div className="grid gap-8 sm:grid-cols-2 sm:items-center">
+              <div>
+                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/15 text-orange-400">
+                  <Smartphone className="h-6 w-6" />
+                </div>
+                <h2 className="text-3xl font-bold sm:text-4xl">
+                  Install Bewosai on your phone
+                </h2>
+                <p className="mt-4 text-navy-300">
+                  No Play Store, no App Store, no big download — Bewosai installs
+                  straight from your browser. Add it to your home screen and open
+                  it like any other app, even without internet.
+                </p>
+                <div className="mt-8 flex flex-wrap gap-4">
+                  <button
+                    onClick={handleInstall}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400"
+                  >
+                    <Download className="h-5 w-5" />
+                    {installed ? "App Installed" : "Download App"}
+                  </button>
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-navy-700 px-6 py-3.5 text-sm font-medium text-white transition hover:border-orange-500 hover:text-orange-400"
+                  >
+                    <Monitor className="h-5 w-5" />
+                    Use Web Version
+                  </Link>
+                </div>
+              </div>
+              <div className="space-y-4 rounded-2xl border border-navy-800 bg-navy-950/60 p-5 text-sm text-navy-300">
+                <p className="font-semibold text-white">How to install</p>
+                <p>
+                  <span className="font-semibold text-orange-400">Android / Desktop Chrome:</span>{" "}
+                  Tap "Download App" above and confirm Install.
+                </p>
+                <p>
+                  <span className="font-semibold text-orange-400">iPhone (Safari):</span>{" "}
+                  Tap Share, then "Add to Home Screen".
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Features Grid */}
-      <section className="py-16 sm:py-20">
+      <section id="features" className="py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold sm:text-4xl">
@@ -259,7 +330,7 @@ export default function LandingPage() {
       </section>
 
       {/* Plans */}
-      <section className="py-16 sm:py-20">
+      <section id="pricing" className="py-16 sm:py-20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6">
           <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold sm:text-4xl">Simple, honest pricing</h2>
@@ -309,16 +380,66 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-navy-800 py-8">
+      <footer className="border-t border-navy-800 py-12">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-            <div className="flex items-center gap-2">
-              <img src={bewosaiLogo} alt="Bewosai" className="h-7 w-7 rounded-lg object-cover" />
-              <span className="font-bold text-white">Bewosai</span>
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <img src={bewosaiLogo} alt="Bewosai" className="h-8 w-8 rounded-lg object-cover" />
+                <span className="text-lg font-bold text-white">Bewosai</span>
+              </div>
+              <p className="mt-3 max-w-xs text-sm leading-6 text-navy-400">
+                Simple billing, inventory, and accounting software for Nepal's
+                small shops, traders, and service businesses — no accountant
+                or VAT/PAN setup required to get started.
+              </p>
+              {!installed && (
+                <button
+                  onClick={handleInstall}
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl border border-navy-700 px-4 py-2 text-xs font-semibold text-white transition hover:border-orange-500 hover:text-orange-400"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download App
+                </button>
+              )}
             </div>
-            <p className="text-sm text-navy-400">
-              © 2026 Bewosai. Built for Nepal.
-            </p>
+
+            <div>
+              <h4 className="text-sm font-bold text-white">Product</h4>
+              <ul className="mt-4 space-y-2.5 text-sm text-navy-400">
+                <li><a href="#features" className="transition hover:text-orange-400">Features</a></li>
+                <li><a href="#pricing" className="transition hover:text-orange-400">Pricing</a></li>
+                <li><a href="#download" className="transition hover:text-orange-400">Download</a></li>
+                <li><Link to="/login" className="transition hover:text-orange-400">Sign In</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-bold text-white">What's Inside</h4>
+              <ul className="mt-4 space-y-2.5 text-sm text-navy-400">
+                <li>Sales, Quotations & Returns</li>
+                <li>Purchases & Bills</li>
+                <li>Inventory & Stock</li>
+                <li>Customers & Suppliers</li>
+                <li>Expenses & Payments</li>
+                <li>Banking</li>
+                <li>Reports</li>
+                <li>Staff & Roles</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-bold text-white">Built for small business</h4>
+              <p className="mt-4 text-sm leading-6 text-navy-400">
+                Start free, record your first sale in minutes, and upgrade only
+                when your business grows. Works offline, syncs when you're
+                back online, and speaks your language.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-10 border-t border-navy-800 pt-6 text-center">
+            <p className="text-sm text-navy-500">© 2026 Bewosai. Built for Nepal.</p>
           </div>
         </div>
       </footer>

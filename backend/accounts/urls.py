@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     path("send-otp/", views.SendOTPView.as_view()),
     path("verify-otp/", views.VerifyOTPView.as_view()),
+    path("google-login/", views.GoogleLoginView.as_view()),
     path("logout/", views.LogoutView.as_view()),
     path("set-account-type/", views.SetAccountTypeView.as_view()),
     path("refresh/", TokenRefreshView.as_view()),

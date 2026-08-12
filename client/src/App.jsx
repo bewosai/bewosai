@@ -12,6 +12,7 @@ import SelectBusinessPage from "./pages/SelectBusiness";
 // Business layout + pages
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import FeatureGate from "./components/FeatureGate";
 import DashboardPage from "./pages/Dashboard";
 import PartiesPage from "./pages/PartiesPage";
 import InventoryPage from "./pages/InventoryPage";
@@ -83,32 +84,32 @@ export default function App() {
         }
       >
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/parties" element={<PartiesPage />} />
+        <Route path="/parties" element={<FeatureGate feature="parties"><PartiesPage /></FeatureGate>} />
 
-        <Route path="/inventory" element={<InventoryPage />} />
-        <Route path="/inventory/products" element={<InventoryPage />} />
-        <Route path="/inventory/categories" element={<InventoryPage />} />
-        <Route path="/inventory/stock" element={<InventoryPage />} />
-        <Route path="/inventory/low-stock" element={<InventoryPage />} />
+        <Route path="/inventory" element={<FeatureGate feature="inventory"><InventoryPage /></FeatureGate>} />
+        <Route path="/inventory/products" element={<FeatureGate feature="inventory"><InventoryPage /></FeatureGate>} />
+        <Route path="/inventory/categories" element={<FeatureGate feature="inventory"><InventoryPage /></FeatureGate>} />
+        <Route path="/inventory/stock" element={<FeatureGate feature="inventory"><InventoryPage /></FeatureGate>} />
+        <Route path="/inventory/low-stock" element={<FeatureGate feature="inventory"><InventoryPage /></FeatureGate>} />
 
-        <Route path="/sales" element={<SalesPage />} />
-        <Route path="/sales/quotation" element={<QuotationPage />} />
-        <Route path="/sales/return" element={<SalesReturnPage />} />
+        <Route path="/sales" element={<FeatureGate feature="pos"><SalesPage /></FeatureGate>} />
+        <Route path="/sales/quotation" element={<FeatureGate feature="pos"><QuotationPage /></FeatureGate>} />
+        <Route path="/sales/return" element={<FeatureGate feature="pos"><SalesReturnPage /></FeatureGate>} />
 
-        <Route path="/purchases" element={<PurchasesPage />} />
-        <Route path="/payments" element={<PaymentsPage />} />
-        <Route path="/expenses" element={<ExpensesPage />} />
+        <Route path="/purchases" element={<FeatureGate feature="purchases"><PurchasesPage /></FeatureGate>} />
+        <Route path="/payments" element={<FeatureGate feature="payments"><PaymentsPage /></FeatureGate>} />
+        <Route path="/expenses" element={<FeatureGate feature="expenses"><ExpensesPage /></FeatureGate>} />
 
-        <Route path="/banking" element={<BankingPage />} />
-        <Route path="/banking/accounts" element={<BankingPage />} />
-        <Route path="/banking/transactions" element={<BankingPage />} />
-        <Route path="/banking/cashbook" element={<BankingPage />} />
+        <Route path="/banking" element={<FeatureGate feature="banking"><BankingPage /></FeatureGate>} />
+        <Route path="/banking/accounts" element={<FeatureGate feature="banking"><BankingPage /></FeatureGate>} />
+        <Route path="/banking/transactions" element={<FeatureGate feature="banking"><BankingPage /></FeatureGate>} />
+        <Route path="/banking/cashbook" element={<FeatureGate feature="banking"><BankingPage /></FeatureGate>} />
 
-        <Route path="/staff" element={<StaffPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/staff" element={<FeatureGate feature="staff_management"><StaffPage /></FeatureGate>} />
+        <Route path="/reports" element={<FeatureGate feature="reports"><ReportsPage /></FeatureGate>} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/recycle-bin" element={<RecycleBinPage />} />
-        <Route path="/import" element={<ImportPage />} />
+        <Route path="/import" element={<FeatureGate feature="excel_import"><ImportPage /></FeatureGate>} />
         <Route path="/superadmin" element={<SuperAdminPage />} />
       </Route>
 

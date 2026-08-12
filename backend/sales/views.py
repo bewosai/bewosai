@@ -1,13 +1,19 @@
 import re
 
-from rest_framework import generics, filters
+from rest_framework import generics, filters, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 
+from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
 from bewosai.utils import get_bid, require_business
 from .models import Sale, SaleReturn, Quotation
 from .serializers import SaleSerializer, SaleReturnSerializer, QuotationSerializer
+
+
+class _RequirePos:
+    """Gated by the Super Admin 'POS / Sales' feature switch."""
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("pos")]
 
 
 def _next_invoice_number(business_id):
@@ -30,13 +36,13 @@ def _next_quotation_number(business_id):
     return f"QUO-{num:04d}"
 
 
-class SaleNextNumberView(APIView):
+class SaleNextNumberView(_RequirePos, APIView):
     def get(self, request):
         business = require_business(request)
         return Response({"next_number": _next_invoice_number(business.id)})
 
 
-class SaleListCreateView(generics.ListCreateAPIView):
+class SaleListCreateView(_RequirePos, generics.ListCreateAPIView):
     serializer_class = SaleSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["status", "payment_method", "customer"]
@@ -69,7 +75,7 @@ class SaleListCreateView(generics.ListCreateAPIView):
         )
 
 
-class SaleDetailView(generics.RetrieveUpdateDestroyAPIView):
+class SaleDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = SaleSerializer
 
     def get_queryset(self):
@@ -88,7 +94,7 @@ class SaleDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.save(update_fields=["is_deleted", "deleted_at"])
 
 
-class SaleReturnListCreateView(generics.ListCreateAPIView):
+class SaleReturnListCreateView(_RequirePos, generics.ListCreateAPIView):
     serializer_class = SaleReturnSerializer
 
     def get_queryset(self):

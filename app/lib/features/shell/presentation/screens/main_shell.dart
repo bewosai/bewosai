@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/i18n/translations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_mode.dart';
+import '../../../../shared/widgets/feature_gate.dart';
+import '../../../../shared/widgets/offline_banner.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../dashboard/presentation/screens/dashboard_screen.dart';
 import '../../../inventory/presentation/screens/inventory_screen.dart';
@@ -13,7 +16,10 @@ import 'transactions_screen.dart';
 
 class MainShell extends StatefulWidget {
   final int initialIndex;
-  const MainShell({super.key, this.initialIndex = 0});
+  /// Sub-tab within the Transactions tab (0 = Sales, 1 = Purchases) — only
+  /// relevant when [initialIndex] is 1.
+  final int initialSubTab;
+  const MainShell({super.key, this.initialIndex = 0, this.initialSubTab = 0});
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -25,20 +31,21 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    // Keying by the calendar + theme preference forces the tabs to fully
-    // remount (instead of staying cached in the IndexedStack) whenever
-    // either changes, so every date/color on screen — which read the
-    // mutable Formatters/AppColors globals directly rather than
-    // Theme.of(context) — re-renders with the newly selected value instead
-    // of staying frozen at whatever it was on last build.
+    // Keying by the calendar + theme + language preference forces the tabs
+    // to fully remount (instead of staying cached in the IndexedStack)
+    // whenever any of them changes, so every date/color/label on screen —
+    // which read the mutable Formatters/AppColors/AppTranslations globals
+    // directly rather than Theme.of(context) — re-renders with the newly
+    // selected value instead of staying frozen at whatever it was on last build.
     final useNepaliCalendar = context.select<SettingsProvider, bool>((s) => s.settings.showNepaliCalendar);
     final themeMode = context.select<SettingsProvider, AppThemeMode>((s) => s.settings.themeMode);
     final hideAmounts = context.select<SettingsProvider, bool>((s) => s.settings.hideAmounts);
+    final language = context.select<SettingsProvider, String>((s) => s.settings.language);
     final screens = [
       const DashboardScreen(),
-      const TransactionsScreen(),
-      const PartiesScreen(),
-      const InventoryScreen(),
+      TransactionsScreen(initialSubTab: widget.initialSubTab),
+      const FeatureGate(feature: 'parties', child: PartiesScreen()),
+      const FeatureGate(feature: 'inventory', child: InventoryScreen()),
       const MoreScreen(),
     ];
     return Scaffold(
@@ -85,10 +92,17 @@ class _MainShellState extends State<MainShell> {
               ],
             )
           : null,
-      body: IndexedStack(
-        key: ValueKey('$useNepaliCalendar-$themeMode-$hideAmounts'),
-        index: _index,
-        children: screens,
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          Expanded(
+            child: IndexedStack(
+              key: ValueKey('$useNepaliCalendar-$themeMode-$hideAmounts-$language'),
+              index: _index,
+              children: screens,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -103,12 +117,12 @@ class _MainShellState extends State<MainShell> {
               HapticFeedback.selectionClick();
               setState(() => _index = i);
             },
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Home'),
-              BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long), label: 'Transactions'),
-              BottomNavigationBarItem(icon: Icon(Icons.people_outline), activeIcon: Icon(Icons.people), label: 'Parties'),
-              BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), activeIcon: Icon(Icons.inventory_2), label: 'Inventory'),
-              BottomNavigationBarItem(icon: Icon(Icons.grid_view_outlined), activeIcon: Icon(Icons.grid_view), label: 'More'),
+            items: [
+              BottomNavigationBarItem(icon: const Icon(Icons.home_outlined), activeIcon: const Icon(Icons.home), label: t('home')),
+              BottomNavigationBarItem(icon: const Icon(Icons.receipt_long_outlined), activeIcon: const Icon(Icons.receipt_long), label: t('transactions')),
+              BottomNavigationBarItem(icon: const Icon(Icons.people_outline), activeIcon: const Icon(Icons.people), label: t('parties')),
+              BottomNavigationBarItem(icon: const Icon(Icons.inventory_2_outlined), activeIcon: const Icon(Icons.inventory_2), label: t('inventory')),
+              BottomNavigationBarItem(icon: const Icon(Icons.grid_view_outlined), activeIcon: const Icon(Icons.grid_view), label: t('more')),
             ],
           ),
         ),

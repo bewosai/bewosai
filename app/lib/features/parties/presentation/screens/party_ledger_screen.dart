@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/widgets/app_widgets.dart';
@@ -56,13 +57,39 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
     }
   }
 
+  void _shareStatement() {
+    final l = _ledger;
+    if (l == null) return;
+    final owesYou = l.closingBalance >= 0;
+    final text = Uri.encodeComponent(
+      '${l.party.name} — Account Statement\n'
+      'Total Billed: ${Formatters.currency(l.totalDebit)}\n'
+      'Total Received: ${Formatters.currency(l.totalCredit)}\n'
+      '${owesYou ? "Balance — they owe you" : "Balance — you owe them"}: '
+      '${Formatters.currency(l.closingBalance.abs())}',
+    );
+    final phone = l.party.phone.replaceAll(RegExp(r'\D'), '');
+    final uri = phone.isEmpty
+        ? Uri.parse('https://wa.me/?text=$text')
+        : Uri.parse('https://wa.me/$phone?text=$text');
+    launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = _ledger;
     return Scaffold(
       appBar: AppBar(
         title: Text(l?.party.name ?? 'Party Ledger'),
-        actions: const [HomeLogoButton()],
+        actions: [
+          if (l != null)
+            IconButton(
+              icon: const Icon(Icons.share_outlined),
+              tooltip: 'Share statement',
+              onPressed: _shareStatement,
+            ),
+          const HomeLogoButton(),
+        ],
       ),
       bottomNavigationBar: const AppBottomNav(currentIndex: 2),
       floatingActionButton: l == null
@@ -97,7 +124,7 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
                       children: [
                         Expanded(
                           child: _summaryCard(
-                            'Total Debit',
+                            l.party.isCustomer ? 'Total Sold' : 'Total Purchased',
                             l.totalDebit,
                             AppColors.error,
                           ),
@@ -105,7 +132,7 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: _summaryCard(
-                            'Total Credit',
+                            l.party.isCustomer ? 'Total Received' : 'Total Paid',
                             l.totalCredit,
                             AppColors.success,
                           ),
@@ -113,8 +140,8 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: _summaryCard(
-                            'Balance',
-                            l.closingBalance,
+                            l.closingBalance >= 0 ? 'They Owe You' : 'You Owe Them',
+                            l.closingBalance.abs(),
                             l.closingBalance >= 0
                                 ? AppColors.warning
                                 : AppColors.success,
@@ -157,7 +184,7 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
                                       Row(
                                         children: [
                                           StatusBadge(
-                                            label: e.type,
+                                            label: Formatters.transactionTypeLabel(e.type),
                                             color: AppColors.navy500,
                                           ),
                                           const SizedBox(width: 6),

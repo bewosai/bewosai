@@ -7,6 +7,7 @@ class SettingsLocalDataSource {
   static const _themeModeKey = 'settings.theme_mode';
   static const _nepaliCalendarKey = 'settings.show_nepali_calendar';
   static const _hideAmountsKey = 'settings.hide_amounts';
+  static const _languageKey = 'settings.language';
 
   Future<SettingsPreferencesModel> read() async {
     final prefs = await SharedPreferences.getInstance();
@@ -18,6 +19,7 @@ class SettingsLocalDataSource {
       showNepaliCalendar:
           prefs.getBool(_nepaliCalendarKey) ?? true,
       hideAmounts: prefs.getBool(_hideAmountsKey) ?? false,
+      language: prefs.getString(_languageKey) ?? 'en',
     );
   }
 
@@ -36,5 +38,6 @@ class SettingsLocalDataSource {
       _hideAmountsKey,
       settings.hideAmounts,
     );
+    await prefs.setString(_languageKey, settings.language);
   }
 }

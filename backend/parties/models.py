@@ -74,6 +74,12 @@ class PartyPayment(models.Model):
     payment_type = models.CharField(max_length=5, choices=TYPE_CHOICES)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     payment_method = models.CharField(max_length=10, choices=METHOD_CHOICES, default=METHOD_CASH)
+    bank_account = models.ForeignKey(
+        "banking.BankAccount", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="party_payments",
+        help_text="Required when payment_method is a non-cash method that should hit a real "
+                   "account — a matching BankTransaction is kept in sync automatically.",
+    )
     date = models.DateField()
     note = models.TextField(blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)

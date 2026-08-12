@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/offline/app_database.dart';
+import '../../../../core/offline/connectivity_service.dart';
+import '../../../../core/offline/sync_service.dart';
+import '../../../../core/storage/token_storage.dart';
 import '../../data/models/sale_model.dart';
 import '../../domain/usecases/sale_usecases.dart';
 
@@ -12,17 +16,59 @@ class SaleProvider extends ChangeNotifier {
   bool isLoading = false;
   String? error;
 
+  Future<String> _businessId() async {
+    final business = await TokenStorage.instance.currentBusiness;
+    return '${business?['id'] ?? ''}';
+  }
+
   Future<void> load() async {
     isLoading = true;
     error = null;
     notifyListeners();
     try {
-      sales = await _useCases.listSales();
+      final pending = await _pendingSales();
+      sales = [...pending, ...await _useCases.listSales()];
     } catch (e) {
-      error = e is ApiException ? e.message : e.toString();
+      sales = await _pendingSales();
+      if (sales.isEmpty) error = e is ApiException ? e.message : e.toString();
     }
     isLoading = false;
     notifyListeners();
+  }
+
+  Future<List<Sale>> _pendingSales() async {
+    final businessId = await _businessId();
+    if (businessId.isEmpty) return [];
+    final rows = await AppDatabase.instance.pendingSales(businessId);
+    return rows.map((json) => Sale(
+          id: json['temp_id'] as int,
+          invoiceNumber: json['invoice_number'] as String? ?? '',
+          customer: json['customer'] as int?,
+          customerName: '',
+          partyPhone: '',
+          saleDate: DateTime.tryParse(json['sale_date'] as String? ?? ''),
+          dueDate: DateTime.tryParse(json['due_date'] as String? ?? ''),
+          subtotal: (json['items'] as List? ?? [])
+              .fold(0.0, (sum, i) => sum + ((i['quantity'] as num? ?? 0) * (i['unit_price'] as num? ?? 0) - (i['discount_amount'] as num? ?? 0))),
+          discount: (json['discount'] as num?)?.toDouble() ?? 0,
+          taxRate: (json['tax_rate'] as num?)?.toDouble() ?? 0,
+          taxAmount: 0,
+          total: (json['paid_amount'] as num?)?.toDouble() ?? 0,
+          paidAmount: (json['paid_amount'] as num?)?.toDouble() ?? 0,
+          dueAmount: 0,
+          paymentMethod: json['payment_method'] as String? ?? 'CASH',
+          status: json['status'] as String? ?? 'CONFIRMED',
+          saleType: json['sale_type'] as String? ?? 'SALE',
+          notes: json['notes'] as String? ?? '',
+          items: (json['items'] as List? ?? [])
+              .map((e) => SaleItem.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList(),
+          createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+          pendingSync: true,
+        ))
+        .toList()
+        .reversed
+        .toList();
   }
 
   Future<void> loadQuotations() async {
@@ -50,6 +96,9 @@ class SaleProvider extends ChangeNotifier {
       if (id != null) {
         result = await _useCases.updateSale(id, sale);
         sales = sales.map((s) => s.id == id ? result : s).toList();
+      } else if (!await ConnectivityService.instance.checkOnline()) {
+        result = await _saveOffline(sale);
+        sales = [result, ...sales];
       } else {
         result = await _useCases.createSale(sale);
         sales = [result, ...sales];
@@ -63,6 +112,38 @@ class SaleProvider extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+  }
+
+  /// Queues [sale] in the local outbox instead of posting it, returning a
+  /// negative-ID stand-in so Quick POS can show its normal "saved" flow —
+  /// [SyncService] replays it against the real API on reconnect.
+  Future<Sale> _saveOffline(Sale sale) async {
+    final businessId = await _businessId();
+    final tempId = await AppDatabase.instance.enqueueSale(businessId, sale.toJson());
+    await SyncService.instance.refreshPendingCount();
+    return Sale(
+      id: tempId,
+      invoiceNumber: sale.invoiceNumber,
+      customer: sale.customer,
+      customerName: sale.customerName,
+      partyPhone: sale.partyPhone,
+      saleDate: sale.saleDate,
+      dueDate: sale.dueDate,
+      subtotal: sale.subtotal,
+      discount: sale.discount,
+      taxRate: sale.taxRate,
+      taxAmount: sale.taxAmount,
+      total: sale.total,
+      paidAmount: sale.paidAmount,
+      dueAmount: sale.dueAmount,
+      paymentMethod: sale.paymentMethod,
+      status: sale.status,
+      saleType: sale.saleType,
+      notes: sale.notes,
+      items: sale.items,
+      createdAt: DateTime.now(),
+      pendingSync: true,
+    );
   }
 
   Future<bool> cancel(int id) => _guard(() async {

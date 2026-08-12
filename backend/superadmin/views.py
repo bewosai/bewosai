@@ -8,8 +8,9 @@ from django.utils import timezone
 
 from accounts.models import User, Business, LoginActivity
 from accounts.serializers import UserSerializer, BusinessSerializer
-from .models import SupportTicket, Announcement
-from .serializers import SupportTicketSerializer, AnnouncementSerializer
+from bewosai.utils import get_business
+from .models import SupportTicket, Announcement, Feature
+from .serializers import SupportTicketSerializer, AnnouncementSerializer, FeatureSerializer
 
 
 class IsPlatformAdmin(permissions.BasePermission):
@@ -289,6 +290,54 @@ class BusinessEditDeleteView(APIView):
             return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
         biz.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── Feature management (admin only) ─────────────────────────────────────────────
+
+class FeatureManagementListView(generics.ListAPIView):
+    """Super Admin: list every feature with its current toggle state, for the
+    Feature Management table (Feature | Status | Available To | Action)."""
+    permission_classes = [IsPlatformAdmin]
+    serializer_class = FeatureSerializer
+    queryset = Feature.objects.all()
+
+
+class FeatureToggleView(APIView):
+    """Super Admin: patch any of a feature's toggle fields by its key."""
+    permission_classes = [IsPlatformAdmin]
+
+    def patch(self, request, key):
+        try:
+            feature = Feature.objects.get(key=key)
+        except Feature.DoesNotExist:
+            return Response({"error": "Feature not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = FeatureSerializer(feature, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EffectiveFeaturesView(APIView):
+    """
+    Any authenticated user: the effective on/off map for their current
+    business on the calling platform (?platform=mobile|desktop, or the
+    X-Platform header — see bewosai.permissions.get_platform). This is the
+    single source both React and Flutter read, so they can never show a
+    different feature set for the same business.
+    """
+
+    def get(self, request):
+        from bewosai.permissions import get_platform
+
+        business = get_business(request)
+        platform = get_platform(request)
+        features = {
+            f.key: f.is_available_on(platform, business)
+            for f in Feature.objects.all()
+        }
+        return Response({"platform": platform, "features": features})
 
 
 class BusinessDataView(APIView):

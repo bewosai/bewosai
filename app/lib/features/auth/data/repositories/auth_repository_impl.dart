@@ -16,6 +16,10 @@ class AuthRepositoryImpl implements AuthRepository {
       _service.verifyOtp(email, code, remember: remember, name: name);
 
   @override
+  Future<VerifyOtpResult> googleLogin(String idToken, {bool remember = false}) =>
+      _service.googleLogin(idToken, remember: remember);
+
+  @override
   Future<void> setAccountType(String accountType) => _service.setAccountType(accountType);
 
   @override

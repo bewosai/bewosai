@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/offline/app_database.dart';
+import '../../../../core/offline/connectivity_service.dart';
+import '../../../../core/storage/token_storage.dart';
 import '../../data/models/inventory_model.dart';
 import '../../domain/usecases/inventory_usecases.dart';
 
@@ -15,6 +18,16 @@ class InventoryProvider extends ChangeNotifier {
   List<Unit> units = [];
   bool isLoading = false;
   String? error;
+
+  /// True when [products] came from the local cache instead of a live
+  /// request — low-stock alerts are suppressed in this state since stock
+  /// numbers may be stale (e.g. a since-synced offline sale elsewhere).
+  bool isOffline = false;
+
+  Future<String> _businessId() async {
+    final business = await TokenStorage.instance.currentBusiness;
+    return '${business?['id'] ?? ''}';
+  }
 
   /// Active list filter (null = all).
   String? filterItemType; // PRODUCT | SERVICE | null
@@ -36,6 +49,14 @@ class InventoryProvider extends ChangeNotifier {
     isLoading = true;
     error = null;
     notifyListeners();
+
+    final businessId = await _businessId();
+    final online = await ConnectivityService.instance.checkOnline();
+    if (!online) {
+      await _loadFromCache(businessId);
+      return;
+    }
+
     try {
       final results = await Future.wait([
         _useCases.listProducts(
@@ -50,12 +71,45 @@ class InventoryProvider extends ChangeNotifier {
       products = results[0] as List<Product>;
       categories = results[1] as List<Category>;
       units = results[2] as List<Unit>;
+      isOffline = false;
+      // Cache only the unfiltered product list so offline browsing always
+      // has the full catalog, not whatever search/filter happened to be
+      // active the last time connectivity was live.
+      if (businessId.isNotEmpty && filterSearch == null && filterCategoryId == null && !filterLowStock && filterItemType == null) {
+        await AppDatabase.instance.replaceCache(
+          'cached_products',
+          businessId,
+          products.map((p) => p.toCacheJson()).toList(),
+        );
+      }
     } catch (e) {
+      if (businessId.isNotEmpty) {
+        final cached = await AppDatabase.instance.readCache('cached_products', businessId);
+        if (cached.isNotEmpty) {
+          products = cached.map(Product.fromJson).toList();
+          isOffline = true;
+          isLoading = false;
+          notifyListeners();
+          return;
+        }
+      }
       error = e is ApiException ? e.message : e.toString();
     } finally {
       isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _loadFromCache(String businessId) async {
+    isOffline = true;
+    if (businessId.isNotEmpty) {
+      final cached = await AppDatabase.instance.readCache('cached_products', businessId);
+      products = cached.map(Product.fromJson).toList();
+    }
+    categories = [];
+    units = [];
+    isLoading = false;
+    notifyListeners();
   }
 
   Future<void> setItemTypeFilter(String? type) async {
@@ -69,8 +123,12 @@ class InventoryProvider extends ChangeNotifier {
   List<Product> get serviceItems =>
       products.where((p) => p.isService).toList();
 
-  List<Product> get lowStock =>
-      products.where((p) => p.isProduct && p.isLowStock).toList();
+  /// Empty while offline — stock numbers may be stale (e.g. a since-synced
+  /// offline sale elsewhere), so a "low stock" read here could be wrong in
+  /// either direction. Alerts resume as soon as a live sync completes.
+  List<Product> get lowStock => isOffline
+      ? const []
+      : products.where((p) => p.isProduct && p.isLowStock).toList();
 
   Future<bool> saveProduct(Product product, {int? id}) {
     return _guard(() async {

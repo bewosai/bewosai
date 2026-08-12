@@ -382,6 +382,11 @@ export default function StaffPage() {
     setLoading(true);
     authApi.staff(currentBusiness.id)
       .then((r) => setStaff(r.data.results ?? r.data))
+      // A 403 here (e.g. Staff Management switched off/Premium-only for this
+      // business — see require_feature("staff_management") on the backend)
+      // is expected and handled by the route's <FeatureGate>; without this
+      // catch it surfaces as an unhandled promise rejection instead.
+      .catch(() => setStaff([]))
       .finally(() => setLoading(false));
   };
 

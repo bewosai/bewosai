@@ -226,6 +226,29 @@ class Product {
     };
   }
 
+  /// Full read-shape serialization (unlike [toJson], which is a write body
+  /// missing server-computed fields) — used to persist this product to the
+  /// offline cache so [Product.fromJson] can reconstruct it byte-for-byte.
+  Map<String, dynamic> toCacheJson() => {
+        'id': id,
+        'name': name,
+        'category': category,
+        'category_name': categoryName,
+        'item_type': itemType,
+        'unit': unit,
+        'unit_name': unitName,
+        'description': description,
+        'purchase_price': purchasePrice,
+        'sale_price': salePrice,
+        'stock_quantity': stockQuantity,
+        'low_stock_threshold': lowStockThreshold,
+        'is_low_stock': isLowStock,
+        'barcode': barcode,
+        'image': image,
+        'is_active': isActive,
+        'created_at': createdAt?.toIso8601String(),
+      };
+
   Product copyWith({
     int? id,
     String? name,

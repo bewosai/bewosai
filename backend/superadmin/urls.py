@@ -29,4 +29,10 @@ urlpatterns = [
     path("tickets/", views.TicketListView.as_view()),
     path("tickets/<int:pk>/", views.TicketDetailView.as_view()),
     path("support/", views.SubmitTicketView.as_view()),
+
+    # Feature management (admin only) — public effective-map endpoint lives
+    # at /api/features/ (see bewosai/urls.py), not here, since every business
+    # user needs to read it, not just platform admins.
+    path("features/", views.FeatureManagementListView.as_view()),
+    path("features/<slug:key>/toggle/", views.FeatureToggleView.as_view()),
 ]

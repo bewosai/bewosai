@@ -54,20 +54,35 @@ class AuthService {
         'remember': remember,
         if (name.isNotEmpty) 'name': name,
       });
-      final data = res.data as Map<String, dynamic>;
-      return VerifyOtpResult(
-        access: data['access'] as String,
-        refresh: data['refresh'] as String,
-        user: AppUser.fromJson(data['user'] as Map<String, dynamic>),
-        isNewUser: data['is_new_user'] as bool? ?? false,
-        needsProfileSetup: data['needs_profile_setup'] as bool? ?? false,
-        businesses: (data['businesses'] as List? ?? [])
-            .map((e) => Business.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+      return _verifyOtpResultFromResponse(res.data as Map<String, dynamic>);
     } catch (e) {
       throw ApiClient.toApiException(e);
     }
+  }
+
+  Future<VerifyOtpResult> googleLogin(String idToken, {bool remember = false}) async {
+    try {
+      final res = await _dio.post('/auth/google-login/', data: {
+        'id_token': idToken,
+        'remember': remember,
+      });
+      return _verifyOtpResultFromResponse(res.data as Map<String, dynamic>);
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
+  VerifyOtpResult _verifyOtpResultFromResponse(Map<String, dynamic> data) {
+    return VerifyOtpResult(
+      access: data['access'] as String,
+      refresh: data['refresh'] as String,
+      user: AppUser.fromJson(data['user'] as Map<String, dynamic>),
+      isNewUser: data['is_new_user'] as bool? ?? false,
+      needsProfileSetup: data['needs_profile_setup'] as bool? ?? false,
+      businesses: (data['businesses'] as List? ?? [])
+          .map((e) => Business.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
   }
 
   Future<void> setAccountType(String accountType) async {

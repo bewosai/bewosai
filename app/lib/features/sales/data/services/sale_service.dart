@@ -49,6 +49,18 @@ class SaleService {
     }
   }
 
+  /// Same endpoint as [create], but posts an already-built write-body
+  /// directly — used by [SyncService] to replay a payload that was queued
+  /// while offline without needing to reconstruct a [Sale] object first.
+  Future<Sale> createRaw(Map<String, dynamic> payload) async {
+    try {
+      final res = await _dio.post('/sales/', data: payload);
+      return Sale.fromJson(res.data as Map<String, dynamic>);
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
   Future<Sale> update(int id, Sale sale) async {
     try {
       final res = await _dio.put('/sales/$id/', data: sale.toJson());

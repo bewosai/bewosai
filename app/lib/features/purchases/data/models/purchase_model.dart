@@ -49,10 +49,13 @@ class Purchase {
   final DateTime? dueDate;
   final double subtotal;
   final double discount;
+  final double taxRate;
+  final double taxAmount;
   final double total;
   final double paidAmount;
   final double dueAmount;
   final String paymentMethod;
+  final int? bankAccount;
   final String status;
   final String notes;
   final String? billImage;
@@ -69,10 +72,13 @@ class Purchase {
     this.dueDate,
     required this.subtotal,
     required this.discount,
+    this.taxRate = 0,
+    this.taxAmount = 0,
     required this.total,
     required this.paidAmount,
     required this.dueAmount,
     required this.paymentMethod,
+    this.bankAccount,
     required this.status,
     required this.notes,
     this.billImage,
@@ -90,10 +96,13 @@ class Purchase {
         dueDate: Formatters.parseDate(json['due_date'] as String?),
         subtotal: Formatters.toDouble(json['subtotal']),
         discount: Formatters.toDouble(json['discount']),
+        taxRate: Formatters.toDouble(json['tax_rate']),
+        taxAmount: Formatters.toDouble(json['tax_amount']),
         total: Formatters.toDouble(json['total']),
         paidAmount: Formatters.toDouble(json['paid_amount']),
         dueAmount: Formatters.toDouble(json['due_amount']),
         paymentMethod: json['payment_method'] as String? ?? 'CASH',
+        bankAccount: json['bank_account'] as int?,
         status: json['status'] as String? ?? 'CONFIRMED',
         notes: json['notes'] as String? ?? '',
         billImage: json['bill_image'] as String?,
@@ -110,8 +119,10 @@ class Purchase {
         'purchase_date': purchaseDate != null ? Formatters.apiDate(purchaseDate!) : null,
         'due_date': dueDate != null ? Formatters.apiDate(dueDate!) : null,
         'discount': discount,
+        'tax_rate': taxRate,
         'paid_amount': paidAmount,
         'payment_method': paymentMethod,
+        'bank_account': bankAccount,
         'status': status,
         'notes': notes,
         'items': items.map((e) => e.toJson()).toList(),

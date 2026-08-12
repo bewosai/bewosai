@@ -16,6 +16,7 @@ class _SettingsBusinessScreenState extends State<SettingsBusinessScreen> {
   final _typeController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+  final _taxRateController = TextEditingController();
   bool _saving = false;
 
   @override
@@ -26,6 +27,10 @@ class _SettingsBusinessScreenState extends State<SettingsBusinessScreen> {
     _typeController.text = business?.businessType ?? '';
     _phoneController.text = business?.phone ?? '';
     _addressController.text = business?.address ?? '';
+    final taxRate = business?.defaultTaxRate ?? 13;
+    _taxRateController.text = taxRate == taxRate.roundToDouble()
+        ? taxRate.toStringAsFixed(0)
+        : taxRate.toString();
   }
 
   @override
@@ -34,6 +39,7 @@ class _SettingsBusinessScreenState extends State<SettingsBusinessScreen> {
     _typeController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _taxRateController.dispose();
     super.dispose();
   }
 
@@ -46,6 +52,7 @@ class _SettingsBusinessScreenState extends State<SettingsBusinessScreen> {
       'business_type': _typeController.text.trim(),
       'phone': _phoneController.text.trim(),
       'address': _addressController.text.trim(),
+      'default_tax_rate': double.tryParse(_taxRateController.text) ?? 13,
     });
     if (!mounted) return;
     setState(() => _saving = false);
@@ -86,9 +93,19 @@ class _SettingsBusinessScreenState extends State<SettingsBusinessScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _addressController,
-              textInputAction: TextInputAction.done,
+              textInputAction: TextInputAction.next,
               maxLines: 2,
               decoration: const InputDecoration(labelText: 'Address'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _taxRateController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: 'Default Tax Rate (%)',
+                helperText: 'Applied by default to new sales (e.g. VAT 13%)',
+              ),
             ),
             const SizedBox(height: 20),
             PrimaryButton(

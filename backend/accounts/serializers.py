@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from bewosai.utils import suggest_email_typo_fix
 from .models import User, Business, StaffMember
 
 
@@ -17,7 +18,7 @@ class BusinessSerializer(serializers.ModelSerializer):
         model = Business
         fields = (
             "id", "name", "business_type", "address", "phone", "email",
-            "logo", "pan_number", "vat_number", "currency", "fiscal_year_start",
+            "logo", "pan_number", "vat_number", "currency", "fiscal_year_start", "default_tax_rate",
             "plan", "status", "subscription_expires",
             "owner", "owner_name", "staff_count", "created_at",
         )
@@ -52,7 +53,14 @@ class SendOTPSerializer(serializers.Serializer):
     is_signup = serializers.BooleanField(default=False)
 
     def validate_email(self, value):
-        return value.strip().lower()
+        value = value.strip().lower()
+        fix = suggest_email_typo_fix(value)
+        if fix:
+            raise serializers.ValidationError(
+                f"Did you mean {fix}? \"{value.rpartition('@')[2]}\" isn't a real "
+                f"{fix.rpartition('@')[2]} address, so the code would never arrive."
+            )
+        return value
 
 
 class VerifyOTPSerializer(serializers.Serializer):
@@ -66,3 +74,8 @@ class VerifyOTPSerializer(serializers.Serializer):
 
     def validate_name(self, value):
         return value.strip()
+
+
+class GoogleLoginSerializer(serializers.Serializer):
+    id_token = serializers.CharField()
+    remember = serializers.BooleanField(default=False)

@@ -28,6 +28,14 @@ class AppConstants {
     return _emulatorUrl;
   }
 
+  // ── Google Sign-In ──────────────────────────────────────────────────────
+  // The OAuth 2.0 *Web* client ID from Google Cloud Console — passed as
+  // GoogleSignIn's serverClientId so the ID token it returns is minted for
+  // that audience, matching backend.GOOGLE_OAUTH_CLIENT_ID which verifies it.
+  // Required to enable Google sign-in; blank disables the button. Set via:
+  //   flutter run --dart-define=GOOGLE_WEB_CLIENT_ID=xxxxx.apps.googleusercontent.com
+  static const String googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
+
   // Secure storage keys
   static const String keyAccessToken = 'access_token';
   static const String keyRefreshToken = 'refresh_token';

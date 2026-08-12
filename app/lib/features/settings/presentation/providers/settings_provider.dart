@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/i18n/translations.dart';
 import '../../../../core/theme/theme_mode.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../domain/entities/settings_preferences.dart';
@@ -34,6 +35,7 @@ class SettingsProvider extends ChangeNotifier {
       _settings = await getPreferences();
       Formatters.useNepaliCalendar = _settings.showNepaliCalendar;
       Formatters.hideAmounts = _settings.hideAmounts;
+      AppTranslations.language = _settings.language;
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -54,6 +56,18 @@ class SettingsProvider extends ChangeNotifier {
     return _save(_settings.copyWith(hideAmounts: enabled));
   }
 
+  /// Also switches the calendar to match (Nepali → BS, English → AD) — the
+  /// two started as independent toggles, but users consistently expect
+  /// picking Nepali to mean "everything Nepali," dates included. The
+  /// separate "Date Format" setting still lets anyone override this
+  /// afterward (e.g. English UI with BS dates).
+  Future<bool> setLanguage(String language) async {
+    return _save(_settings.copyWith(
+      language: language,
+      showNepaliCalendar: language == 'ne',
+    ));
+  }
+
   Future<bool> _save(SettingsPreferences value) async {
     _saving = true;
     _error = null;
@@ -64,6 +78,7 @@ class SettingsProvider extends ChangeNotifier {
       _settings = value;
       Formatters.useNepaliCalendar = _settings.showNepaliCalendar;
       Formatters.hideAmounts = _settings.hideAmounts;
+      AppTranslations.language = _settings.language;
       return true;
     } catch (e) {
       _error = e.toString();

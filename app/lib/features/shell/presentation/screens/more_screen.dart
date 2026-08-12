@@ -1,9 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/features/feature_provider.dart';
+import '../../../../core/i18n/translations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+
+class _MoreTile {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final String? feature;
+  const _MoreTile(this.icon, this.label, this.onTap, {this.feature});
+}
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -11,11 +21,20 @@ class MoreScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final features = context.watch<FeatureProvider>();
     final user = auth.user;
     final business = auth.currentBusiness;
 
+    final businessTiles = [
+      _MoreTile(Icons.point_of_sale_outlined, 'Quick POS', () => context.push('/pos'), feature: 'pos'),
+      _MoreTile(Icons.receipt_outlined, t('expenses'), () => context.push('/expenses'), feature: 'expenses'),
+      _MoreTile(Icons.account_balance_outlined, t('banking'), () => context.push('/banking'), feature: 'banking'),
+      _MoreTile(Icons.bar_chart_outlined, t('reports'), () => context.push('/reports'), feature: 'reports'),
+      _MoreTile(Icons.badge_outlined, t('staff'), () => context.push('/staff'), feature: 'staff_management'),
+    ].where((tile) => tile.feature == null || features.isEnabled(tile.feature!)).toList();
+
     return Scaffold(
-      appBar: AppBar(title: const Text('More')),
+      appBar: AppBar(title: Text(t('more'))),
       body: ResponsiveBody(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -66,47 +85,19 @@ class MoreScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            const SectionHeader(title: 'Business'),
-            const SizedBox(height: 10),
-            AppSectionCard(
-              children: [
-                _tile(
-                  context,
-                  Icons.point_of_sale_outlined,
-                  'Quick POS',
-                  () => context.push('/pos'),
-                ),
-                _divider(),
-                _tile(
-                  context,
-                  Icons.receipt_outlined,
-                  'Expenses',
-                  () => context.push('/expenses'),
-                ),
-                _divider(),
-                _tile(
-                  context,
-                  Icons.account_balance_outlined,
-                  'Banking',
-                  () => context.push('/banking'),
-                ),
-                _divider(),
-                _tile(
-                  context,
-                  Icons.bar_chart_outlined,
-                  'Reports',
-                  () => context.push('/reports'),
-                ),
-                _divider(),
-                _tile(
-                  context,
-                  Icons.badge_outlined,
-                  'Staff',
-                  () => context.push('/staff'),
-                ),
-              ],
-            ),
+            if (businessTiles.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              const SectionHeader(title: 'Business'),
+              const SizedBox(height: 10),
+              AppSectionCard(
+                children: [
+                  for (var i = 0; i < businessTiles.length; i++) ...[
+                    if (i > 0) _divider(),
+                    _tile(context, businessTiles[i].icon, businessTiles[i].label, businessTiles[i].onTap),
+                  ],
+                ],
+              ),
+            ],
             const SizedBox(height: 20),
             const SectionHeader(title: 'Account'),
             const SizedBox(height: 10),
@@ -122,14 +113,14 @@ class MoreScreen extends StatelessWidget {
                 _tile(
                   context,
                   Icons.settings_outlined,
-                  'Settings',
+                  t('settings'),
                   () => context.push('/settings'),
                 ),
                 _divider(),
                 _tile(
                   context,
                   Icons.delete_outline,
-                  'Recycle Bin',
+                  t('recycleBin'),
                   () => context.push('/recycle-bin'),
                 ),
               ],
@@ -140,7 +131,7 @@ class MoreScreen extends StatelessWidget {
                 _tile(
                   context,
                   Icons.logout,
-                  'Logout',
+                  t('logout'),
                   () => auth.logout(),
                   color: AppColors.error,
                 ),

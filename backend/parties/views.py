@@ -1,17 +1,27 @@
 from decimal import Decimal
-from rest_framework import generics, filters, status
+from rest_framework import generics, filters, status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
-from bewosai.permissions import IsPremiumBusiness
+from bewosai.permissions import BusinessNotArchivedForWrites, IsPremiumBusiness, require_feature
 from bewosai.utils import get_bid, get_business
 from .models import Party, PartyPayment
 from .serializers import PartySerializer, PartyPaymentSerializer
 
 
-class PartyListCreateView(generics.ListCreateAPIView):
+class _RequireParties:
+    """Gated by the Super Admin 'Parties' feature switch."""
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("parties")]
+
+
+class _RequirePayments:
+    """Gated by the Super Admin 'Payments' feature switch."""
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("payments")]
+
+
+class PartyListCreateView(_RequireParties, generics.ListCreateAPIView):
     serializer_class = PartySerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["party_type", "is_active"]
@@ -34,7 +44,7 @@ class PartyListCreateView(generics.ListCreateAPIView):
         serializer.save(business=business)
 
 
-class PartyDetailView(generics.RetrieveUpdateDestroyAPIView):
+class PartyDetailView(_RequireParties, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PartySerializer
 
     def get_queryset(self):
@@ -63,7 +73,7 @@ class PartyDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.save(update_fields=["is_deleted", "deleted_at"])
 
 
-class PartyPaymentListCreateView(generics.ListCreateAPIView):
+class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
     serializer_class = PartyPaymentSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["payment_type", "payment_method"]
@@ -90,6 +100,7 @@ class PartyPaymentListCreateView(generics.ListCreateAPIView):
             raise ValidationError({"party": "Invalid party for this business."})
         payment = serializer.save(created_by=self.request.user)
         self._reconcile_payment(payment)
+        PartyPaymentSerializer._sync_bank(payment)
 
     @staticmethod
     def _reconcile_payment(payment):
@@ -110,6 +121,7 @@ class PartyPaymentListCreateView(generics.ListCreateAPIView):
                     break
                 apply = min(remaining, sale.due_amount)
                 sale.paid_amount += apply
+                sale.reconciled_amount += apply
                 sale.save()                 # triggers due_amount = total - paid_amount
                 remaining -= apply
 
@@ -123,11 +135,12 @@ class PartyPaymentListCreateView(generics.ListCreateAPIView):
                     break
                 apply = min(remaining, purchase.due_amount)
                 purchase.paid_amount += apply
+                purchase.reconciled_amount += apply
                 purchase.save()
                 remaining -= apply
 
 
-class PartyPaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
+class PartyPaymentDetailView(_RequirePayments, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PartyPaymentSerializer
 
     def get_queryset(self):
@@ -145,10 +158,16 @@ class PartyPaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
         party = serializer.validated_data.get("party")
         if party is not None and party.business_id != business.id:
             raise ValidationError({"party": "Invalid party for this business."})
-        serializer.save()
+        payment = serializer.save()
+        PartyPaymentSerializer._sync_bank(payment)
+
+    def perform_destroy(self, instance):
+        from banking.models import BankTransaction
+        BankTransaction.objects.filter(reference=f"PARTYPAYMENT-{instance.id}").delete()
+        instance.delete()
 
 
-class PartyLedgerView(APIView):
+class PartyLedgerView(_RequireParties, APIView):
     """Combined ledger for a party: sales, purchases, direct payments, and returns."""
 
     def get(self, request, pk):
@@ -177,11 +196,16 @@ class PartyLedgerView(APIView):
                 "debit": float(s.total), "credit": 0.0, "balance": 0.0,
                 "note": s.notes or "",
             })
-            if s.paid_amount > 0:
+            # Only the portion paid at/after sale creation that did NOT come through a
+            # reconciled PartyPayment — the reconciled portion is already represented
+            # by that PartyPayment's own PAYMENT_IN entry below, so including all of
+            # paid_amount here would double-count it.
+            direct_receipt = s.paid_amount - s.reconciled_amount
+            if direct_receipt > 0:
                 entries.append({
                     "date": str(s.sale_date), "type": "RECEIPT",
                     "ref": s.invoice_number,
-                    "debit": 0.0, "credit": float(s.paid_amount), "balance": 0.0,
+                    "debit": 0.0, "credit": float(direct_receipt), "balance": 0.0,
                     "note": f"Payment via {s.payment_method}",
                 })
 
@@ -204,11 +228,14 @@ class PartyLedgerView(APIView):
                 "debit": 0.0, "credit": float(p.total), "balance": 0.0,
                 "note": p.notes or "",
             })
-            if p.paid_amount > 0:
+            # See the matching comment on the sales loop above — exclude the portion
+            # already reconciled from a PartyPayment to avoid double-counting it.
+            direct_payment = p.paid_amount - p.reconciled_amount
+            if direct_payment > 0:
                 entries.append({
                     "date": str(p.purchase_date), "type": "PAYMENT_OUT",
                     "ref": p.bill_number,
-                    "debit": float(p.paid_amount), "credit": 0.0, "balance": 0.0,
+                    "debit": float(direct_payment), "credit": 0.0, "balance": 0.0,
                     "note": f"Payment via {p.payment_method}",
                 })
 
@@ -259,7 +286,7 @@ class PartyLedgerView(APIView):
 class PartyBulkImportView(APIView):
     """Bulk create parties from Excel import. Accepts list of party objects. Premium only."""
 
-    permission_classes = [IsPremiumBusiness]
+    permission_classes = [IsPremiumBusiness, require_feature("excel_import")]
 
     def post(self, request):
         bid = get_bid(request)

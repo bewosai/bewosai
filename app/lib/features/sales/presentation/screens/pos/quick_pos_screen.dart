@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../../core/constants/app_constants.dart';
+import '../../../../../core/notifications/notification_service.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/utils/formatters.dart';
 import '../../../../../core/utils/validators.dart';
 import '../../../../../shared/widgets/app_widgets.dart';
+import '../../../../auth/presentation/providers/auth_provider.dart';
+import '../../../../banking/presentation/providers/banking_provider.dart';
 import '../../../../inventory/data/models/inventory_model.dart';
 import '../../../../inventory/presentation/providers/inventory_provider.dart';
 import '../../../../parties/data/models/party_model.dart';
@@ -45,6 +48,7 @@ class _LineItem {
 class _QuickPosScreenState extends State<QuickPosScreen> {
   final _invoiceController = TextEditingController();
   final _discountPctController = TextEditingController(text: '0');
+  final _taxRateController = TextEditingController(text: '13');
   final _paidController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
 
@@ -52,10 +56,13 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   DateTime _saleDate = DateTime.now();
   DateTime? _dueDate;
   String _paymentMethod = 'CASH';
+  int? _bankAccountId;
   bool _vatEnabled = false;
   bool _saving = false;
   bool _loaded = false;
   int? _editId;
+  bool _reminderEnabled = false;
+  DateTime? _reminderAt;
 
   final List<_LineItem> _items = [_LineItem()];
 
@@ -67,6 +74,13 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       final partyProvider = context.read<PartyProvider>();
       final invProvider = context.read<InventoryProvider>();
       final saleProvider = context.read<SaleProvider>();
+      context.read<BankingProvider>().load();
+      final businessTaxRate = context.read<AuthProvider>().currentBusiness?.defaultTaxRate;
+      if (businessTaxRate != null && _editId == null) {
+        _taxRateController.text = businessTaxRate == businessTaxRate.roundToDouble()
+            ? businessTaxRate.toStringAsFixed(0)
+            : businessTaxRate.toString();
+      }
       if (partyProvider.parties.isEmpty) await partyProvider.load();
       if (invProvider.products.isEmpty) await invProvider.load();
 
@@ -89,7 +103,15 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     _saleDate = sale.saleDate ?? DateTime.now();
     _dueDate = sale.dueDate;
     _paymentMethod = sale.paymentMethod;
+    _bankAccountId = sale.bankAccount;
     _vatEnabled = sale.taxRate > 0;
+    _reminderEnabled = sale.reminderEnabled;
+    _reminderAt = sale.reminderAt;
+    if (sale.taxRate > 0) {
+      _taxRateController.text = sale.taxRate == sale.taxRate.roundToDouble()
+          ? sale.taxRate.toStringAsFixed(0)
+          : sale.taxRate.toString();
+    }
     _paidController.text = sale.paidAmount.toString();
     _notesController.text = sale.notes;
     _discountPctController.text = sale.subtotal > 0
@@ -119,6 +141,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     }
     _invoiceController.dispose();
     _discountPctController.dispose();
+    _taxRateController.dispose();
     _paidController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -128,7 +151,8 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   double get _discountPct => double.tryParse(_discountPctController.text) ?? 0;
   double get _discountAmount => _subtotal * _discountPct / 100;
   double get _taxable => _subtotal - _discountAmount;
-  double get _taxAmount => _vatEnabled ? _taxable * 13 / 100 : 0;
+  double get _taxRate => double.tryParse(_taxRateController.text) ?? 0;
+  double get _taxAmount => _vatEnabled ? _taxable * _taxRate / 100 : 0;
   double get _total => _taxable + _taxAmount;
   double get _paid => double.tryParse(_paidController.text) ?? 0;
   // Not clamped to 0 — matches the backend's due_amount exactly (total - paid),
@@ -167,7 +191,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     final stockController = TextEditingController(text: '0');
     final formKey = GlobalKey<FormState>();
     bool saving = false;
-
+//Add a profile and eye buttom like other page with same functionality with back bu
     await showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -393,15 +417,18 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       dueDate: _dueDate,
       subtotal: _subtotal,
       discount: _discountAmount,
-      taxRate: _vatEnabled ? 13 : 0,
+      taxRate: _vatEnabled ? _taxRate : 0,
       taxAmount: _taxAmount,
       total: _total,
       paidAmount: _paid,
       dueAmount: _balanceDue,
       paymentMethod: _paymentMethod,
+      bankAccount: _paymentMethod != 'CASH' ? _bankAccountId : null,
       status: status,
       saleType: 'SALE',
       notes: _notesController.text.trim(),
+      reminderEnabled: _reminderEnabled,
+      reminderAt: _reminderEnabled ? _reminderAt : null,
       items: _items
           .where((i) => i.qty > 0)
           .map(
@@ -422,6 +449,35 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     if (!mounted) return;
     setState(() => _saving = false);
     if (result != null) {
+      if (_reminderEnabled && _reminderAt != null) {
+        await NotificationService.instance.scheduleReminder(
+          id: result.id,
+          title: 'Payment Reminder',
+          body: '${result.customerName.isNotEmpty ? result.customerName : 'Customer'} '
+              'owes ${Formatters.currency(result.dueAmount)}',
+          scheduledDate: _reminderAt!,
+        );
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Reminder Set'),
+            content: Text(
+              'Reminder set for ${Formatters.date(_reminderAt)} at '
+              '${TimeOfDay.fromDateTime(_reminderAt!).format(ctx)}',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+            ],
+          ),
+        );
+        if (!mounted) return;
+      } else {
+        // Editing a sale that previously had a reminder but it's now off —
+        // don't leave a stale notification scheduled for it.
+        await NotificationService.instance.cancel(result.id);
+      }
+      if (!mounted) return;
       if (context.canPop()) {
         context.pop();
       } else {
@@ -486,6 +542,76 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Switch(
+                                  value: _reminderEnabled,
+                                  onChanged: (v) async {
+                                    if (v) {
+                                      final granted = await NotificationService.instance.requestPermission();
+                                      if (!mounted) return;
+                                      if (!granted) {
+                                        showAppSnackBar(
+                                          context,
+                                          'Notifications are turned off for this app — enable them in phone settings to get reminders.',
+                                          isError: true,
+                                        );
+                                        return;
+                                      }
+                                      _reminderAt ??= DateTime(
+                                        (_dueDate ?? _saleDate).year,
+                                        (_dueDate ?? _saleDate).month,
+                                        (_dueDate ?? _saleDate).day,
+                                        9,
+                                      );
+                                    }
+                                    setState(() => _reminderEnabled = v);
+                                  },
+                                ),
+                                const Text('Set Reminder', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          if (_reminderEnabled)
+                            Expanded(
+                              child: InkWell(
+                                onTap: () async {
+                                  final base = _reminderAt ?? (_dueDate ?? _saleDate);
+                                  final pickedDate = await showDatePicker(
+                                    context: context,
+                                    initialDate: base,
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (pickedDate == null || !context.mounted) return;
+                                  final pickedTime = await showTimePicker(
+                                    context: context,
+                                    initialTime: TimeOfDay.fromDateTime(base),
+                                  );
+                                  if (pickedTime == null) return;
+                                  setState(() {
+                                    _reminderAt = DateTime(
+                                      pickedDate.year, pickedDate.month, pickedDate.day,
+                                      pickedTime.hour, pickedTime.minute,
+                                    );
+                                  });
+                                },
+                                child: InputDecorator(
+                                  decoration: const InputDecoration(labelText: 'Remind me at', isDense: true),
+                                  child: Text(
+                                    _reminderAt != null
+                                        ? '${Formatters.date(_reminderAt)} · ${TimeOfDay.fromDateTime(_reminderAt!).format(context)}'
+                                        : 'Pick date & time',
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -530,11 +656,27 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                             ),
                           ),
                           const SizedBox(width: 16),
+                          if (_vatEnabled)
+                            SizedBox(
+                              width: 72,
+                              child: TextField(
+                                controller: _taxRateController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
+                                decoration: const InputDecoration(
+                                  labelText: 'VAT %',
+                                ),
+                                onChanged: (_) => setState(() {}),
+                              ),
+                            ),
+                          const SizedBox(width: 8),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'VAT 13%',
+                                'VAT',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: AppColors.textSecondary,
@@ -565,7 +707,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                     children: [
                       _totalsRow('Subtotal', _subtotal),
                       _totalsRow('Discount', -_discountAmount),
-                      if (_vatEnabled) _totalsRow('VAT (13%)', _taxAmount),
+                      if (_vatEnabled) _totalsRow('VAT (${_taxRate.toStringAsFixed(_taxRate == _taxRate.roundToDouble() ? 0 : 2)}%)', _taxAmount),
                       const Divider(height: 20),
                       _totalsRow('Grand Total', _total, bold: true),
                       const SizedBox(height: 12),

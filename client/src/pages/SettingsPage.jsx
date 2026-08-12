@@ -86,6 +86,7 @@ export default function SettingsPage() {
     phone: currentBusiness?.phone || "",
     email: currentBusiness?.email || "",
     business_type: currentBusiness?.business_type || "",
+    default_tax_rate: currentBusiness?.default_tax_rate ?? 13,
   });
 
   const handleLogoUpload = (e) => {
@@ -267,6 +268,21 @@ export default function SettingsPage() {
                 />
               </div>
             ))}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-navy-400">
+                {language === "ne" ? "पूर्वनिर्धारित कर दर (%)" : "Default Tax Rate (%)"}
+              </label>
+              <input
+                type="number" min="0" max="100" step="0.01"
+                value={businessForm.default_tax_rate}
+                onChange={(e) => setBusinessForm((f) => ({ ...f, default_tax_rate: parseFloat(e.target.value) || 0 }))}
+                placeholder="13"
+                className="w-full rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
+              />
+              <p className="mt-1 text-[11px] text-navy-500">
+                {language === "ne" ? "नयाँ बिक्रीमा पूर्वनिर्धारित रूपमा लागू हुनेछ (उदाहरणका लागि VAT १३%)।" : "Applied by default to new sales (e.g. VAT 13%)."}
+              </p>
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-navy-400">{t("businessLogo")}</label>

@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext";
+import { useAuth } from "../context/AuthContext";
 import { purchases as purchasesApi, parties, inventory } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
 
@@ -43,6 +44,7 @@ const EMPTY_FORM = {
   due_date: "",
   items: [{ ...EMPTY_ITEM }],
   discount: 0,
+  tax_rate: 0,
   paid_amount: 0,
   payment_method: "CASH",
   notes: "",
@@ -51,6 +53,7 @@ const EMPTY_FORM = {
 
 /* ─── Purchase Modal ─── */
 function PurchaseModal({ onClose, onSaved, editData }) {
+  const { currentBusiness } = useAuth();
   const [form, setForm] = useState(editData ? {
     supplier: editData.supplier || "",
     supplier_name: editData.supplier_name || editData.party_name || "",
@@ -63,11 +66,12 @@ function PurchaseModal({ onClose, onSaved, editData }) {
     discount: editData.subtotal && parseFloat(editData.subtotal) > 0
       ? Math.round((parseFloat(editData.discount || 0) / parseFloat(editData.subtotal)) * 10000) / 100
       : (editData.discount || 0),
+    tax_rate: editData.tax_rate ?? currentBusiness?.default_tax_rate ?? 0,
     paid_amount: editData.paid_amount || 0,
     payment_method: editData.payment_method || "CASH",
     notes: editData.notes || "",
     status: editData.status || "CONFIRMED",
-  } : { ...EMPTY_FORM, items: [{ ...EMPTY_ITEM }] });
+  } : { ...EMPTY_FORM, items: [{ ...EMPTY_ITEM }], tax_rate: currentBusiness?.default_tax_rate ?? 0 });
 
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -107,7 +111,10 @@ function PurchaseModal({ onClose, onSaved, editData }) {
   const subtotal = form.items.reduce((s, it) => s + (it.quantity * it.unit_price) - (parseFloat(it.discount_amount) || 0), 0);
   const discountPercent = Math.min(100, Math.max(0, parseFloat(form.discount) || 0));
   const discountAmount = subtotal * discountPercent / 100;
-  const grandTotal = Math.max(0, subtotal - discountAmount);
+  const taxableAmount = Math.max(0, subtotal - discountAmount);
+  const taxRate = Math.min(100, Math.max(0, parseFloat(form.tax_rate) || 0));
+  const taxAmount = taxableAmount * taxRate / 100;
+  const grandTotal = taxableAmount + taxAmount;
   const balanceDue = Math.max(0, grandTotal - parseFloat(form.paid_amount || 0));
 
   const handleSubmit = async (statusOverride) => {
@@ -125,6 +132,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
         due_date: form.due_date || null,
         status: statusOverride || form.status,
         discount: discountAmount.toFixed(2),
+        tax_rate: taxRate.toFixed(2),
         subtotal: subtotal.toFixed(2),
         total: grandTotal.toFixed(2),
         due_amount: balanceDue.toFixed(2),
@@ -295,13 +303,23 @@ function PurchaseModal({ onClose, onSaved, editData }) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-navy-400">Discount (%)</label>
-                <input type="number" min="0" max="100" step="0.01"
-                  className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
-                  value={form.discount}
-                  onChange={e => setForm(f => ({ ...f, discount: parseFloat(e.target.value) || 0 }))}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-navy-400">Discount (%)</label>
+                  <input type="number" min="0" max="100" step="0.01"
+                    className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
+                    value={form.discount}
+                    onChange={e => setForm(f => ({ ...f, discount: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-navy-400">VAT / Tax (%)</label>
+                  <input type="number" min="0" max="100" step="0.01"
+                    className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
+                    value={form.tax_rate}
+                    onChange={e => setForm(f => ({ ...f, tax_rate: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold text-navy-400">Notes</label>
@@ -346,6 +364,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
             <div className="rounded-xl border border-navy-700 bg-navy-800/40 p-4 space-y-2 text-sm">
               <div className="flex justify-between text-navy-400"><span>Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
               <div className="flex justify-between text-navy-400"><span>Discount ({discountPercent}%)</span><span>- Rs. {discountAmount.toFixed(2)}</span></div>
+              <div className="flex justify-between text-navy-400"><span>Tax ({taxRate}%)</span><span>+ Rs. {taxAmount.toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-white border-t border-navy-700 pt-2"><span>Grand Total</span><span>Rs. {grandTotal.toFixed(2)}</span></div>
               <div className="pt-1 space-y-2">
                 <div>

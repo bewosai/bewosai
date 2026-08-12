@@ -5,7 +5,10 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: { "Content-Type": "application/json" },
+  // Tells the backend's feature-flag enforcement (require_feature) this is
+  // the web client, so Super Admin's per-platform toggles apply correctly —
+  // see bewosai/permissions.py::get_platform. The Flutter app sends "mobile".
+  headers: { "Content-Type": "application/json", "X-Platform": "web" },
 });
 
 // Wrap so offline mutations are queued and re-synced automatically
@@ -196,6 +199,16 @@ export const superadmin = {
   createAnnouncement: (d) => api.post("/superadmin/announcements/", d),
   updateAnnouncement: (id, d) => api.patch(`/superadmin/announcements/${id}/`, d),
   deleteAnnouncement: (id) => api.delete(`/superadmin/announcements/${id}/`),
+
+  features: () => api.get("/superadmin/features/"),
+  toggleFeature: (key, d) => api.patch(`/superadmin/features/${key}/toggle/`, d),
+};
+
+// Effective feature availability for the current business — same endpoint
+// the Flutter app reads, so both platforms always agree (see
+// bewosai/urls.py::EffectiveFeaturesView).
+export const features = {
+  effective: () => api.get("/features/"),
 };
 
 export default api;

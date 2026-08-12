@@ -1,6 +1,55 @@
+from django.db.utils import DatabaseError
+
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 from .utils import get_bid, get_business
+
+
+def get_platform(request):
+    """
+    'mobile' for the Flutter app, 'desktop' for everything else (the React
+    web client, API tools, etc). Both frontends send this explicitly via the
+    X-Platform header rather than being sniffed from the user agent, so the
+    signal is reliable — see EffectiveFeaturesView / require_feature below.
+    """
+    platform = (request.headers.get("X-Platform") or "").strip().lower()
+    return "mobile" if platform == "mobile" else "desktop"
+
+
+def require_feature(key):
+    """
+    Two-layer permission model:
+      1. Super Admin feature control — is this module even switched on for
+         this business/platform right now? (superadmin.models.Feature)
+      2. Business/staff permissions — can *this* user use it? (existing
+         per-view/staff-role checks, unaffected by this class)
+    A Feature that's off overrides every staff permission underneath it —
+    intentionally checked first and independently, so disabling e.g. Banking
+    from the Super Admin dashboard immediately locks out every business on
+    both Desktop and Mobile, regardless of individual staff roles.
+    """
+
+    class _RequireFeature(BasePermission):
+        message = f"The '{key}' feature is currently disabled for your plan or platform."
+
+        def has_permission(self, request, view):
+            from superadmin.models import Feature
+
+            try:
+                feature = Feature.objects.filter(key=key).first()
+            except DatabaseError:
+                # Feature table not migrated yet on this environment — fail
+                # open rather than 500 every gated endpoint.
+                return True
+            if feature is None:
+                # Unregistered feature key — fail open rather than break
+                # an endpoint because the seed data hasn't been run yet.
+                return True
+            business = get_business(request)
+            platform = get_platform(request)
+            return feature.is_available_on(platform, business)
+
+    return _RequireFeature
 
 
 class IsPremiumBusiness(BasePermission):

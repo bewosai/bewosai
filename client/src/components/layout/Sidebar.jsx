@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useFeatures } from "../../context/FeatureContext";
 import { useTranslation } from "../../utils/translations";
 import { useOfflineSync } from "../../utils/offlineQueue";
 import api from "../../api/index";
@@ -19,17 +20,19 @@ function buildNavItems(t, language, isPremium) {
     {
       name: t("sales"),
       icon: ShoppingCart,
+      feature: "pos",
       children: [
         { name: t("allInvoices"), path: "/sales" },
         { name: t("quotation"), path: "/sales/quotation" },
         { name: t("salesReturn"), path: "/sales/return" },
       ],
     },
-    { name: t("purchases"), path: "/purchases", icon: Truck },
-    { name: t("expenses"), path: "/expenses", icon: Receipt },
+    { name: t("purchases"), path: "/purchases", icon: Truck, feature: "purchases" },
+    { name: t("expenses"), path: "/expenses", icon: Receipt, feature: "expenses" },
     {
       name: t("inventory"),
       icon: Boxes,
+      feature: "inventory",
       children: [
         { name: t("products"), path: "/inventory/products" },
         { name: t("categories"), path: "/inventory/categories" },
@@ -37,22 +40,23 @@ function buildNavItems(t, language, isPremium) {
         { name: t("lowStock"), path: "/inventory/low-stock" },
       ],
     },
-    { name: t("parties"), path: "/parties", icon: Users },
-    { name: t("payments"), path: "/payments", icon: Wallet },
+    { name: t("parties"), path: "/parties", icon: Users, feature: "parties" },
+    { name: t("payments"), path: "/payments", icon: Wallet, feature: "payments" },
     {
       name: t("banking"),
       icon: CreditCard,
+      feature: "banking",
       children: [
         { name: t("banking"), path: "/banking/accounts" },
         { name: t("report"), path: "/banking/transactions" },
       ],
     },
-    { name: t("staff"), path: "/staff", icon: UserCheck },
-    { name: t("reports"), path: "/reports", icon: BarChart3 },
+    { name: t("staff"), path: "/staff", icon: UserCheck, feature: "staff_management" },
+    { name: t("reports"), path: "/reports", icon: BarChart3, feature: "reports" },
     { name: t("settings"), path: "/settings", icon: Settings },
     { name: t("recycleBin"), path: "/recycle-bin", icon: Trash2 },
     ...(isPremium
-      ? [{ name: language === "ne" ? "Excel आयात" : "Import Excel", path: "/import", icon: FileSpreadsheet }]
+      ? [{ name: language === "ne" ? "Excel आयात" : "Import Excel", path: "/import", icon: FileSpreadsheet, feature: "excel_import" }]
       : []),
   ];
 }
@@ -119,8 +123,10 @@ function NavItem({ item, onClose }) {
 export default function Sidebar({ open, setOpen }) {
   const { currentBusiness, user } = useAuth();
   const { t, language } = useTranslation();
+  const { isFeatureEnabled } = useFeatures();
   const { isOnline, pendingCount, isSyncing, flush } = useOfflineSync(api);
-  const navItems = buildNavItems(t, language, currentBusiness?.plan === "PREMIUM");
+  const navItems = buildNavItems(t, language, currentBusiness?.plan === "PREMIUM")
+    .filter((item) => !item.feature || isFeatureEnabled(item.feature));
 
   return (
     <>

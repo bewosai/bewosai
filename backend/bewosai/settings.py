@@ -118,6 +118,17 @@ STORAGES = {
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Render's filesystem is ephemeral — anything saved to MEDIA_ROOT (product
+# images, business logos, purchase bill photos) disappears on every deploy
+# or restart. Set CLOUDINARY_URL (from the Cloudinary dashboard's "API
+# Environment variable" — looks like cloudinary://<key>:<secret>@<cloud_name>)
+# to persist uploads there instead. Without it, uploads just use local disk
+# exactly as before, so local dev needs no Cloudinary account.
+CLOUDINARY_CONFIGURED = bool(config("CLOUDINARY_URL", default=""))
+if CLOUDINARY_CONFIGURED:
+    INSTALLED_APPS += ["cloudinary_storage", "cloudinary"]
+    STORAGES["default"] = {"BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── Django REST Framework ──────────────────────────────────────────────────────
@@ -213,6 +224,7 @@ CORS_ALLOW_HEADERS = [
     "x-csrftoken",
     "x-requested-with",
     "x-business-id",  # Flutter app business context header
+    "x-platform",     # "web" (React) / "mobile" (Flutter) — feature-flag platform targeting
 ]
 
 SENDGRID_API_KEY = config("SENDGRID_API_KEY", default="")
@@ -224,6 +236,11 @@ EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+
+# OAuth 2.0 Web client ID from Google Cloud Console — used as the `audience`
+# when verifying ID tokens from GoogleLoginView. The Flutter app's
+# google_sign_in setup must use a client tied to the same GCP project.
+GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
 
 # Auto-select backend: SMTP when Gmail credentials present, console otherwise
 EMAIL_BACKEND = (

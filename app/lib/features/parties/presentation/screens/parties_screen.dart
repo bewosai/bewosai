@@ -62,6 +62,12 @@ class _PartiesScreenState extends State<PartiesScreen> {
     final filtered = _filtered(pp.parties);
 
     return Scaffold(
+      // No AppBar here previously — fine when this screen is the embedded
+      // "Parties" bottom-nav tab (MainShell provides chrome for tab 0 only,
+      // same as TransactionsScreen), but this screen is also pushed
+      // standalone (e.g. the Dashboard's "Add Party" shortcut), where it had
+      // no title, no back button, and no way back to Dashboard at all.
+      appBar: AppBar(title: const Text('Parties'), actions: const [HomeLogoButton()]),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'parties_fab',
         onPressed: _openAddSheet,
@@ -390,13 +396,7 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                widget.party == null ? 'Add Party' : 'Edit Party',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              SheetHeader(title: widget.party == null ? 'Add Party' : 'Edit Party'),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _nameController,

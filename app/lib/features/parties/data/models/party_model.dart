@@ -64,6 +64,25 @@ class Party {
         'is_active': isActive,
       };
 
+  /// Full read-shape serialization for the offline cache — unlike [toJson]
+  /// (a write body), this round-trips through [Party.fromJson] exactly.
+  Map<String, dynamic> toCacheJson() => {
+        'id': id,
+        'name': name,
+        'party_type': partyType,
+        'customer_type': customerType,
+        'phone': phone,
+        'email': email,
+        'address': address,
+        'pan_number': panNumber,
+        'vat_number': vatNumber,
+        'opening_balance': openingBalance,
+        'balance': balance,
+        'notes': notes,
+        'is_active': isActive,
+        'created_at': createdAt?.toIso8601String(),
+      };
+
   bool get isCustomer => partyType == 'CUSTOMER' || partyType == 'BOTH';
   bool get isSupplier => partyType == 'SUPPLIER' || partyType == 'BOTH';
 }
@@ -75,6 +94,7 @@ class PartyPayment {
   final String paymentType; // IN / OUT
   final double amount;
   final String paymentMethod;
+  final int? bankAccount;
   final DateTime? date;
   final String note;
   final DateTime? createdAt;
@@ -86,6 +106,7 @@ class PartyPayment {
     required this.paymentType,
     required this.amount,
     required this.paymentMethod,
+    this.bankAccount,
     this.date,
     required this.note,
     this.createdAt,
@@ -98,6 +119,7 @@ class PartyPayment {
         paymentType: json['payment_type'] as String? ?? 'IN',
         amount: Formatters.toDouble(json['amount']),
         paymentMethod: json['payment_method'] as String? ?? 'CASH',
+        bankAccount: json['bank_account'] as int?,
         date: Formatters.parseDate(json['date'] as String?),
         note: json['note'] as String? ?? '',
         createdAt: Formatters.parseDate(json['created_at'] as String?),
@@ -108,6 +130,7 @@ class PartyPayment {
         'payment_type': paymentType,
         'amount': amount,
         'payment_method': paymentMethod,
+        'bank_account': bankAccount,
         'date': date != null ? Formatters.apiDate(date!) : null,
         'note': note,
       };

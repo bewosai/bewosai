@@ -1,5 +1,16 @@
 from rest_framework import serializers
-from .models import SupportTicket, Announcement
+from .models import SupportTicket, Announcement, Feature
+
+
+class FeatureSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Feature
+        fields = (
+            "id", "key", "name", "description", "enabled",
+            "desktop_enabled", "mobile_enabled", "premium_only",
+            "updated_at",
+        )
+        read_only_fields = ("id", "key", "updated_at")
 
 
 class SupportTicketSerializer(serializers.ModelSerializer):

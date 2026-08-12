@@ -31,8 +31,23 @@ class Purchase(models.Model):
     due_date = models.DateField(null=True, blank=True)
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="VAT % e.g. 13")
+    tax_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    bank_account = models.ForeignKey(
+        "banking.BankAccount", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="purchases",
+        help_text="Which account paid_amount was paid from when payment_method is non-cash — "
+                   "a matching BankTransaction is kept in sync automatically.",
+    )
+    reconciled_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0,
+        help_text="Portion of paid_amount applied here later via a party PartyPayment "
+                   "(see PartyPaymentListCreateView._reconcile_payment), as opposed to "
+                   "being paid at the point of purchase. Lets the party ledger show each "
+                   "rupee exactly once instead of double-counting reconciled payments.",
+    )
     due_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=10, choices=METHOD_CHOICES, default=METHOD_CASH)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default=STATUS_CONFIRMED)
@@ -52,6 +67,14 @@ class Purchase(models.Model):
         return self.bill_number
 
     def save(self, *args, **kwargs):
+        # tax_amount is computed from taxable amount (subtotal - discount),
+        # mirroring Sale.save() so purchases carry VAT the same way sales do.
+        from decimal import Decimal
+        taxable = self.subtotal - self.discount
+        if taxable < 0:
+            taxable = 0
+        self.tax_amount = (taxable * self.tax_rate / Decimal("100")).quantize(Decimal("0.01"))
+        self.total = taxable + self.tax_amount
         self.due_amount = self.total - self.paid_amount
         super().save(*args, **kwargs)
 

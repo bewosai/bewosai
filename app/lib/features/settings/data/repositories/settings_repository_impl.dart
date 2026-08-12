@@ -19,6 +19,8 @@ class SettingsRepositoryImpl implements SettingsRepository {
       SettingsPreferencesModel(
         themeMode: preferences.themeMode,
         showNepaliCalendar: preferences.showNepaliCalendar,
+        hideAmounts: preferences.hideAmounts,
+        language: preferences.language,
       ),
     );
   }

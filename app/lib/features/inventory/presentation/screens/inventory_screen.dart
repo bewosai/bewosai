@@ -50,14 +50,20 @@ class _InventoryScreenState extends State<InventoryScreen>
     final width = MediaQuery.sizeOf(context).width;
     final kpiColumns = width < 420 ? 2 : (width < 800 ? 2 : 4);
 
+    // No AppBar/bottom-nav when this is the embedded "Inventory" bottom-nav
+    // tab (MainShell provides chrome there), but it's also pushed standalone
+    // for the low-stock filter AND the Dashboard's "Add Item" shortcut —
+    // both need a title, back button, and way home just like every other
+    // standalone-pushed screen.
+    final standalone = widget.initialLowStockFilter || widget.openAddOnStart;
     return Scaffold(
-      appBar: widget.initialLowStockFilter
+      appBar: standalone
           ? AppBar(
-              title: const Text('Low Stock Products'),
+              title: Text(widget.initialLowStockFilter ? 'Low Stock Products' : 'Inventory'),
               actions: const [HomeLogoButton()],
             )
           : null,
-      bottomNavigationBar: widget.initialLowStockFilter
+      bottomNavigationBar: standalone
           ? const AppBottomNav(currentIndex: 3)
           : null,
       floatingActionButton: FloatingActionButton(
@@ -501,13 +507,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                widget.product == null ? 'New Product' : 'Edit Product',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              SheetHeader(title: widget.product == null ? 'New Product' : 'Edit Product'),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _nameController,
@@ -700,10 +700,7 @@ class _UnitFormSheetState extends State<_UnitFormSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              widget.unit == null ? 'New Unit' : 'Edit Unit',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-            ),
+            SheetHeader(title: widget.unit == null ? 'New Unit' : 'Edit Unit'),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -829,10 +826,7 @@ class _CategoryFormSheetState extends State<_CategoryFormSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              widget.category == null ? 'New Category' : 'Edit Category',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-            ),
+            SheetHeader(title: widget.category == null ? 'New Category' : 'Edit Category'),
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,

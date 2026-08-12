@@ -195,6 +195,7 @@ class _CreateBusinessSheetState extends State<_CreateBusinessSheet> {
       vatNumber: '',
       currency: 'NPR',
       fiscalYearStart: '07-16',
+      defaultTaxRate: 13,
       plan: 'FREE',
       status: 'ACTIVE',
       owner: 0,
@@ -229,10 +230,7 @@ class _CreateBusinessSheetState extends State<_CreateBusinessSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'New Business',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-            ),
+            const SheetHeader(title: 'New Business'),
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,

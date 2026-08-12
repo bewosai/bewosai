@@ -7,6 +7,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../parties/presentation/providers/party_provider.dart';
 import '../../data/models/report_models.dart';
 import '../../domain/usecases/report_usecases.dart';
+import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../providers/report_provider.dart';
 
@@ -578,8 +579,8 @@ class _DayBookTabState extends State<_DayBookTab> {
         InkWell(
           onTap: () async {
             final reportProvider = context.read<ReportProvider>();
-            final picked = await showDatePicker(
-              context: context,
+            final picked = await AppDatePicker.pick(
+              context,
               initialDate: _date,
               firstDate: DateTime(2020),
               lastDate: DateTime(2100),
@@ -634,7 +635,7 @@ class _DayBookTabState extends State<_DayBookTab> {
                             Row(
                               children: [
                                 StatusBadge(
-                                  label: e.type,
+                                  label: Formatters.transactionTypeLabel(e.type),
                                   color: AppColors.navy500,
                                 ),
                                 const SizedBox(width: 6),
@@ -919,7 +920,7 @@ class _AllTransactionsTabState extends State<_AllTransactionsTab> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(children: [
-                            StatusBadge(label: e.type, color: AppColors.navy500),
+                            StatusBadge(label: Formatters.transactionTypeLabel(e.type), color: AppColors.navy500),
                             const SizedBox(width: 6),
                             Flexible(child: Text(e.ref, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
                           ]),
@@ -1040,7 +1041,7 @@ class _CashInHandTab extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(children: [
-                            StatusBadge(label: e.type, color: AppColors.navy500),
+                            StatusBadge(label: Formatters.transactionTypeLabel(e.type), color: AppColors.navy500),
                             const SizedBox(width: 6),
                             Flexible(child: Text(e.party, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
                           ]),
@@ -1190,7 +1191,7 @@ class _BankStatementTabState extends State<_BankStatementTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            StatusBadge(label: e.type, color: AppColors.navy500),
+                            StatusBadge(label: Formatters.transactionTypeLabel(e.type), color: AppColors.navy500),
                             if (e.description.isNotEmpty)
                               Text(e.description, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                           ],

@@ -1,13 +1,19 @@
 import re
 
-from rest_framework import generics, status, parsers
+from rest_framework import generics, status, parsers, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.utils import timezone
 
+from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
 from bewosai.utils import get_business
 from .models import Purchase, PurchaseReturn
 from .serializers import PurchaseSerializer, PurchaseReturnSerializer
+
+
+class _RequirePurchases:
+    """Gated by the Super Admin 'Purchases' feature switch."""
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("purchases")]
 
 
 def _next_bill_number(business):
@@ -20,7 +26,7 @@ def _next_bill_number(business):
     return f"PUR-{num:04d}"
 
 
-class PurchaseNextNumberView(APIView):
+class PurchaseNextNumberView(_RequirePurchases, APIView):
     def get(self, request):
         biz = get_business(request)
         if not biz:
@@ -28,7 +34,7 @@ class PurchaseNextNumberView(APIView):
         return Response({"next_number": _next_bill_number(biz)})
 
 
-class PurchaseListCreateView(generics.ListCreateAPIView):
+class PurchaseListCreateView(_RequirePurchases, generics.ListCreateAPIView):
     serializer_class = PurchaseSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
@@ -60,7 +66,7 @@ class PurchaseListCreateView(generics.ListCreateAPIView):
         )
 
 
-class PurchaseDetailView(generics.RetrieveUpdateDestroyAPIView):
+class PurchaseDetailView(_RequirePurchases, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PurchaseSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
@@ -74,7 +80,7 @@ class PurchaseDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.save(update_fields=["is_deleted", "deleted_at"])
 
 
-class PurchaseReturnListCreateView(generics.ListCreateAPIView):
+class PurchaseReturnListCreateView(_RequirePurchases, generics.ListCreateAPIView):
     serializer_class = PurchaseReturnSerializer
 
     def get_queryset(self):

@@ -123,9 +123,11 @@ export default function ReportsPage() {
     }).finally(() => setLoading(false));
   }, []);
 
-  // Profit & Loss tab — refetch whenever the date range or tab changes
+  // Profit & Loss tab (and Overview's Net Profit card, which shows the same
+  // backend-computed figure — not a separately-derived one) — refetch
+  // whenever the date range or tab changes.
   useEffect(() => {
-    if (activeReport !== "profit") return;
+    if (activeReport !== "profit" && activeReport !== "overview") return;
     setProfitLoading(true);
     reportsApi.profit({ date_from: dateFrom, date_to: dateTo })
       .then((res) => setProfitData(res.data))
@@ -246,7 +248,10 @@ export default function ReportsPage() {
   const totalSales = filteredSales.reduce((s, x) => s + parseFloat(x.total_amount || x.total || 0), 0);
   const totalExp = filteredExp.reduce((s, x) => s + parseFloat(x.amount || 0), 0);
   const totalPurchases = filteredPurchases.reduce((s, x) => s + parseFloat(x.total || 0), 0);
-  const netProfit = totalSales - totalExp;
+  // Same figure as the Profit & Loss tab (backend net_profit = revenue − returns
+  // − COGS − expenses) — previously this card computed sales − expenses locally,
+  // which ignored cost of goods sold and showed a different "Net Profit" than P&L.
+  const netProfit = profitData ? profitData.net_profit : (totalSales - totalExp);
 
   // Monthly data (last 6 months)
   const monthlyData = Array.from({ length: 6 }, (_, i) => {

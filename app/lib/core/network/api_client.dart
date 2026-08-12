@@ -21,7 +21,10 @@ class ApiClient {
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 30),
       sendTimeout: const Duration(seconds: 30),
-      headers: {'Content-Type': 'application/json'},
+      // X-Platform tells the backend's feature-flag enforcement this is the
+      // Flutter app, so Super Admin's per-platform toggles apply correctly —
+      // see backend bewosai/permissions.py::get_platform. React sends "web".
+      headers: {'Content-Type': 'application/json', 'X-Platform': 'mobile'},
     ));
 
     _dio.interceptors.add(InterceptorsWrapper(

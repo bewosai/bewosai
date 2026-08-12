@@ -12,6 +12,8 @@ export 'responsive_grid.dart';
 export 'responsive_body.dart';
 export 'home_logo_button.dart';
 export 'app_bottom_nav.dart';
+export 'feature_gate.dart';
+export 'sheet_header.dart';
 
 class SectionHeader extends StatelessWidget {
   final String title;

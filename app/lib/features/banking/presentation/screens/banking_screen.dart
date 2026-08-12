@@ -4,6 +4,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
+import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../data/models/banking_model.dart';
 import '../providers/banking_provider.dart';
@@ -192,7 +193,7 @@ class _AccountFormSheetState extends State<_AccountFormSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(widget.account == null ? 'Add Account' : 'Edit Account', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              SheetHeader(title: widget.account == null ? 'Add Account' : 'Edit Account'),
               const SizedBox(height: 16),
               TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Account Name *'), validator: (v) => Validators.required(v, 'Account name')),
               const SizedBox(height: 12),
@@ -265,7 +266,7 @@ class _TransactionFormSheetState extends State<_TransactionFormSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Add Transaction', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const SheetHeader(title: 'Add Transaction'),
           const SizedBox(height: 16),
           Row(children: [
             Expanded(
@@ -289,7 +290,7 @@ class _TransactionFormSheetState extends State<_TransactionFormSheet> {
           const SizedBox(height: 12),
           InkWell(
             onTap: () async {
-              final picked = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
+              final picked = await AppDatePicker.pick(context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
               if (picked != null) setState(() => _date = picked);
             },
             child: InputDecorator(decoration: const InputDecoration(labelText: 'Date'), child: Text(Formatters.date(_date))),

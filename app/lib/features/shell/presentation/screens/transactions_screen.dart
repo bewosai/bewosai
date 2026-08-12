@@ -8,7 +8,10 @@ import '../../../sales/presentation/screens/sales_screen.dart';
 /// tabs; they're combined here under sub-tabs so the main nav has room for
 /// "More" instead.
 class TransactionsScreen extends StatefulWidget {
-  const TransactionsScreen({super.key});
+  /// 0 = Sales, 1 = Purchases — which sub-tab to land on (e.g. the
+  /// Dashboard's "Purchase (This Month)" card jumps here on index 1).
+  final int initialSubTab;
+  const TransactionsScreen({super.key, this.initialSubTab = 0});
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -16,7 +19,11 @@ class TransactionsScreen extends StatefulWidget {
 
 class _TransactionsScreenState extends State<TransactionsScreen>
     with SingleTickerProviderStateMixin {
-  late final _tabController = TabController(length: 2, vsync: this);
+  late final _tabController = TabController(
+    length: 2,
+    vsync: this,
+    initialIndex: widget.initialSubTab.clamp(0, 1),
+  );
 
   @override
   void dispose() {
@@ -44,7 +51,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
       body: ResponsiveBody(
         child: TabBarView(
           controller: _tabController,
-          children: const [SalesScreen(), PurchasesScreen()],
+          children: const [
+            FeatureGate(feature: 'pos', child: SalesScreen()),
+            FeatureGate(feature: 'purchases', child: PurchasesScreen()),
+          ],
         ),
       ),
     );

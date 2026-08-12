@@ -10,6 +10,7 @@ class Business {
   final String vatNumber;
   final String currency;
   final String fiscalYearStart;
+  final double defaultTaxRate;
   final String plan;
   final String status;
   final int owner;
@@ -28,6 +29,7 @@ class Business {
     required this.vatNumber,
     required this.currency,
     required this.fiscalYearStart,
+    required this.defaultTaxRate,
     required this.plan,
     required this.status,
     required this.owner,
@@ -47,6 +49,7 @@ class Business {
         vatNumber: json['vat_number'] as String? ?? '',
         currency: json['currency'] as String? ?? 'NPR',
         fiscalYearStart: json['fiscal_year_start'] as String? ?? '07-16',
+        defaultTaxRate: double.tryParse('${json['default_tax_rate'] ?? ''}') ?? 13,
         plan: json['plan'] as String? ?? 'FREE',
         status: json['status'] as String? ?? 'ACTIVE',
         owner: json['owner'] is int ? json['owner'] as int : int.tryParse('${json['owner']}') ?? 0,
@@ -64,6 +67,7 @@ class Business {
         'vat_number': vatNumber,
         'currency': currency,
         'fiscal_year_start': fiscalYearStart,
+        'default_tax_rate': defaultTaxRate,
       };
 
   Map<String, dynamic> toRawJson() => {
@@ -78,6 +82,7 @@ class Business {
         'vat_number': vatNumber,
         'currency': currency,
         'fiscal_year_start': fiscalYearStart,
+        'default_tax_rate': defaultTaxRate,
         'plan': plan,
         'status': status,
         'owner': owner,

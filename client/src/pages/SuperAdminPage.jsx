@@ -12,6 +12,7 @@ import {
   CalendarDays, ChevronLeft, ChevronRight, Plus, Edit2,
   Trash2, MessageSquare, Bell, Search, RefreshCw, Loader,
   TrendingUp, AlertTriangle, ToggleLeft, ToggleRight, Crown,
+  SlidersHorizontal, Monitor, Smartphone,
 } from "lucide-react";
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -942,6 +943,99 @@ function AnnouncementsTab({ announcements, onRefresh }) {
   );
 }
 
+/* ── Feature Management Tab ──────────────────────────────────────────────────
+   Master switch for every app module — enforced on the backend for both
+   Desktop (React) and Mobile (Flutter), not just hidden in this UI. See
+   backend bewosai/permissions.py::require_feature. */
+function FeaturesTab({ features, onRefresh }) {
+  const [busyKey, setBusyKey] = useState(null);
+
+  const toggle = async (feature, field) => {
+    setBusyKey(feature.key + field);
+    try {
+      await adminApi.toggleFeature(feature.key, { [field]: !feature[field] });
+      onRefresh();
+    } catch {}
+    setBusyKey(null);
+  };
+
+  const availableTo = (f) => {
+    if (!f.enabled) return "—";
+    return f.premium_only ? "Premium" : "All businesses";
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-navy-500">
+        Disabling a feature here overrides every staff permission underneath it — nobody in any
+        business can use it, on Desktop or Mobile, until it's switched back on.
+      </p>
+      <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-navy-800 text-left text-xs text-navy-500">
+              <th className="px-4 py-3 font-medium">Feature</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Available To</th>
+              <th className="px-4 py-3 font-medium text-center">Desktop</th>
+              <th className="px-4 py-3 font-medium text-center">Mobile</th>
+              <th className="px-4 py-3 font-medium text-center">Premium Only</th>
+              <th className="px-4 py-3 font-medium text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-navy-800/50">
+            {features.map((f) => (
+              <tr key={f.key} className="hover:bg-navy-800/30 transition">
+                <td className="px-4 py-3">
+                  <p className="font-semibold text-white">{f.name}</p>
+                  <p className="text-[11px] text-navy-500">{f.key}</p>
+                </td>
+                <td className="px-4 py-3">
+                  <Badge label={f.enabled ? "Enabled" : "Disabled"} color={f.enabled ? "green" : "red"} />
+                </td>
+                <td className="px-4 py-3 text-navy-300">{availableTo(f)}</td>
+                <td className="px-4 py-3 text-center">
+                  <button disabled={busyKey === f.key + "desktop_enabled"} onClick={() => toggle(f, "desktop_enabled")}
+                    title={f.desktop_enabled ? "Disable on Desktop" : "Enable on Desktop"}
+                    className="inline-flex items-center gap-1 text-navy-400 hover:text-orange-400 disabled:opacity-50">
+                    <Monitor className="h-3.5 w-3.5" />
+                    {f.desktop_enabled ? <ToggleRight className="h-4 w-4 text-green-400" /> : <ToggleLeft className="h-4 w-4" />}
+                  </button>
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <button disabled={busyKey === f.key + "mobile_enabled"} onClick={() => toggle(f, "mobile_enabled")}
+                    title={f.mobile_enabled ? "Disable on Mobile" : "Enable on Mobile"}
+                    className="inline-flex items-center gap-1 text-navy-400 hover:text-orange-400 disabled:opacity-50">
+                    <Smartphone className="h-3.5 w-3.5" />
+                    {f.mobile_enabled ? <ToggleRight className="h-4 w-4 text-green-400" /> : <ToggleLeft className="h-4 w-4" />}
+                  </button>
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <button disabled={busyKey === f.key + "premium_only"} onClick={() => toggle(f, "premium_only")}
+                    title={f.premium_only ? "Make available to all plans" : "Restrict to Premium plan"}
+                    className="text-navy-400 hover:text-orange-400 disabled:opacity-50">
+                    {f.premium_only ? <Crown className="h-4 w-4 text-yellow-400" /> : <Crown className="h-4 w-4" />}
+                  </button>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button disabled={busyKey === f.key + "enabled"} onClick={() => toggle(f, "enabled")}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                      f.enabled
+                        ? "border-red-500/30 text-red-400 hover:bg-red-500/10"
+                        : "border-green-500/30 text-green-400 hover:bg-green-500/10"
+                    }`}>
+                    {f.enabled ? "Disable" : "Enable"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /* ── Tickets Tab ──────────────────────────────────────────────────────────── */
 function TicketsTab({ tickets, onRefresh }) {
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -1014,6 +1108,7 @@ export default function SuperAdminPage() {
   const [users, setUsers] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [tickets, setTickets] = useState([]);
+  const [featureList, setFeatureList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState("overview");
@@ -1021,18 +1116,20 @@ export default function SuperAdminPage() {
   const load = async (showSpinner = true) => {
     if (showSpinner) setLoading(true); else setRefreshing(true);
     try {
-      const [s, b, u, a, tk] = await Promise.allSettled([
+      const [s, b, u, a, tk, f] = await Promise.allSettled([
         adminApi.stats(),
         adminApi.businesses(),
         adminApi.users(),
         adminApi.announcements(),
         adminApi.tickets(),
+        adminApi.features(),
       ]);
       if (s.status === "fulfilled") setStats(s.value.data);
       if (b.status === "fulfilled") setBusinesses(b.value.data?.results ?? b.value.data ?? []);
       if (u.status === "fulfilled") setUsers(u.value.data?.results ?? u.value.data ?? []);
       if (a.status === "fulfilled") setAnnouncements(a.value.data?.results ?? a.value.data ?? []);
       if (tk.status === "fulfilled") setTickets(tk.value.data?.results ?? tk.value.data ?? []);
+      if (f.status === "fulfilled") setFeatureList(f.value.data?.results ?? f.value.data ?? []);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1048,6 +1145,7 @@ export default function SuperAdminPage() {
     { id: "overview", label: "Overview", icon: TrendingUp },
     { id: "businesses", label: `Businesses (${businesses.length})`, icon: Building2 },
     { id: "users", label: `Users (${users.length})`, icon: Users },
+    { id: "features", label: "Feature Management", icon: SlidersHorizontal },
     { id: "announcements", label: "Announcements", icon: Bell },
     { id: "tickets", label: `Tickets (${tickets.filter(t => t.status === "OPEN").length} open)`, icon: MessageSquare },
   ];
@@ -1086,6 +1184,7 @@ export default function SuperAdminPage() {
           {tab === "overview" && <OverviewTab stats={stats} />}
           {tab === "businesses" && <BusinessesTab businesses={businesses} onRefresh={() => load(false)} />}
           {tab === "users" && <UsersTab users={users} onRefresh={() => load(false)} />}
+          {tab === "features" && <FeaturesTab features={featureList} onRefresh={() => load(false)} />}
           {tab === "announcements" && <AnnouncementsTab announcements={announcements} onRefresh={() => load(false)} />}
           {tab === "tickets" && <TicketsTab tickets={tickets} onRefresh={() => load(false)} />}
         </>

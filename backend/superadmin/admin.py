@@ -1,5 +1,12 @@
 from django.contrib import admin
-from .models import SupportTicket, Announcement
+from .models import SupportTicket, Announcement, Feature
+
+
+@admin.register(Feature)
+class FeatureAdmin(admin.ModelAdmin):
+    list_display = ("name", "key", "enabled", "desktop_enabled", "mobile_enabled", "premium_only")
+    list_filter = ("enabled", "premium_only")
+    search_fields = ("name", "key")
 
 
 @admin.register(SupportTicket)

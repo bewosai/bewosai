@@ -1,17 +1,50 @@
 from datetime import date, timedelta
 
+from rest_framework import permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.db.models import Sum, Count, F
-from django.db.models.functions import TruncDay
+from django.db.models import Sum, Count, F, DecimalField
+from django.db.models.functions import TruncDay, Coalesce
 
+from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
 from bewosai.utils import get_business
-from sales.models import Sale, SaleItem
+from sales.models import Sale, SaleItem, SaleReturn, SaleReturnItem
 from expenses.models import Expense
 from inventory.models import Product
 from parties.models import PartyPayment
 from purchases.models import Purchase
 from banking.models import BankAccount
+
+
+class _RequireReports:
+    """Gated by the Super Admin 'Reports' feature switch. Not applied to
+    DashboardSummaryView — that's the home screen, not the dedicated Reports
+    section, so it stays available even if 'reports' is switched off."""
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("reports")]
+
+# Cost of a sold unit: prefer the unit_cost snapshotted on the SaleItem at
+# sale time; fall back to the product's current purchase_price only for
+# older rows created before unit_cost existed.
+_UNIT_COST = Coalesce(F("unit_cost"), F("product__purchase_price"), output_field=DecimalField())
+_RETURN_UNIT_COST = Coalesce(
+    F("sale_item__unit_cost"), F("sale_item__product__purchase_price"), F("product__purchase_price"),
+    output_field=DecimalField(),
+)
+
+
+def _sale_returns_total(business, date_from, date_to):
+    """Revenue given back via SaleReturn within a date range, keyed by return_date."""
+    return SaleReturn.objects.filter(
+        business=business, return_date__range=[date_from, date_to],
+    ).aggregate(total=Sum("amount"))["total"] or 0
+
+
+def _sale_returns_cogs(business, date_from, date_to):
+    """Cost of goods that came back via SaleReturn within a date range — those units
+    were restocked, not sold, so their cost must come back out of COGS too."""
+    return SaleReturnItem.objects.filter(
+        sale_return__business=business, sale_return__return_date__range=[date_from, date_to],
+    ).aggregate(total=Sum(F("quantity") * _RETURN_UNIT_COST))["total"] or 0
 
 
 class DashboardSummaryView(APIView):
@@ -101,7 +134,6 @@ class DashboardSummaryView(APIView):
             business=biz, status="CONFIRMED", is_deleted=False
         ).order_by("-created_at")[:5]
 
-        from django.db.models import F as _F
         cogs_month = SaleItem.objects.filter(
             sale__business=biz,
             sale__sale_date__gte=month_start,
@@ -109,8 +141,16 @@ class DashboardSummaryView(APIView):
             sale__is_deleted=False,
             product__isnull=False,
         ).aggregate(
-            total=Sum(_F("quantity") * _F("product__purchase_price"))
+            total=Sum(F("quantity") * _UNIT_COST)
         )["total"] or 0
+
+        today_iso = today.isoformat()
+        month_start_iso = month_start.isoformat()
+        sales_returns_month = _sale_returns_total(biz, month_start_iso, today_iso)
+        returns_cogs_month = _sale_returns_cogs(biz, month_start_iso, today_iso)
+
+        net_sales_month = float(sales_month) - float(sales_returns_month)
+        net_cogs_month = float(cogs_month) - float(returns_cogs_month)
 
         return Response({
             "sales_today": float(sales_today),
@@ -123,15 +163,15 @@ class DashboardSummaryView(APIView):
             "total_payable": float(total_payable),
             "cash_balance": cash_balance,
             "low_stock_count": low_stock_count,
-            "cogs_month": float(cogs_month),
-            "gross_profit_month": float(sales_month) - float(cogs_month),
-            "profit_month": float(sales_month) - float(cogs_month) - float(expenses_month),
+            "cogs_month": net_cogs_month,
+            "gross_profit_month": net_sales_month - net_cogs_month,
+            "profit_month": net_sales_month - net_cogs_month - float(expenses_month),
             "top_items": top_items,
             "recent_sales": SaleSerializer(recent_sales, many=True).data,
         })
 
 
-class SalesReportView(APIView):
+class SalesReportView(_RequireReports, APIView):
     def get(self, request):
         biz = get_business(request)
         if not biz:
@@ -169,7 +209,7 @@ class SalesReportView(APIView):
         })
 
 
-class ExpenseReportView(APIView):
+class ExpenseReportView(_RequireReports, APIView):
     def get(self, request):
         biz = get_business(request)
         if not biz:
@@ -198,7 +238,7 @@ class ExpenseReportView(APIView):
         })
 
 
-class InventoryReportView(APIView):
+class InventoryReportView(_RequireReports, APIView):
     def get(self, request):
         biz = get_business(request)
         if not biz:
@@ -223,7 +263,7 @@ class InventoryReportView(APIView):
         })
 
 
-class ProfitReportView(APIView):
+class ProfitReportView(_RequireReports, APIView):
     def get(self, request):
         biz = get_business(request)
         if not biz:
@@ -238,18 +278,25 @@ class ProfitReportView(APIView):
             status="CONFIRMED",
             is_deleted=False,
         )
-        revenue = confirmed_sales.aggregate(total=Sum("total"))["total"] or 0
+        gross_revenue = confirmed_sales.aggregate(total=Sum("total"))["total"] or 0
 
-        # COGS = sum of (qty × product.purchase_price) for each item sold
-        cogs = SaleItem.objects.filter(
+        # COGS = sum of (qty × unit_cost snapshot) for each item sold
+        gross_cogs = SaleItem.objects.filter(
             sale__business=biz,
             sale__sale_date__range=[date_from, date_to],
             sale__status="CONFIRMED",
             sale__is_deleted=False,
             product__isnull=False,
         ).aggregate(
-            total=Sum(F("quantity") * F("product__purchase_price"))
+            total=Sum(F("quantity") * _UNIT_COST)
         )["total"] or 0
+
+        # Returned goods were never really "sold" — net them out of both
+        # revenue and COGS (the cost comes back out too since it was restocked).
+        returns_amount = _sale_returns_total(biz, date_from, date_to)
+        returns_cogs = _sale_returns_cogs(biz, date_from, date_to)
+        revenue = float(gross_revenue) - float(returns_amount)
+        cogs = float(gross_cogs) - float(returns_cogs)
 
         expenses = Expense.objects.filter(
             business=biz, date__range=[date_from, date_to], is_deleted=False
@@ -267,14 +314,20 @@ class ProfitReportView(APIView):
             while m <= 0:
                 m += 12
                 y -= 1
-            m_rev = Sale.objects.filter(
+            m_start = date(y, m, 1)
+            m_end = date(y + 1, 1, 1) - timedelta(days=1) if m == 12 else date(y, m + 1, 1) - timedelta(days=1)
+            m_rev_gross = Sale.objects.filter(
                 business=biz, sale_date__year=y, sale_date__month=m,
                 status="CONFIRMED", is_deleted=False,
             ).aggregate(t=Sum("total"))["t"] or 0
-            m_cogs = SaleItem.objects.filter(
+            m_cogs_gross = SaleItem.objects.filter(
                 sale__business=biz, sale__sale_date__year=y, sale__sale_date__month=m,
                 sale__status="CONFIRMED", sale__is_deleted=False, product__isnull=False,
-            ).aggregate(t=Sum(F("quantity") * F("product__purchase_price")))["t"] or 0
+            ).aggregate(t=Sum(F("quantity") * _UNIT_COST))["t"] or 0
+            m_returns = _sale_returns_total(biz, m_start.isoformat(), m_end.isoformat())
+            m_returns_cogs = _sale_returns_cogs(biz, m_start.isoformat(), m_end.isoformat())
+            m_rev = float(m_rev_gross) - float(m_returns)
+            m_cogs = float(m_cogs_gross) - float(m_returns_cogs)
             m_exp = Expense.objects.filter(
                 business=biz, date__year=y, date__month=m, is_deleted=False,
             ).aggregate(t=Sum("amount"))["t"] or 0
@@ -301,7 +354,7 @@ class ProfitReportView(APIView):
         })
 
 
-class ReceivableAgingView(APIView):
+class ReceivableAgingView(_RequireReports, APIView):
     def get(self, request):
         biz = get_business(request)
         if not biz:
@@ -346,7 +399,7 @@ class ReceivableAgingView(APIView):
         })
 
 
-class MonthlyReportView(APIView):
+class MonthlyReportView(_RequireReports, APIView):
     def get(self, request):
         biz = get_business(request)
         if not biz:
@@ -361,7 +414,10 @@ class MonthlyReportView(APIView):
                 month += 12
                 year -= 1
 
-            sales = Sale.objects.filter(
+            m_start = date(year, month, 1)
+            m_end = (date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)) - timedelta(days=1)
+
+            sales_gross = Sale.objects.filter(
                 business=biz, is_deleted=False,
                 sale_date__year=year, sale_date__month=month,
                 status="CONFIRMED",
@@ -372,13 +428,18 @@ class MonthlyReportView(APIView):
                 date__year=year, date__month=month,
             ).aggregate(total=Sum("amount"))["total"] or 0
 
-            cogs = SaleItem.objects.filter(
+            cogs_gross = SaleItem.objects.filter(
                 sale__business=biz, sale__is_deleted=False,
                 sale__sale_date__year=year, sale__sale_date__month=month,
                 sale__status="CONFIRMED", product__isnull=False,
             ).aggregate(
-                total=Sum(F("quantity") * F("product__purchase_price"))
+                total=Sum(F("quantity") * _UNIT_COST)
             )["total"] or 0
+
+            returns_amount = _sale_returns_total(biz, m_start.isoformat(), m_end.isoformat())
+            returns_cogs = _sale_returns_cogs(biz, m_start.isoformat(), m_end.isoformat())
+            sales = float(sales_gross) - float(returns_amount)
+            cogs = float(cogs_gross) - float(returns_cogs)
 
             gross = float(sales) - float(cogs)
             result.append({
@@ -394,7 +455,7 @@ class MonthlyReportView(APIView):
         return Response(result)
 
 
-class DayBookView(APIView):
+class DayBookView(_RequireReports, APIView):
     """Daily transaction register — all cash in/out for a given date."""
 
     def get(self, request):
@@ -476,7 +537,7 @@ class DayBookView(APIView):
         })
 
 
-class CashFlowView(APIView):
+class CashFlowView(_RequireReports, APIView):
     """Monthly cash flow — cash in vs cash out by payment method."""
 
     def get(self, request):
@@ -532,7 +593,7 @@ class CashFlowView(APIView):
         })
 
 
-class StockReportView(APIView):
+class StockReportView(_RequireReports, APIView):
     """Full per-product stock valuation list (all active products, not just low-stock alerts)."""
 
     def get(self, request):
@@ -572,7 +633,7 @@ class StockReportView(APIView):
         })
 
 
-class CashInHandView(APIView):
+class CashInHandView(_RequireReports, APIView):
     """Cash-in-hand ledger: running balance of all CASH-payment-method transactions."""
 
     @staticmethod
@@ -665,7 +726,7 @@ class CashInHandView(APIView):
         })
 
 
-class BankStatementView(APIView):
+class BankStatementView(_RequireReports, APIView):
     """Without ?account=: list of bank accounts with current balances (for the picker).
     With ?account=<id>: running-balance statement for that account over a date range."""
 
@@ -734,7 +795,7 @@ class BankStatementView(APIView):
         })
 
 
-class AllTransactionsView(APIView):
+class AllTransactionsView(_RequireReports, APIView):
     """Combined feed of sales, purchases, expenses, party payments, and bank transactions
     across a date range — the 'All Transaction Report'."""
 

@@ -1,10 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../banking/presentation/providers/banking_provider.dart';
+import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../inventory/data/models/inventory_model.dart';
 import '../../../inventory/presentation/providers/inventory_provider.dart';
 import '../../../parties/data/models/party_model.dart';
@@ -239,28 +244,42 @@ class _PurchaseItemRow {
 
 class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
   final _billNumberController = TextEditingController();
+  final _taxRateController = TextEditingController(text: '13');
   final _paidController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
+  bool _vatEnabled = false;
   Party? _supplier;
   DateTime _purchaseDate = DateTime.now();
   DateTime? _dueDate;
   String _paymentMethod = 'CASH';
+  int? _bankAccountId;
   bool _saving = false;
   bool _loaded = false;
+  File? _billImageFile;
+  String? _billImageUrl;
   final List<_PurchaseItemRow> _items = [_PurchaseItemRow()];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      context.read<BankingProvider>().load();
       if (widget.purchase != null) {
         final p = widget.purchase!;
         _billNumberController.text = p.billNumber;
         _purchaseDate = p.purchaseDate ?? DateTime.now();
         _dueDate = p.dueDate;
         _paymentMethod = p.paymentMethod;
+        _bankAccountId = p.bankAccount;
         _paidController.text = p.paidAmount.toString();
         _notesController.text = p.notes;
+        _billImageUrl = p.billImageUrl;
+        _vatEnabled = p.taxRate > 0;
+        if (p.taxRate > 0) {
+          _taxRateController.text = p.taxRate == p.taxRate.roundToDouble()
+              ? p.taxRate.toStringAsFixed(0)
+              : p.taxRate.toString();
+        }
         final parties = context.read<PartyProvider>().parties;
         if (p.supplier != null) {
           final match = parties.where((s) => s.id == p.supplier);
@@ -278,6 +297,12 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
         }
         if (_items.isEmpty) _items.add(_PurchaseItemRow());
       } else {
+        final businessTaxRate = context.read<AuthProvider>().currentBusiness?.defaultTaxRate;
+        if (businessTaxRate != null) {
+          _taxRateController.text = businessTaxRate == businessTaxRate.roundToDouble()
+              ? businessTaxRate.toStringAsFixed(0)
+              : businessTaxRate.toString();
+        }
         final next = await context.read<PurchaseProvider>().nextNumber();
         _billNumberController.text = next;
       }
@@ -286,10 +311,13 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
   }
 
   double get _subtotal => _items.fold(0.0, (sum, i) => sum + i.total);
+  double get _taxRate => double.tryParse(_taxRateController.text) ?? 0;
+  double get _taxAmount => _vatEnabled ? _subtotal * _taxRate / 100 : 0;
+  double get _total => _subtotal + _taxAmount;
   double get _paid => double.tryParse(_paidController.text) ?? 0;
   // Not clamped — matches the backend's due_amount exactly (total - paid),
   // which goes negative on overpayment rather than hiding it as zero.
-  double get _balanceDue => _subtotal - _paid;
+  double get _balanceDue => _total - _paid;
   bool get _isAdvance => _balanceDue < 0;
 
   void _pickSupplier() {
@@ -303,8 +331,134 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
         labelBuilder: (p) => p.name,
         subtitleBuilder: (p) => p.phone,
         onSelected: (p) => setState(() => _supplier = p),
+        onAddNew: _openAddSupplierDialog,
+        addNewLabel: 'Add New Supplier',
       ),
     );
+  }
+
+  Future<void> _openAddSupplierDialog() async {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool saving = false;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Add New Supplier'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Supplier Name *',
+                    ),
+                    validator: (v) => Validators.required(v, 'Name'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone (optional)',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            PrimaryButton(
+              label: 'Save',
+              expand: false,
+              isLoading: saving,
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                setDialogState(() => saving = true);
+                final partyProvider = context.read<PartyProvider>();
+                final created = await partyProvider.quickCreate(
+                  Party(
+                    id: 0,
+                    name: nameController.text.trim(),
+                    partyType: 'SUPPLIER',
+                    customerType: '',
+                    phone: phoneController.text.trim(),
+                    email: '',
+                    address: '',
+                    panNumber: '',
+                    vatNumber: '',
+                    openingBalance: 0,
+                    balance: 0,
+                    notes: '',
+                    isActive: true,
+                  ),
+                );
+                if (!dialogContext.mounted) return;
+                if (created != null) {
+                  setState(() => _supplier = created);
+                  Navigator.pop(dialogContext);
+                } else {
+                  setDialogState(() => saving = false);
+                  showAppSnackBar(
+                    dialogContext,
+                    partyProvider.error ?? 'Failed to add supplier',
+                    isError: true,
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickBillImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 80);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _billImageFile = File(picked.path);
+      _billImageUrl = null;
+    });
+  }
+
+  void _removeBillImage() {
+    setState(() {
+      _billImageFile = null;
+      _billImageUrl = null;
+    });
   }
 
   void _pickProduct(_PurchaseItemRow item) {
@@ -456,10 +610,13 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
       dueDate: _dueDate,
       subtotal: _subtotal,
       discount: 0,
-      total: _subtotal,
+      taxRate: _vatEnabled ? _taxRate : 0,
+      taxAmount: _taxAmount,
+      total: _total,
       paidAmount: _paid,
       dueAmount: _balanceDue,
       paymentMethod: _paymentMethod,
+      bankAccount: _paymentMethod != 'CASH' ? _bankAccountId : null,
       status: status,
       notes: _notesController.text.trim(),
       items: _items
@@ -480,6 +637,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
     final result = await context.read<PurchaseProvider>().save(
       purchase,
       id: widget.purchase?.id,
+      billImage: _billImageFile,
     );
     if (!mounted) return;
     setState(() => _saving = false);
@@ -496,6 +654,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.purchase != null ? 'Edit Purchase' : 'New Purchase'),
+        actions: const [HomeLogoButton()],
       ),
       body: ResponsiveBody(
         child: !_loaded
@@ -528,8 +687,8 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                           Expanded(
                             child: InkWell(
                               onTap: () async {
-                                final picked = await showDatePicker(
-                                  context: context,
+                                final picked = await AppDatePicker.pick(
+                                  context,
                                   initialDate: _purchaseDate,
                                   firstDate: DateTime(2020),
                                   lastDate: DateTime(2100),
@@ -550,9 +709,9 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                           Expanded(
                             child: InkWell(
                               onTap: () async {
-                                final picked = await showDatePicker(
-                                  context: context,
-                                  initialDate: DateTime.now(),
+                                final picked = await AppDatePicker.pick(
+                                  context,
+                                  initialDate: _dueDate ?? DateTime.now(),
                                   firstDate: DateTime(2020),
                                   lastDate: DateTime(2100),
                                 );
@@ -624,47 +783,57 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                               ),
                               const SizedBox(height: 8),
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Expanded(
+                                    flex: 3,
                                     child: TextField(
                                       controller: e.value.qtyController,
                                       keyboardType:
                                           const TextInputType.numberWithOptions(
                                             decimal: true,
                                           ),
+                                      style: const TextStyle(fontSize: 13),
                                       decoration: const InputDecoration(
                                         labelText: 'Qty',
                                         isDense: true,
+                                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       ),
                                       onChanged: (_) => setState(() {}),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   Expanded(
+                                    flex: 4,
                                     child: TextField(
                                       controller: e.value.priceController,
                                       keyboardType:
                                           const TextInputType.numberWithOptions(
                                             decimal: true,
                                           ),
+                                      style: const TextStyle(fontSize: 13),
                                       decoration: const InputDecoration(
                                         labelText: 'Cost',
                                         isDense: true,
+                                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       ),
                                       onChanged: (_) => setState(() {}),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   Expanded(
+                                    flex: 4,
                                     child: TextField(
                                       controller: e.value.discountController,
                                       keyboardType:
                                           const TextInputType.numberWithOptions(
                                             decimal: true,
                                           ),
+                                      style: const TextStyle(fontSize: 13),
                                       decoration: const InputDecoration(
                                         labelText: 'Disc.',
                                         isDense: true,
+                                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       ),
                                       onChanged: (_) => setState(() {}),
                                     ),
@@ -703,12 +872,46 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          const Text('Subtotal'),
+                          Text(Formatters.currency(_subtotal)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Text('VAT / Tax'),
+                              Switch(
+                                value: _vatEnabled,
+                                onChanged: (v) => setState(() => _vatEnabled = v),
+                              ),
+                              if (_vatEnabled)
+                                SizedBox(
+                                  width: 64,
+                                  child: TextField(
+                                    controller: _taxRateController,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: const InputDecoration(labelText: '%'),
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          if (_vatEnabled) Text(Formatters.currency(_taxAmount)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
                           const Text(
                             'Total',
                             style: TextStyle(fontWeight: FontWeight.w700),
                           ),
                           Text(
-                            Formatters.currency(_subtotal),
+                            Formatters.currency(_total),
                             style: const TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
@@ -723,6 +926,22 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                           labelText: 'Notes (optional)',
                         ),
                         maxLines: 2,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Bill Image (optional)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _BillImagePicker(
+                        imageFile: _billImageFile,
+                        imageUrl: _billImageUrl,
+                        onTap: _pickBillImage,
+                        onRemove: _removeBillImage,
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -758,12 +977,48 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                                     ),
                                   )
                                   .toList(),
-                              onChanged: (v) =>
-                                  setState(() => _paymentMethod = v ?? 'CASH'),
+                              onChanged: (v) => setState(() {
+                                _paymentMethod = v ?? 'CASH';
+                                if (_paymentMethod == 'CASH') _bankAccountId = null;
+                              }),
                             ),
                           ),
                         ],
                       ),
+                      if (_paymentMethod != 'CASH') ...[
+                        const SizedBox(height: 12),
+                        Consumer<BankingProvider>(
+                          builder: (context, bp, _) {
+                            final accounts = bp.accounts;
+                            if (accounts.isEmpty) {
+                              return Text(
+                                'No bank accounts set up yet — add one from Banking to track this payment on a statement.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              );
+                            }
+                            return DropdownButtonFormField<int>(
+                              initialValue: accounts.any((a) => a.id == _bankAccountId)
+                                  ? _bankAccountId
+                                  : null,
+                              decoration: const InputDecoration(
+                                labelText: 'Paid From Account',
+                              ),
+                              items: accounts
+                                  .map(
+                                    (a) => DropdownMenuItem(
+                                      value: a.id,
+                                      child: Text(a.accountName),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) => setState(() => _bankAccountId = v),
+                            );
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -813,6 +1068,75 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _BillImagePicker extends StatelessWidget {
+  final File? imageFile;
+  final String? imageUrl;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  const _BillImagePicker({
+    required this.imageFile,
+    required this.imageUrl,
+    required this.onTap,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = imageFile != null || imageUrl != null;
+    if (!hasImage) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 90,
+          width: 90,
+          decoration: BoxDecoration(
+            color: AppColors.navy50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.navy300),
+          ),
+          child: Icon(
+            Icons.add_a_photo_outlined,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      );
+    }
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: imageFile != null
+                ? Image.file(imageFile!, height: 90, width: 90, fit: BoxFit.cover)
+                : Image.network(imageUrl!, height: 90, width: 90, fit: BoxFit.cover),
+          ),
+        ),
+        Positioned(
+          top: -6,
+          right: -6,
+          child: InkWell(
+            onTap: onRemove,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close, size: 14, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -37,3 +37,8 @@ services:
         sync: false
       - key: EMAIL_HOST_PASSWORD
         sync: false
+      # Optional — leave blank to keep using Render's local (ephemeral) disk
+      # for uploads. Set from Cloudinary dashboard → "API Environment
+      # variable": cloudinary://<api_key>:<api_secret>@<cloud_name>
+      - key: CLOUDINARY_URL
+        sync: false

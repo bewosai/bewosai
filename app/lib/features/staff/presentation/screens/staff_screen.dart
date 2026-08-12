@@ -186,10 +186,7 @@ class _InviteStaffSheetState extends State<_InviteStaffSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Invite Staff',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-            ),
+            const SheetHeader(title: 'Invite Staff'),
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,

@@ -13,6 +13,7 @@ import '../features/sales/presentation/screens/pos/quick_pos_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
 import '../features/shell/presentation/screens/main_shell.dart';
 import '../features/staff/presentation/screens/staff_screen.dart';
+import '../shared/widgets/feature_gate.dart';
 
 GoRouter buildAppRouter(AuthProvider authProvider) {
   return GoRouter(
@@ -45,28 +46,38 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
         path: '/dashboard',
         builder: (context, state) {
           final tab = int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
-          return MainShell(initialIndex: tab);
+          final subtab = int.tryParse(state.uri.queryParameters['subtab'] ?? '') ?? 0;
+          return MainShell(initialIndex: tab, initialSubTab: subtab);
         },
       ),
       GoRoute(
         path: '/pos',
         builder: (context, state) {
           final editId = state.uri.queryParameters['edit'];
-          return QuickPosScreen(saleId: editId != null ? int.tryParse(editId) : null);
+          return FeatureGate(
+            feature: 'pos',
+            child: QuickPosScreen(saleId: editId != null ? int.tryParse(editId) : null),
+          );
         },
       ),
       GoRoute(
         path: '/invoice/:id',
-        builder: (context, state) => InvoiceDetailScreen(saleId: int.parse(state.pathParameters['id']!)),
+        builder: (context, state) => FeatureGate(
+          feature: 'pos',
+          child: InvoiceDetailScreen(saleId: int.parse(state.pathParameters['id']!)),
+        ),
       ),
       GoRoute(
         path: '/party-ledger/:id',
-        builder: (context, state) => PartyLedgerScreen(partyId: int.parse(state.pathParameters['id']!)),
+        builder: (context, state) => FeatureGate(
+          feature: 'parties',
+          child: PartyLedgerScreen(partyId: int.parse(state.pathParameters['id']!)),
+        ),
       ),
-      GoRoute(path: '/expenses', builder: (context, state) => const ExpensesScreen()),
-      GoRoute(path: '/banking', builder: (context, state) => const BankingScreen()),
-      GoRoute(path: '/reports', builder: (context, state) => const ReportsScreen()),
-      GoRoute(path: '/staff', builder: (context, state) => const StaffScreen()),
+      GoRoute(path: '/expenses', builder: (context, state) => const FeatureGate(feature: 'expenses', child: ExpensesScreen())),
+      GoRoute(path: '/banking', builder: (context, state) => const FeatureGate(feature: 'banking', child: BankingScreen())),
+      GoRoute(path: '/reports', builder: (context, state) => const FeatureGate(feature: 'reports', child: ReportsScreen())),
+      GoRoute(path: '/staff', builder: (context, state) => const FeatureGate(feature: 'staff_management', child: StaffScreen())),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(path: '/recycle-bin', builder: (context, state) => const RecycleBinScreen()),
     ],

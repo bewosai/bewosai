@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../banking/presentation/providers/banking_provider.dart';
 import '../../data/models/party_model.dart';
 import '../providers/party_provider.dart';
 
@@ -31,6 +33,7 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
   Party? _party;
   DateTime _date = DateTime.now();
   String _method = 'CASH';
+  int? _bankAccountId;
   bool _saving = false;
 
   bool get _isIn => widget.paymentType == 'IN';
@@ -39,6 +42,9 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
   void initState() {
     super.initState();
     _party = widget.initialParty;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BankingProvider>().load();
+    });
   }
 
   void _pickParty() {
@@ -76,6 +82,7 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
       paymentType: widget.paymentType,
       amount: amount,
       paymentMethod: _method,
+      bankAccount: _method != 'CASH' ? _bankAccountId : null,
       date: _date,
       note: _noteController.text.trim(),
     ));
@@ -98,9 +105,10 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(_isIn ? 'Payment In' : 'Payment Out', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: accent)),
+          SheetHeader(title: _isIn ? 'Receive' : 'Give'),
           Text(
             _isIn ? 'Record money received from a customer' : 'Record money paid to a supplier',
+            textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 16),
@@ -120,7 +128,7 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
           const SizedBox(height: 12),
           InkWell(
             onTap: () async {
-              final picked = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
+              final picked = await AppDatePicker.pick(context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
               if (picked != null) setState(() => _date = picked);
             },
             child: InputDecorator(
@@ -138,8 +146,31 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
               DropdownMenuItem(value: 'ESEWA', child: Text('eSewa')),
               DropdownMenuItem(value: 'KHALTI', child: Text('Khalti')),
             ],
-            onChanged: (v) => setState(() => _method = v ?? 'CASH'),
+            onChanged: (v) => setState(() {
+              _method = v ?? 'CASH';
+              if (_method == 'CASH') _bankAccountId = null;
+            }),
           ),
+          if (_method != 'CASH') ...[
+            const SizedBox(height: 12),
+            Consumer<BankingProvider>(
+              builder: (context, bp, _) {
+                final accounts = bp.accounts;
+                if (accounts.isEmpty) {
+                  return Text(
+                    'No bank accounts set up yet — add one from Banking to track this payment on a statement.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  );
+                }
+                return DropdownButtonFormField<int>(
+                  initialValue: accounts.any((a) => a.id == _bankAccountId) ? _bankAccountId : null,
+                  decoration: InputDecoration(labelText: _isIn ? 'Received Into Account' : 'Paid From Account'),
+                  items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text(a.accountName))).toList(),
+                  onChanged: (v) => setState(() => _bankAccountId = v),
+                );
+              },
+            ),
+          ],
           const SizedBox(height: 12),
           TextField(controller: _noteController, decoration: const InputDecoration(labelText: 'Note (optional)')),
           const SizedBox(height: 20),
@@ -148,7 +179,7 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
             style: ElevatedButton.styleFrom(backgroundColor: accent),
             child: _saving
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                : Text(_isIn ? 'Save Payment In' : 'Save Payment Out'),
+                : Text(_isIn ? 'Save (Received)' : 'Save (Given)'),
           ),
         ],
       ),

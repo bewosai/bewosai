@@ -62,7 +62,7 @@ class ReportsHubScreen extends StatelessWidget {
             ResponsiveGrid(
               columns: 2,
               spacing: 12,
-              childAspectRatio: 1.25,
+              childAspectRatio: 1.0,
               children: _popular.map((r) => _PopularTile(report: r, onTap: () => _open(context, r.tabIndex))).toList(),
             ),
             const SizedBox(height: 24),
@@ -98,20 +98,41 @@ class _PopularTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.navy100),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(color: AppColors.orange.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                child: Icon(report.icon, size: 18, color: AppColors.orange),
-              ),
-              const SizedBox(height: 10),
-              Text(report.label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-              const SizedBox(height: 2),
-              Text(report.desc, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-            ],
+          // Same safety net as KpiCard: FittedBox scales the whole card body
+          // down to fit the grid's fixed tile height instead of overflowing
+          // it — a fixed childAspectRatio alone can't predict every
+          // combination of long title + narrow phone + accessibility font
+          // scaling, which is exactly what caused the overflow here.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.topLeft,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(color: AppColors.orange.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(report.icon, size: 18, color: AppColors.orange),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: 150,
+                  child: Text(
+                    report.label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, height: 1.15),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                SizedBox(
+                  width: 150,
+                  child: Text(report.desc, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                ),
+              ],
+            ),
           ),
         ),
       ),

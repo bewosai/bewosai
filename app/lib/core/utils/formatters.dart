@@ -26,6 +26,39 @@ class Formatters {
   static const _nepaliDatePattern = 'dd MMM yyyy';
   static const _nepaliDateShortPattern = 'dd MMM';
 
+  /// Everyday give/receive wording for a transaction-feed "type" badge
+  /// (Day Book, All Transactions, Cash In Hand, Bank Statement, Party
+  /// Ledger) instead of the raw backend enum ("PAYMENT_IN", "BANK_CREDIT",
+  /// ...) — matches the "Give"/"Receive" quick-entry shortcuts on the
+  /// Dashboard so the same money movement reads the same way everywhere.
+  static String transactionTypeLabel(String type) {
+    switch (type) {
+      case 'SALE':
+        return 'Sale';
+      case 'SALE_RETURN':
+        return 'Sale Return';
+      case 'PURCHASE':
+        return 'Purchase';
+      case 'PURCHASE_RETURN':
+        return 'Purchase Return';
+      case 'EXPENSE':
+        return 'Expense';
+      case 'RECEIPT':
+      case 'PAYMENT_IN':
+        return 'Received';
+      case 'PAYMENT_OUT':
+        return 'Given';
+      case 'BANK_CREDIT':
+      case 'CREDIT':
+        return 'Bank Credit';
+      case 'BANK_DEBIT':
+      case 'DEBIT':
+        return 'Bank Debit';
+      default:
+        return type;
+    }
+  }
+
   static String currency(num? amount) => hideAmounts
       ? '${AppConstants.defaultCurrency} $_maskedAmount'
       : '${AppConstants.defaultCurrency} ${_amountFormat.format(amount ?? 0)}';

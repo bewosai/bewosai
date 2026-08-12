@@ -102,6 +102,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.signInWithGoogle(remember: _remember);
+    if (!mounted) return;
+    if (!ok && auth.error != null) {
+      showAppSnackBar(context, auth.error!, isError: true);
+    }
+  }
+
   Future<void> _verifyOtp() async {
     if (_verifying) return;
     if (!(_otpFormKey.currentState?.validate() ?? false)) return;
@@ -286,6 +295,25 @@ class _LoginScreenState extends State<LoginScreen> {
               child: const Text('New here? Create an account'),
             ),
           ),
+          if (auth.googleSignInAvailable) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: Divider(color: AppColors.textSecondary.withValues(alpha: 0.25))),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('OR', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                ),
+                Expanded(child: Divider(color: AppColors.textSecondary.withValues(alpha: 0.25))),
+              ],
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: auth.isLoading ? null : _signInWithGoogle,
+              icon: const Icon(Icons.g_mobiledata, size: 26),
+              label: const Text('Continue with Google'),
+            ),
+          ],
         ],
       ),
     );

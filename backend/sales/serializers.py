@@ -1,7 +1,8 @@
 from decimal import Decimal
-from django.db.models import Sum
+from django.db.models import Sum, F
+from django.db.models.functions import Greatest
 from rest_framework import serializers
-from bewosai.utils import require_business
+from bewosai.utils import require_business, sync_bank_transaction
 from inventory.models import Product
 from .models import Sale, SaleItem, SaleReturn, SaleReturnItem, Quotation
 
@@ -13,8 +14,8 @@ class SaleItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleItem
-        fields = ("id", "product", "product_name", "quantity", "unit_price", "discount_amount", "total")
-        read_only_fields = ("id", "total")
+        fields = ("id", "product", "product_name", "quantity", "unit_price", "unit_cost", "discount_amount", "total")
+        read_only_fields = ("id", "unit_cost", "total")
 
 
 class SaleSerializer(serializers.ModelSerializer):
@@ -28,7 +29,8 @@ class SaleSerializer(serializers.ModelSerializer):
         fields = (
             "id", "invoice_number", "customer", "customer_name", "party_name", "party_phone",
             "sale_date", "due_date", "subtotal", "discount", "tax_rate", "tax_amount", "total",
-            "paid_amount", "due_amount", "payment_method", "status", "sale_type",
+            "paid_amount", "due_amount", "payment_method", "bank_account", "status", "sale_type",
+            "reminder_enabled", "reminder_at",
             "notes", "items", "created_at",
         )
         read_only_fields = ("id", "tax_amount", "total", "due_amount", "created_at",
@@ -39,11 +41,26 @@ class SaleSerializer(serializers.ModelSerializer):
         customer = data.get("customer")
         if customer is not None and customer.business_id != business.id:
             raise serializers.ValidationError({"customer": "Invalid customer for this business."})
+        bank_account = data.get("bank_account")
+        if bank_account is not None and bank_account.business_id != business.id:
+            raise serializers.ValidationError({"bank_account": "Invalid account for this business."})
         for item in data.get("items", []):
             product = item.get("product")
             if product is not None and product.business_id != business.id:
                 raise serializers.ValidationError({"items": "Invalid product for this business."})
         return data
+
+    @staticmethod
+    def _sync_bank(sale):
+        sync_bank_transaction(
+            reference=f"SALE-{sale.id}",
+            bank_account=sale.bank_account if sale.payment_method != "CASH" else None,
+            transaction_type="CREDIT",
+            amount=sale.paid_amount,
+            date=sale.sale_date,
+            description=f"Sale {sale.invoice_number}" + (f" — {sale.customer.name}" if sale.customer_id else ""),
+            created_by=sale.created_by,
+        )
 
     def create(self, validated_data):
         items_data = validated_data.pop("items")
@@ -55,18 +72,18 @@ class SaleSerializer(serializers.ModelSerializer):
             item.save()                     # computes item.total = qty*price - discount
             subtotal += item.total
 
-            # Decrement stock for linked products
+            # Decrement stock for linked products via an atomic F()-expression
+            # UPDATE (not read-modify-write) so two concurrent sales of the
+            # same product can't race and silently lose one decrement.
             if item.product_id:
-                product = item.product
-                product.stock_quantity = max(
-                    Decimal("0"),
-                    product.stock_quantity - item.quantity,
+                Product.objects.filter(pk=item.product_id).update(
+                    stock_quantity=Greatest(F("stock_quantity") - item.quantity, Decimal("0"))
                 )
-                product.save(update_fields=["stock_quantity"])
 
         sale.subtotal = subtotal
         # model.save() recomputes tax_amount, total, due_amount
         sale.save()
+        self._sync_bank(sale)
         return sale
 
     def update(self, instance, validated_data):
@@ -76,9 +93,9 @@ class SaleSerializer(serializers.ModelSerializer):
         if items_data is not None:
             for old_item in instance.items.all():
                 if old_item.product_id:
-                    product = old_item.product
-                    product.stock_quantity += old_item.quantity
-                    product.save(update_fields=["stock_quantity"])
+                    Product.objects.filter(pk=old_item.product_id).update(
+                        stock_quantity=F("stock_quantity") + old_item.quantity
+                    )
             instance.items.all().delete()
 
         for attr, value in validated_data.items():
@@ -93,17 +110,15 @@ class SaleSerializer(serializers.ModelSerializer):
 
                 # Apply new stock decrements
                 if item.product_id:
-                    product = item.product
-                    product.stock_quantity = max(
-                        Decimal("0"),
-                        product.stock_quantity - item.quantity,
+                    Product.objects.filter(pk=item.product_id).update(
+                        stock_quantity=Greatest(F("stock_quantity") - item.quantity, Decimal("0"))
                     )
-                    product.save(update_fields=["stock_quantity"])
 
             instance.subtotal = subtotal
             # model.save() recomputes tax_amount, total, due_amount
 
         instance.save()
+        self._sync_bank(instance)
         return instance
 
 
@@ -165,9 +180,9 @@ class SaleReturnSerializer(serializers.ModelSerializer):
 
             # Restore stock for linked products
             if item.product_id:
-                product = item.product
-                product.stock_quantity += item.quantity
-                product.save(update_fields=["stock_quantity"])
+                Product.objects.filter(pk=item.product_id).update(
+                    stock_quantity=F("stock_quantity") + item.quantity
+                )
 
         return sale_return
 

@@ -1,11 +1,11 @@
-from rest_framework import generics, filters, status
+from rest_framework import generics, filters, status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import F
 
-from bewosai.permissions import IsPremiumBusiness
+from bewosai.permissions import BusinessNotArchivedForWrites, IsPremiumBusiness, require_feature
 from bewosai.utils import get_bid, require_business
 from .models import Category, Unit, Product, StockMovement
 from .serializers import CategorySerializer, UnitSerializer, ProductSerializer, StockMovementSerializer
@@ -20,7 +20,12 @@ def _validate_category_unit(validated_data, business):
         raise ValidationError({"unit": "Invalid unit for this business."})
 
 
-class CategoryListCreateView(generics.ListCreateAPIView):
+class _RequireInventory:
+    """Gated by the Super Admin 'Inventory' feature switch."""
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("inventory")]
+
+
+class CategoryListCreateView(_RequireInventory, generics.ListCreateAPIView):
     serializer_class = CategorySerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ["name"]
@@ -37,7 +42,7 @@ class CategoryListCreateView(generics.ListCreateAPIView):
         serializer.save(business=require_business(self.request))
 
 
-class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+class CategoryDetailView(_RequireInventory, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CategorySerializer
 
     def get_queryset(self):
@@ -49,7 +54,7 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
         )
 
 
-class UnitListCreateView(generics.ListCreateAPIView):
+class UnitListCreateView(_RequireInventory, generics.ListCreateAPIView):
     serializer_class = UnitSerializer
 
     def get_queryset(self):
@@ -64,7 +69,7 @@ class UnitListCreateView(generics.ListCreateAPIView):
         serializer.save(business=require_business(self.request))
 
 
-class UnitDetailView(generics.RetrieveUpdateDestroyAPIView):
+class UnitDetailView(_RequireInventory, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UnitSerializer
 
     def get_queryset(self):
@@ -76,7 +81,7 @@ class UnitDetailView(generics.RetrieveUpdateDestroyAPIView):
         )
 
 
-class ProductListCreateView(generics.ListCreateAPIView):
+class ProductListCreateView(_RequireInventory, generics.ListCreateAPIView):
     serializer_class = ProductSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["category", "is_active"]
@@ -101,7 +106,7 @@ class ProductListCreateView(generics.ListCreateAPIView):
         serializer.save(business=business)
 
 
-class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
+class ProductDetailView(_RequireInventory, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductSerializer
 
     def get_queryset(self):
@@ -125,7 +130,7 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.save(update_fields=["is_deleted", "deleted_at"])
 
 
-class StockMovementListCreateView(generics.ListCreateAPIView):
+class StockMovementListCreateView(_RequireInventory, generics.ListCreateAPIView):
     serializer_class = StockMovementSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["movement_type", "product"]
@@ -163,7 +168,7 @@ class StockMovementListCreateView(generics.ListCreateAPIView):
 class ProductBulkImportView(APIView):
     """Bulk create products from Excel import. Accepts list of product objects. Premium only."""
 
-    permission_classes = [IsPremiumBusiness]
+    permission_classes = [IsPremiumBusiness, require_feature("excel_import")]
 
     def post(self, request):
         bid = get_bid(request)

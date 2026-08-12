@@ -6,6 +6,7 @@ class SettingsPreferencesModel extends SettingsPreferences {
     super.themeMode,
     super.showNepaliCalendar,
     super.hideAmounts,
+    super.language,
   });
 
   factory SettingsPreferencesModel.fromMap(Map<String, dynamic> map) {
@@ -13,6 +14,7 @@ class SettingsPreferencesModel extends SettingsPreferences {
       themeMode: AppThemeModeX.fromStorage(map['theme_mode'] as String?),
       showNepaliCalendar: map['show_nepali_calendar'] as bool? ?? true,
       hideAmounts: map['hide_amounts'] as bool? ?? false,
+      language: map['language'] as String? ?? 'en',
     );
   }
 
@@ -21,6 +23,7 @@ class SettingsPreferencesModel extends SettingsPreferences {
       'theme_mode': themeMode.storageValue,
       'show_nepali_calendar': showNepaliCalendar,
       'hide_amounts': hideAmounts,
+      'language': language,
     };
   }
 }

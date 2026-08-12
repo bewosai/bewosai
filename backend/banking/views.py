@@ -1,13 +1,19 @@
-from rest_framework import generics, filters, parsers
+from rest_framework import generics, filters, parsers, permissions
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
+from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
 from bewosai.utils import get_bid, require_business
 from .models import BankAccount, BankTransaction
 from .serializers import BankAccountSerializer, BankTransactionSerializer
 
 
-class BankAccountListCreateView(generics.ListCreateAPIView):
+class _RequireBanking:
+    """Gated by the Super Admin 'Banking' feature switch."""
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("banking")]
+
+
+class BankAccountListCreateView(_RequireBanking, generics.ListCreateAPIView):
     serializer_class = BankAccountSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
@@ -28,7 +34,7 @@ class BankAccountListCreateView(generics.ListCreateAPIView):
         serializer.save(business=require_business(self.request))
 
 
-class BankAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
+class BankAccountDetailView(_RequireBanking, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BankAccountSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
@@ -46,7 +52,7 @@ class BankAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
         return ctx
 
 
-class BankTransactionListCreateView(generics.ListCreateAPIView):
+class BankTransactionListCreateView(_RequireBanking, generics.ListCreateAPIView):
     serializer_class = BankTransactionSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["transaction_type", "account"]
@@ -72,7 +78,7 @@ class BankTransactionListCreateView(generics.ListCreateAPIView):
         serializer.save(created_by=self.request.user)
 
 
-class BankTransactionDetailView(generics.RetrieveUpdateDestroyAPIView):
+class BankTransactionDetailView(_RequireBanking, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BankTransactionSerializer
 
     def get_queryset(self):

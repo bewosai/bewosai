@@ -36,6 +36,25 @@ class Sale(models.Model):
     tax_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    bank_account = models.ForeignKey(
+        "banking.BankAccount", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="sales",
+        help_text="Which account received paid_amount when payment_method is non-cash — "
+                   "a matching BankTransaction is kept in sync automatically.",
+    )
+    reminder_enabled = models.BooleanField(default=False)
+    reminder_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When to notify the business owner to follow up on this due amount. "
+                   "Fired as an on-device notification by the mobile app, not a server push.",
+    )
+    reconciled_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0,
+        help_text="Portion of paid_amount applied here later via a party PartyPayment "
+                   "(see PartyPaymentListCreateView._reconcile_payment), as opposed to "
+                   "being paid at the point of sale. Lets the party ledger show each "
+                   "rupee exactly once instead of double-counting reconciled payments.",
+    )
     due_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=10, choices=METHOD_CHOICES, default=METHOD_CASH)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default=STATUS_CONFIRMED)
@@ -72,11 +91,18 @@ class SaleItem(models.Model):
     product_name = models.CharField(max_length=200)
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    unit_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Snapshot of product.purchase_price at the time of sale, so editing a "
+                   "product's cost later doesn't retroactively rewrite past profit reports.",
+    )
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2)
 
     def save(self, *args, **kwargs):
         self.total = (self.quantity * self.unit_price) - self.discount_amount
+        if self.unit_cost is None and self.product_id:
+            self.unit_cost = self.product.purchase_price
         super().save(*args, **kwargs)
 
 

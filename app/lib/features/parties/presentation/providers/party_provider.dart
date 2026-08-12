@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/offline/app_database.dart';
+import '../../../../core/offline/connectivity_service.dart';
+import '../../../../core/storage/token_storage.dart';
 import '../../data/models/party_model.dart';
 import '../../domain/usecases/party_usecases.dart';
 
@@ -11,13 +14,54 @@ class PartyProvider extends ChangeNotifier {
   bool isLoading = false;
   String? error;
 
+  /// True when [parties] came from the local cache — see
+  /// [InventoryProvider.isOffline] for why this exists.
+  bool isOffline = false;
+
+  Future<String> _businessId() async {
+    final business = await TokenStorage.instance.currentBusiness;
+    return '${business?['id'] ?? ''}';
+  }
+
   Future<void> load() async {
     isLoading = true;
     error = null;
     notifyListeners();
+
+    final businessId = await _businessId();
+    final online = await ConnectivityService.instance.checkOnline();
+    if (!online) {
+      isOffline = true;
+      if (businessId.isNotEmpty) {
+        final cached = await AppDatabase.instance.readCache('cached_parties', businessId);
+        parties = cached.map(Party.fromJson).toList();
+      }
+      isLoading = false;
+      notifyListeners();
+      return;
+    }
+
     try {
       parties = await _useCases.listParties();
+      isOffline = false;
+      if (businessId.isNotEmpty) {
+        await AppDatabase.instance.replaceCache(
+          'cached_parties',
+          businessId,
+          parties.map((p) => p.toCacheJson()).toList(),
+        );
+      }
     } catch (e) {
+      if (businessId.isNotEmpty) {
+        final cached = await AppDatabase.instance.readCache('cached_parties', businessId);
+        if (cached.isNotEmpty) {
+          parties = cached.map(Party.fromJson).toList();
+          isOffline = true;
+          isLoading = false;
+          notifyListeners();
+          return;
+        }
+      }
       error = e is ApiException ? e.message : e.toString();
     }
     isLoading = false;

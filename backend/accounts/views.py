@@ -1,21 +1,30 @@
 import logging
 import threading
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from rest_framework import status, generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from bewosai.email import send_otp_email
+from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
 from bewosai.utils import get_bid, get_business
 from .models import User, Business, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import (
     UserSerializer, BusinessSerializer, StaffMemberSerializer, InviteStaffSerializer,
-    SendOTPSerializer, VerifyOTPSerializer,
+    SendOTPSerializer, VerifyOTPSerializer, GoogleLoginSerializer,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _RequireStaffManagement:
+    """Gated by the Super Admin 'Staff Management' feature switch."""
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("staff_management")]
 
 
 def api_response(success, message, status_code, **extra):
@@ -132,24 +141,91 @@ class VerifyOTPView(APIView):
 
         logger.info("User %s logged in via OTP (new_user=%s)", email, is_new)
 
-        # Generate JWT
-        refresh = RefreshToken.for_user(user)
-        if remember:
-            refresh.set_exp(lifetime=timedelta(days=30))
-            refresh.access_token.set_exp(lifetime=timedelta(days=30))
+        return _login_response(user, is_new, remember)
 
-        businesses = Business.objects.filter(staff__user=user, staff__is_active=True, status="ACTIVE")
 
-        return api_response(
-            True, "Login successful.", status.HTTP_200_OK,
-            access=str(refresh.access_token),
-            refresh=str(refresh),
-            user=UserSerializer(user).data,
-            is_new_user=is_new,
-            # New user needs to select their profile type (personal vs business)
-            needs_profile_setup=is_new,
-            businesses=BusinessSerializer(businesses, many=True).data,
-        )
+class GoogleLoginView(APIView):
+    """
+    Exchanges a Google ID token (obtained client-side via google_sign_in) for
+    our own JWT pair — same find-or-create-by-email + response shape as
+    VerifyOTPView, so the Flutter app's post-login flow is unaffected by
+    which method the user signed in with.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "otp_verify"
+
+    def post(self, request):
+        serializer = GoogleLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return api_response(False, _first_error(serializer.errors), status.HTTP_400_BAD_REQUEST)
+
+        if not settings.GOOGLE_OAUTH_CLIENT_ID:
+            logger.error("Google sign-in attempted but GOOGLE_OAUTH_CLIENT_ID is not configured")
+            return api_response(False, "Google sign-in is not configured.", status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        try:
+            payload = google_id_token.verify_oauth2_token(
+                serializer.validated_data["id_token"],
+                google_requests.Request(),
+                audience=settings.GOOGLE_OAUTH_CLIENT_ID,
+            )
+        except ValueError:
+            logger.warning("Google sign-in rejected: invalid id_token")
+            return api_response(False, "Invalid Google sign-in token.", status.HTTP_400_BAD_REQUEST)
+
+        email = (payload.get("email") or "").strip().lower()
+        if not email:
+            return api_response(False, "Google account has no email address.", status.HTTP_400_BAD_REQUEST)
+        if not payload.get("email_verified"):
+            return api_response(False, "This Google account's email isn't verified.", status.HTTP_400_BAD_REQUEST)
+
+        remember = serializer.validated_data["remember"]
+
+        with transaction.atomic():
+            user = User.objects.filter(email=email).first()
+            is_new = user is None
+            if is_new:
+                user = User.objects.create_user(
+                    email=email,
+                    name=payload.get("name") or email.split("@")[0].capitalize(),
+                    account_type=ACCOUNT_BUSINESS,
+                    is_verified=True,
+                )
+
+            user.last_login_at = timezone.now()
+            user.is_verified = True
+            user.save(update_fields=["last_login_at", "is_verified"])
+
+            LoginActivity.objects.create(
+                user=user,
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            )
+
+        logger.info("User %s logged in via Google (new_user=%s)", email, is_new)
+
+        return _login_response(user, is_new, remember)
+
+
+def _login_response(user, is_new, remember):
+    refresh = RefreshToken.for_user(user)
+    if remember:
+        refresh.set_exp(lifetime=timedelta(days=30))
+        refresh.access_token.set_exp(lifetime=timedelta(days=30))
+
+    businesses = Business.objects.filter(staff__user=user, staff__is_active=True, status="ACTIVE")
+
+    return api_response(
+        True, "Login successful.", status.HTTP_200_OK,
+        access=str(refresh.access_token),
+        refresh=str(refresh),
+        user=UserSerializer(user).data,
+        is_new_user=is_new,
+        # New user needs to select their profile type (personal vs business)
+        needs_profile_setup=is_new,
+        businesses=BusinessSerializer(businesses, many=True).data,
+    )
 
 
 class LogoutView(APIView):
@@ -323,7 +399,7 @@ class CloseFiscalYearView(APIView):
         )
 
 
-class StaffListView(generics.ListCreateAPIView):
+class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
     serializer_class = StaffMemberSerializer
 
     # Free plan: 1 staff member beyond the owner. Premium is unlimited.
@@ -378,7 +454,7 @@ class StaffListView(generics.ListCreateAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class StaffDetailView(generics.RetrieveUpdateDestroyAPIView):
+class StaffDetailView(_RequireStaffManagement, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = StaffMemberSerializer
 
     def get_queryset(self):
@@ -409,7 +485,7 @@ class StaffActivityView(APIView):
 
 # ── Business-scoped staff endpoints (used by Flutter /staff/ calls) ────────────
 
-class BusinessStaffListView(generics.ListAPIView):
+class BusinessStaffListView(_RequireStaffManagement, generics.ListAPIView):
     """List all staff members for the current business."""
     serializer_class = StaffMemberSerializer
 
@@ -424,7 +500,7 @@ class BusinessStaffListView(generics.ListAPIView):
         ).select_related("user").distinct()
 
 
-class BusinessStaffInviteView(APIView):
+class BusinessStaffInviteView(_RequireStaffManagement, APIView):
     """Invite (or add) a staff member to the current business."""
 
     # Free plan: 1 staff member beyond the owner. Premium is unlimited.

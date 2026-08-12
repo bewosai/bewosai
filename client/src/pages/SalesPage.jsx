@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext";
+import { useAuth } from "../context/AuthContext";
 import { sales as salesApi, parties, inventory } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
 
@@ -36,6 +37,7 @@ const EMPTY_FORM = {
   due_date: "",
   items: [{ ...EMPTY_ITEM }],
   discount: 0,
+  tax_rate: 0,
   paid_amount: 0,
   payment_method: "CASH",
   notes: "",
@@ -120,6 +122,9 @@ function PrintModal({ sale, onClose }) {
             {parseFloat(sale.discount || 0) > 0 && (
               <div className="flex justify-between text-red-500"><span>Discount</span><span>- Rs. {parseFloat(sale.discount).toFixed(2)}</span></div>
             )}
+            {parseFloat(sale.tax_amount || 0) > 0 && (
+              <div className="flex justify-between"><span>Tax ({parseFloat(sale.tax_rate || 0)}%)</span><span>+ Rs. {parseFloat(sale.tax_amount).toFixed(2)}</span></div>
+            )}
             <div className="flex justify-between font-bold border-t pt-1"><span>Grand Total</span><span>Rs. {parseFloat(sale.total ?? sale.total_amount ?? 0).toFixed(2)}</span></div>
             <div className="flex justify-between text-green-600"><span>Paid</span><span>Rs. {parseFloat(sale.paid_amount || 0).toFixed(2)}</span></div>
             <div className="flex justify-between text-red-500 font-semibold"><span>Balance Due</span><span>Rs. {(parseFloat(sale.total ?? sale.total_amount ?? 0) - parseFloat(sale.paid_amount || 0)).toFixed(2)}</span></div>
@@ -139,6 +144,7 @@ function PrintModal({ sale, onClose }) {
 /* ─── Sale Modal (New/Edit) ─── */
 function SaleModal({ onClose, onSaved, editData }) {
   const { language } = useAppSettings();
+  const { currentBusiness } = useAuth();
   const [form, setForm] = useState(editData ? {
     customer_id: editData.customer_id || editData.customer || "",
     customer_name: editData.customer_name || editData.party_name || "",
@@ -154,11 +160,12 @@ function SaleModal({ onClose, onSaved, editData }) {
     discount: editData.subtotal && parseFloat(editData.subtotal) > 0
       ? Math.round((parseFloat(editData.discount || 0) / parseFloat(editData.subtotal)) * 10000) / 100
       : (editData.discount || 0),
+    tax_rate: editData.tax_rate ?? currentBusiness?.default_tax_rate ?? 0,
     paid_amount: editData.paid_amount || 0,
     payment_method: editData.payment_method || "CASH",
     notes: editData.notes || "",
     status: editData.status || "CONFIRMED",
-  } : { ...EMPTY_FORM, items: [{ ...EMPTY_ITEM }] });
+  } : { ...EMPTY_FORM, items: [{ ...EMPTY_ITEM }], tax_rate: currentBusiness?.default_tax_rate ?? 0 });
 
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -194,7 +201,10 @@ function SaleModal({ onClose, onSaved, editData }) {
   const subtotal = form.items.reduce((s, it) => s + (it.quantity * it.unit_price) - (parseFloat(it.discount_amount) || 0), 0);
   const discountPercent = Math.min(100, Math.max(0, parseFloat(form.discount) || 0));
   const discountAmount = subtotal * discountPercent / 100;
-  const grandTotal = Math.max(0, subtotal - discountAmount);
+  const taxableAmount = Math.max(0, subtotal - discountAmount);
+  const taxRate = Math.min(100, Math.max(0, parseFloat(form.tax_rate) || 0));
+  const taxAmount = taxableAmount * taxRate / 100;
+  const grandTotal = taxableAmount + taxAmount;
   const balanceDue = Math.max(0, grandTotal - parseFloat(form.paid_amount || 0));
 
   const handleSubmit = async (statusOverride) => {
@@ -212,6 +222,7 @@ function SaleModal({ onClose, onSaved, editData }) {
         sale_date: form.sale_date,
         due_date: form.due_date || null,
         discount: discountAmount.toFixed(2),
+        tax_rate: taxRate.toFixed(2),
         paid_amount: form.paid_amount || 0,
         payment_method: form.payment_method,
         notes: form.notes,
@@ -388,13 +399,23 @@ function SaleModal({ onClose, onSaved, editData }) {
           {/* Summary + Payment */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-navy-400">Overall Discount (%)</label>
-                <input type="number" min="0" max="100" step="0.01"
-                  className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
-                  value={form.discount}
-                  onChange={e => setForm(f => ({ ...f, discount: parseFloat(e.target.value) || 0 }))}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-navy-400">Overall Discount (%)</label>
+                  <input type="number" min="0" max="100" step="0.01"
+                    className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
+                    value={form.discount}
+                    onChange={e => setForm(f => ({ ...f, discount: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-navy-400">VAT / Tax (%)</label>
+                  <input type="number" min="0" max="100" step="0.01"
+                    className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
+                    value={form.tax_rate}
+                    onChange={e => setForm(f => ({ ...f, tax_rate: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold text-navy-400">Notes</label>
@@ -409,6 +430,7 @@ function SaleModal({ onClose, onSaved, editData }) {
             <div className="rounded-xl border border-navy-700 bg-navy-800/40 p-4 space-y-2 text-sm">
               <div className="flex justify-between text-navy-400"><span>Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
               <div className="flex justify-between text-navy-400"><span>Discount ({discountPercent}%)</span><span>- Rs. {discountAmount.toFixed(2)}</span></div>
+              <div className="flex justify-between text-navy-400"><span>Tax ({taxRate}%)</span><span>+ Rs. {taxAmount.toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-white border-t border-navy-700 pt-2"><span>Grand Total</span><span>Rs. {grandTotal.toFixed(2)}</span></div>
               <div className="pt-1 space-y-2">
                 <div>

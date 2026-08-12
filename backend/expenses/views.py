@@ -1,13 +1,19 @@
-from rest_framework import generics, filters, parsers
+from rest_framework import generics, filters, parsers, permissions
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
+from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
 from bewosai.utils import get_bid, require_business
 from .models import ExpenseCategory, Expense
 from .serializers import ExpenseCategorySerializer, ExpenseSerializer
 
 
-class ExpenseCategoryListCreateView(generics.ListCreateAPIView):
+class _RequireExpenses:
+    """Gated by the Super Admin 'Expenses' feature switch."""
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("expenses")]
+
+
+class ExpenseCategoryListCreateView(_RequireExpenses, generics.ListCreateAPIView):
     serializer_class = ExpenseCategorySerializer
 
     def get_queryset(self):
@@ -22,7 +28,7 @@ class ExpenseCategoryListCreateView(generics.ListCreateAPIView):
         serializer.save(business=require_business(self.request))
 
 
-class ExpenseListCreateView(generics.ListCreateAPIView):
+class ExpenseListCreateView(_RequireExpenses, generics.ListCreateAPIView):
     serializer_class = ExpenseSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -53,7 +59,7 @@ class ExpenseListCreateView(generics.ListCreateAPIView):
         serializer.save(business=business, created_by=self.request.user)
 
 
-class ExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
+class ExpenseDetailView(_RequireExpenses, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ExpenseSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
