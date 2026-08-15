@@ -18,9 +18,12 @@ class ApiClient {
   ApiClient._internal() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConstants.baseUrl,
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 30),
-      sendTimeout: const Duration(seconds: 30),
+      // Render's free tier spins the backend down after ~15 min idle and can
+      // take up to a minute to wake on the next request — generous timeouts
+      // avoid spurious "connection timed out" errors on that first request.
+      connectTimeout: const Duration(seconds: 75),
+      receiveTimeout: const Duration(seconds: 75),
+      sendTimeout: const Duration(seconds: 75),
       // X-Platform tells the backend's feature-flag enforcement this is the
       // Flutter app, so Super Admin's per-platform toggles apply correctly —
       // see backend bewosai/permissions.py::get_platform. React sends "web".
@@ -92,8 +95,8 @@ class ApiClient {
       if (refresh == null) return false;
       final res = await Dio(BaseOptions(
         baseUrl: AppConstants.baseUrl,
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
+        connectTimeout: const Duration(seconds: 75),
+        receiveTimeout: const Duration(seconds: 75),
       )).post('/auth/refresh/', data: {'refresh': refresh});
       await TokenStorage.instance.saveAccessToken(res.data['access'] as String);
       return true;

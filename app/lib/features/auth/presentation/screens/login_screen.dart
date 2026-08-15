@@ -49,12 +49,20 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _verifying = false;
   Timer? _timer;
 
+  // The free-tier backend can take 30-60s to wake from sleep on the first
+  // request of a session — with no feedback that looks identical to being
+  // stuck, so testers give up before the response ever arrives. Surface a
+  // hint once loading runs past a few seconds instead of staying silent.
+  bool _showWakingHint = false;
+  Timer? _wakingHintTimer;
+
   // FUTURE_PHONE: bool _usePhone = false;
   // FUTURE_PHONE: final _phoneController = TextEditingController();
 
   @override
   void dispose() {
     _timer?.cancel();
+    _wakingHintTimer?.cancel();
     _emailController.dispose();
     _otpController.dispose();
     _nameController.dispose();
@@ -86,7 +94,9 @@ class _LoginScreenState extends State<LoginScreen> {
     // FUTURE_PHONE: final identity = _usePhone ? _phoneController.text.trim() : _emailController.text.trim();
     final email = _emailController.text.trim();
 
+    _startWakingHint();
     final ok = await auth.sendOtp(email, isSignup: isSignup);
+    _stopWakingHint();
     if (!mounted) return;
 
     if (ok) {
@@ -122,11 +132,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
     _verifying = true;
     final auth = context.read<AuthProvider>();
+    _startWakingHint();
     final ok = await auth.verifyOtp(
       _otpController.text.trim(),
       remember: _remember,
       name: _nameController.text.trim(),
     );
+    _stopWakingHint();
     _verifying = false;
     if (!mounted) return;
 
@@ -135,6 +147,19 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!ok && auth.error != null) {
       showAppSnackBar(context, auth.error!, isError: true);
     }
+  }
+
+  void _startWakingHint() {
+    _wakingHintTimer?.cancel();
+    setState(() => _showWakingHint = false);
+    _wakingHintTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _showWakingHint = true);
+    });
+  }
+
+  void _stopWakingHint() {
+    _wakingHintTimer?.cancel();
+    if (mounted) setState(() => _showWakingHint = false);
   }
 
   void _goBackToEmail() {
@@ -288,6 +313,16 @@ class _LoginScreenState extends State<LoginScreen> {
             isLoading: auth.isLoading,
             onPressed: auth.isLoading ? null : () => _sendOtp(),
           ),
+          if (auth.isLoading && _showWakingHint) ...[
+            const SizedBox(height: 10),
+            Center(
+              child: Text(
+                'Waking up the server — this can take up to a minute on the first try.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Center(
             child: TextButton(
@@ -427,6 +462,16 @@ class _LoginScreenState extends State<LoginScreen> {
             isLoading: auth.isLoading,
             onPressed: auth.isLoading ? null : _verifyOtp,
           ),
+          if (auth.isLoading && _showWakingHint) ...[
+            const SizedBox(height: 10),
+            Center(
+              child: Text(
+                'Waking up the server — this can take up to a minute on the first try.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -1,5 +1,4 @@
 import logging
-import threading
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from rest_framework import status, generics, permissions
@@ -70,17 +69,22 @@ class SendOTPView(APIView):
         account_type = existing.account_type if existing else ACCOUNT_BUSINESS
         otp, code = OTPCode.generate(email, account_type)
 
-        # The code is already generated and stored — send the email on a
-        # background thread so the request returns immediately instead of
-        # blocking on the SMTP/SendGrid round-trip (this was the actual
-        # source of the multi-second delay before the OTP screen appeared).
-        def _send():
-            if not send_otp_email(email, code):
-                logger.error("Failed to send OTP email to %s", email)
+        # Send synchronously and report the real outcome. This used to fire
+        # on a background thread so the request returned instantly, but that
+        # meant an SMTP/SendGrid failure was only ever visible in the server
+        # log — the client always got "success": true even when no email
+        # ever went out, which made real delivery failures undebuggable from
+        # the app. The extra second or two of latency is worth the honesty.
+        if not send_otp_email(email, code):
+            logger.error("Failed to send OTP email to %s", email)
+            otp.delete()
+            return api_response(
+                False,
+                "Couldn't send the verification email right now. Please try again in a moment.",
+                status.HTTP_502_BAD_GATEWAY,
+            )
 
-        threading.Thread(target=_send, daemon=True).start()
-
-        logger.info("OTP send queued for %s (new_account=%s)", email, existing is None)
+        logger.info("OTP sent for %s (new_account=%s)", email, existing is None)
 
         return api_response(
             True, f"OTP sent to {email}. Valid for 10 minutes.", status.HTTP_200_OK,
