@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 
 class AppConstants {
   static const String appName = 'Bewosai';
@@ -8,16 +8,19 @@ class AppConstants {
   //   flutter build apk --release --dart-define=API_BASE_URL=https://your-backend.up.railway.app/api
   //   flutter run --dart-define=API_BASE_URL=http://192.168.1.88:8000/api   (physical device, native build)
   // Without that flag, falls back to:
-  //   Flutter web  → same host the page was loaded from (so opening the dev
-  //                  server's LAN URL from a phone browser auto-targets the
-  //                  PC's Django server on port 8000), else 127.0.0.1.
-  //   Android emulator / native run → 10.0.2.2 (maps to host 127.0.0.1)
+  //   Release build → the deployed Render backend (_renderUrl below).
+  //   Debug, Flutter web → same host the page was loaded from (so opening the
+  //                  dev server's LAN URL from a phone browser auto-targets
+  //                  the PC's Django server on port 8000), else 127.0.0.1.
+  //   Debug, Android emulator / native run → 10.0.2.2 (maps to host 127.0.0.1)
   static const String _prodUrl = String.fromEnvironment('API_BASE_URL');
+  static const String _renderUrl = 'https://bewosai-backend.onrender.com/api';
   static const String _webUrl = 'http://127.0.0.1:8000/api';
   static const String _emulatorUrl = 'http://10.0.2.2:8000/api';
 
   static String get baseUrl {
     if (_prodUrl.isNotEmpty) return _prodUrl;
+    if (kReleaseMode) return _renderUrl;
     if (kIsWeb) {
       final host = Uri.base.host;
       if (host.isNotEmpty && host != 'localhost' && host != '127.0.0.1') {

@@ -236,6 +236,12 @@ EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+# Without this, a blocked/unresponsive SMTP connection hangs forever instead
+# of raising — the gunicorn worker eventually gets killed by its own request
+# timeout, turning a recoverable send failure into a raw 500 instead of the
+# clean "couldn't send" response send_otp_email's except-block is meant to
+# produce.
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
 
 # OAuth 2.0 Web client ID from Google Cloud Console — used as the `audience`
 # when verifying ID tokens from GoogleLoginView. The Flutter app's
