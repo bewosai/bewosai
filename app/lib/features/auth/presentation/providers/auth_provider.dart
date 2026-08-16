@@ -31,14 +31,24 @@ class AuthProvider extends ChangeNotifier {
   final _authUseCases = AuthUseCases();
   final _businessUseCases = BusinessUseCases();
   final _storage = TokenStorage.instance;
-  final _googleSignIn = GoogleSignIn(
-    scopes: const ['email'],
-    serverClientId: AppConstants.googleWebClientId.isEmpty ? null : AppConstants.googleWebClientId,
-  );
 
   /// False when GOOGLE_WEB_CLIENT_ID wasn't provided at build time — the
   /// login screen hides the Google button rather than let it fail every tap.
   bool get googleSignInAvailable => AppConstants.googleWebClientId.isNotEmpty;
+
+  // Built lazily, only once actually needed, and only when a client ID is
+  // configured. google_sign_in_web's plugin initializes itself synchronously
+  // from the constructor and throws immediately if no client ID is set —
+  // building this eagerly as a field initializer crashed the app on launch
+  // on Flutter Web whenever GOOGLE_WEB_CLIENT_ID wasn't provided.
+  GoogleSignIn? _googleSignInInstance;
+  GoogleSignIn? get _googleSignIn {
+    if (!googleSignInAvailable) return null;
+    return _googleSignInInstance ??= GoogleSignIn(
+      scopes: const ['email'],
+      serverClientId: AppConstants.googleWebClientId,
+    );
+  }
 
   AuthStatus status = AuthStatus.unknown;
   AppUser? user;
@@ -137,7 +147,11 @@ class AuthProvider extends ChangeNotifier {
   /// own JWT pair via the same finalization path as OTP login. Returns false
   /// (with no [error] set) if the user cancels the Google account picker.
   Future<bool> signInWithGoogle({bool remember = true}) => _guard(() async {
-        final account = await _googleSignIn.signIn();
+        final googleSignIn = _googleSignIn;
+        if (googleSignIn == null) {
+          throw ApiException('Google Sign-In is not configured.');
+        }
+        final account = await googleSignIn.signIn();
         if (account == null) return false;
 
         final googleAuth = await account.authentication;
@@ -311,7 +325,7 @@ class AuthProvider extends ChangeNotifier {
     final refresh = await _storage.refreshToken;
     await _authUseCases.logout(refresh);
     try {
-      await _googleSignIn.signOut();
+      await _googleSignIn?.signOut();
     } catch (_) {}
     await _storage.clear();
     user = null;
