@@ -20,9 +20,10 @@ if not DEBUG and SECRET_KEY == _INSECURE_DEFAULT_KEY:
         "and set it as an environment variable before running with DEBUG=False."
     )
 
-# Render sets RENDER_EXTERNAL_HOSTNAME on the deployed service; trust it
-# automatically so ALLOWED_HOSTS doesn't need manual updates after every deploy.
-_platform_domain = config("RENDER_EXTERNAL_HOSTNAME", default="")
+# Render sets RENDER_EXTERNAL_HOSTNAME and Railway sets RAILWAY_PUBLIC_DOMAIN
+# on the deployed service; trust whichever is present automatically so
+# ALLOWED_HOSTS doesn't need manual updates after every deploy.
+_platform_domain = config("RENDER_EXTERNAL_HOSTNAME", default="") or config("RAILWAY_PUBLIC_DOMAIN", default="")
 if _platform_domain:
     ALLOWED_HOSTS.append(_platform_domain)
 
