@@ -147,7 +147,9 @@ def _send_via_sendgrid(to_email: str, otp_code: str, api_key: str) -> bool:
         )
         return False
     except Exception as exc:
-        LAST_ERROR = f"SendGrid {type(exc).__name__}: {exc}"
+        body = getattr(exc, "body", None)
+        detail = body.decode() if isinstance(body, bytes) else body
+        LAST_ERROR = f"SendGrid {type(exc).__name__}: {exc}" + (f" | body: {detail}" if detail else "")
         logger.exception("SendGrid send failed for %s: %s", to_email, exc)
         return False
 
