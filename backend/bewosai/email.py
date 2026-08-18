@@ -16,11 +16,6 @@ from django.core.mail import send_mail as django_send_mail
 
 logger = logging.getLogger(__name__)
 
-# Set by the two _send_via_* functions on failure so SendOTPView can surface
-# the real exception to a trusted debug caller (see LAST_ERROR usage there)
-# without needing direct access to Render's log stream.
-LAST_ERROR: str | None = None
-
 
 def _otp_html(otp_code: str, email: str) -> str:
     return f"""
@@ -118,7 +113,6 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
 
 
 def _send_via_sendgrid(to_email: str, otp_code: str, api_key: str) -> bool:
-    global LAST_ERROR
     try:
         from sendgrid import SendGridAPIClient
         from sendgrid.helpers.mail import Mail, To, Content
@@ -140,7 +134,6 @@ def _send_via_sendgrid(to_email: str, otp_code: str, api_key: str) -> bool:
         if response.status_code in (200, 201, 202):
             logger.info("OTP sent via SendGrid to %s (status %s)", to_email, response.status_code)
             return True
-        LAST_ERROR = f"SendGrid HTTP {response.status_code}: {response.body}"
         logger.error(
             "SendGrid unexpected status %s for %s: %s",
             response.status_code, to_email, response.body,
@@ -149,13 +142,13 @@ def _send_via_sendgrid(to_email: str, otp_code: str, api_key: str) -> bool:
     except Exception as exc:
         body = getattr(exc, "body", None)
         detail = body.decode() if isinstance(body, bytes) else body
-        LAST_ERROR = f"SendGrid {type(exc).__name__}: {exc}" + (f" | body: {detail}" if detail else "")
-        logger.exception("SendGrid send failed for %s: %s", to_email, exc)
+        logger.exception(
+            "SendGrid send failed for %s: %s%s", to_email, exc, f" | body: {detail}" if detail else "",
+        )
         return False
 
 
 def _send_via_smtp(to_email: str, otp_code: str) -> bool:
-    global LAST_ERROR
     try:
         # Gmail's SMTP servers reject mail whose From address doesn't match
         # the authenticated account (or a verified alias of it), so this
@@ -176,7 +169,6 @@ def _send_via_smtp(to_email: str, otp_code: str) -> bool:
         logger.info("OTP sent via SMTP to %s", to_email)
         return True
     except Exception as exc:
-        LAST_ERROR = f"SMTP {type(exc).__name__}: {exc}"
         logger.exception("SMTP send failed for %s: %s", to_email, exc)
         return False
 
