@@ -3,14 +3,21 @@ from datetime import timedelta
 from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from django.db import models
 from django.db.models import Count, Sum
 from django.utils import timezone
 
 from accounts.models import User, Business, LoginActivity
 from accounts.serializers import UserSerializer, BusinessSerializer
 from bewosai.utils import get_business
-from .models import SupportTicket, Announcement, Feature
-from .serializers import SupportTicketSerializer, AnnouncementSerializer, FeatureSerializer
+from .models import (
+    SupportTicket, Announcement, Feature,
+    License, BusinessFeatureOverride, LicenseAuditLog,
+)
+from .serializers import (
+    SupportTicketSerializer, AnnouncementSerializer, FeatureSerializer,
+    LicenseSerializer, LicenseAuditLogSerializer,
+)
 
 
 class IsPlatformAdmin(permissions.BasePermission):
@@ -333,8 +340,14 @@ class EffectiveFeaturesView(APIView):
 
         business = get_business(request)
         platform = get_platform(request)
+        overrides = {}
+        if business:
+            overrides = {
+                o.feature_key: o.enabled
+                for o in BusinessFeatureOverride.objects.filter(business=business)
+            }
         features = {
-            f.key: f.is_available_on(platform, business)
+            f.key: overrides[f.key] if f.key in overrides else f.is_available_on(platform, business)
             for f in Feature.objects.all()
         }
         return Response({"platform": platform, "features": features})
@@ -383,3 +396,303 @@ class BusinessDataView(APIView):
             "inventory_count": Product.objects.filter(business=biz, is_deleted=False).count(),
             "parties_count": Party.objects.filter(business=biz, is_deleted=False).count(),
         })
+
+
+# ── Licensing ────────────────────────────────────────────────────────────────
+
+def _log(*, actor, action, business, license=None, old_value="", new_value=""):
+    LicenseAuditLog.objects.create(
+        actor=actor, action=action, business=business, license=license,
+        old_value=str(old_value), new_value=str(new_value),
+    )
+
+
+class LicenseListView(generics.ListAPIView):
+    """
+    Super Admin: filterable license table (Code | Business | Plan | Duration
+    | Start | Expiry | Status | Actions). Filters: duration, status, business
+    search (name/owner email), and start/expiry date ranges — see section 12
+    of the license spec for the exact filter set.
+    """
+    permission_classes = [IsPlatformAdmin]
+    serializer_class = LicenseSerializer
+
+    def get_queryset(self):
+        qs = License.objects.select_related("business", "business__owner", "created_by").all()
+        params = self.request.query_params
+
+        duration = params.get("duration_type")
+        if duration:
+            qs = qs.filter(duration_type=duration)
+
+        status_filter = params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        search = params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                models.Q(business__name__icontains=search)
+                | models.Q(email_snapshot__icontains=search)
+                | models.Q(business__owner__email__icontains=search)
+                | models.Q(business__owner__name__icontains=search)
+            )
+
+        for param, field in [
+            ("start_from", "start_date__gte"), ("start_to", "start_date__lte"),
+            ("expiry_from", "expiry_date__gte"), ("expiry_to", "expiry_date__lte"),
+        ]:
+            value = params.get(param)
+            if value:
+                qs = qs.filter(**{field: value})
+
+        year = params.get("year")
+        if year:
+            qs = qs.filter(models.Q(start_date__year=year) | models.Q(expiry_date__year=year))
+
+        return qs
+
+
+class LicenseYearsView(APIView):
+    """Distinct years present across license start/expiry dates, for the
+    year filter dropdown — generated from real data instead of a hardcoded
+    5-year list, per section 12."""
+    permission_classes = [IsPlatformAdmin]
+
+    def get(self, request):
+        years = set()
+        for row in License.objects.values_list("start_date", "expiry_date"):
+            for d in row:
+                if d:
+                    years.add(d.year)
+        return Response(sorted(years, reverse=True))
+
+
+class LicenseGenerateView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def post(self, request):
+        business_id = request.data.get("business")
+        duration_type = request.data.get("duration_type")
+        if not business_id or not duration_type:
+            return Response(
+                {"error": "'business' and 'duration_type' are required."}, status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            business = Business.objects.get(pk=business_id)
+        except Business.DoesNotExist:
+            return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if duration_type not in dict(License.DURATION_CHOICES):
+            return Response({"error": "Invalid duration_type."}, status=status.HTTP_400_BAD_REQUEST)
+
+        duration_days = request.data.get("duration_days")
+        if duration_type == License.DURATION_CUSTOM:
+            try:
+                duration_days = int(duration_days)
+                assert duration_days > 0
+            except (TypeError, ValueError, AssertionError):
+                return Response(
+                    {"error": "'duration_days' must be a positive integer for a custom duration."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        start_date = request.data.get("start_date") or None
+
+        try:
+            license_obj = License.generate(
+                business=business, duration_type=duration_type,
+                start_date=start_date, duration_days=duration_days,
+                created_by=request.user,
+            )
+        except (ValueError, RuntimeError) as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        _log(
+            actor=request.user, action=LicenseAuditLog.ACTION_CREATED, business=business,
+            license=license_obj, new_value=f"{license_obj.code} · {duration_type} · expires {license_obj.expiry_date}",
+        )
+        return Response(LicenseSerializer(license_obj).data, status=status.HTTP_201_CREATED)
+
+
+class LicenseDetailView(generics.RetrieveUpdateAPIView):
+    """PATCH here is for non-lifecycle edits only (e.g. plan) — the code
+    itself is read_only on the serializer, and status changes always go
+    through the extend/revoke actions below so they're captured in the
+    audit log."""
+    permission_classes = [IsPlatformAdmin]
+    serializer_class = LicenseSerializer
+    queryset = License.objects.select_related("business", "created_by")
+
+
+class LicenseExtendView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def post(self, request, pk):
+        try:
+            license_obj = License.objects.get(pk=pk)
+        except License.DoesNotExist:
+            return Response({"error": "License not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        duration_type = request.data.get("duration_type")
+        if duration_type not in dict(License.DURATION_CHOICES):
+            return Response({"error": "Invalid duration_type."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if duration_type == License.DURATION_CUSTOM:
+            try:
+                extra_days = int(request.data.get("duration_days"))
+                assert extra_days > 0
+            except (TypeError, ValueError, AssertionError):
+                return Response(
+                    {"error": "'duration_days' must be a positive integer for a custom extension."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            extra_days = License.DURATION_DAYS[duration_type]
+
+        old_expiry = license_obj.expiry_date
+        # Extend from whichever is later — the current expiry, or today (an
+        # already-expired license extends from now, not from its stale date).
+        base = max(old_expiry, timezone.localdate())
+        license_obj.expiry_date = base + timedelta(days=extra_days)
+        if license_obj.status == License.STATUS_EXPIRED:
+            license_obj.status = License.STATUS_ACTIVE
+        license_obj.save(update_fields=["expiry_date", "status"])
+
+        _log(
+            actor=request.user, action=LicenseAuditLog.ACTION_EXTENDED, business=license_obj.business,
+            license=license_obj, old_value=old_expiry, new_value=license_obj.expiry_date,
+        )
+        return Response(LicenseSerializer(license_obj).data)
+
+
+class LicenseRevokeView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def post(self, request, pk):
+        try:
+            license_obj = License.objects.get(pk=pk)
+        except License.DoesNotExist:
+            return Response({"error": "License not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        old_status = license_obj.status
+        license_obj.status = License.STATUS_REVOKED
+        license_obj.revoked_at = timezone.now()
+        license_obj.save(update_fields=["status", "revoked_at"])
+
+        _log(
+            actor=request.user, action=LicenseAuditLog.ACTION_REVOKED, business=license_obj.business,
+            license=license_obj, old_value=old_status, new_value=License.STATUS_REVOKED,
+        )
+        return Response(LicenseSerializer(license_obj).data)
+
+
+class LicenseReassignView(APIView):
+    """Move a PENDING (not-yet-activated) license to a different business.
+    Active licenses can't be reassigned — revoke and generate a fresh one
+    instead, so there's never ambiguity about which business actually used
+    the premium period."""
+    permission_classes = [IsPlatformAdmin]
+
+    def post(self, request, pk):
+        try:
+            license_obj = License.objects.get(pk=pk)
+        except License.DoesNotExist:
+            return Response({"error": "License not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if license_obj.status == License.STATUS_ACTIVE:
+            return Response(
+                {"error": "This license is already active — revoke it and generate a new one instead of reassigning."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_business_id = request.data.get("business")
+        try:
+            new_business = Business.objects.get(pk=new_business_id)
+        except Business.DoesNotExist:
+            return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        old_business = license_obj.business
+        license_obj.business = new_business
+        license_obj.email_snapshot = new_business.email or new_business.owner.email
+        license_obj.save(update_fields=["business", "email_snapshot"])
+
+        _log(
+            actor=request.user, action=LicenseAuditLog.ACTION_REASSIGNED, business=new_business,
+            license=license_obj, old_value=old_business.name, new_value=new_business.name,
+        )
+        return Response(LicenseSerializer(license_obj).data)
+
+
+class LicenseAuditLogListView(generics.ListAPIView):
+    permission_classes = [IsPlatformAdmin]
+    serializer_class = LicenseAuditLogSerializer
+
+    def get_queryset(self):
+        qs = LicenseAuditLog.objects.select_related("actor", "business", "license").all()
+        business_id = self.request.query_params.get("business")
+        if business_id:
+            qs = qs.filter(business_id=business_id)
+        return qs[:200]
+
+
+class BusinessFeaturePermissionsView(APIView):
+    """
+    GET: every registered Feature with this business's effective on/off
+    state (override if one exists, else the platform default).
+    PATCH {"feature_key": "reports", "enabled": false}: set or clear an
+    override for one feature. enabled=null removes the override entirely,
+    reverting that feature back to the platform-wide default.
+    """
+    permission_classes = [IsPlatformAdmin]
+
+    def get(self, request, pk):
+        try:
+            business = Business.objects.get(pk=pk)
+        except Business.DoesNotExist:
+            return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        overrides = {o.feature_key: o.enabled for o in BusinessFeatureOverride.objects.filter(business=business)}
+        data = [
+            {
+                "key": f.key,
+                "name": f.name,
+                "platform_default": f.enabled,
+                "override": overrides.get(f.key),
+                "effective": overrides[f.key] if f.key in overrides else f.enabled,
+            }
+            for f in Feature.objects.all()
+        ]
+        return Response(data)
+
+    def patch(self, request, pk):
+        try:
+            business = Business.objects.get(pk=pk)
+        except Business.DoesNotExist:
+            return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        key = request.data.get("feature_key")
+        enabled = request.data.get("enabled")
+        if not key:
+            return Response({"error": "'feature_key' is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing = BusinessFeatureOverride.objects.filter(business=business, feature_key=key).first()
+        old_value = existing.enabled if existing else "platform default"
+
+        if enabled is None:
+            if existing:
+                existing.delete()
+            new_value = "platform default"
+        else:
+            BusinessFeatureOverride.objects.update_or_create(
+                business=business, feature_key=key,
+                defaults={"enabled": bool(enabled), "updated_by": request.user},
+            )
+            new_value = bool(enabled)
+
+        _log(
+            actor=request.user,
+            action=LicenseAuditLog.ACTION_FEATURE_ENABLED if new_value is True else LicenseAuditLog.ACTION_FEATURE_DISABLED,
+            business=business, old_value=f"{key}: {old_value}", new_value=f"{key}: {new_value}",
+        )
+        return self.get(request, pk)

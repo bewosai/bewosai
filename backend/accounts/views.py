@@ -10,8 +10,8 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from bewosai.email import send_otp_email
-from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
-from bewosai.utils import get_bid, get_business
+from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature
+from bewosai.utils import get_bid, get_business, require_business
 from .models import User, Business, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import (
     UserSerializer, BusinessSerializer, StaffMemberSerializer, InviteStaffSerializer,
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class _RequireStaffManagement:
     """Gated by the Super Admin 'Staff Management' feature switch."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("staff_management")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("staff_management")]
 
 
 def api_response(success, message, status_code, **extra):
@@ -595,3 +595,97 @@ class BusinessStaffActivityView(APIView):
             for la in activities
         ]
         return Response(data)
+
+
+# ── Licensing ────────────────────────────────────────────────────────────────
+
+def _license_payload(license_obj):
+    if not license_obj:
+        return None
+    return {
+        "id": license_obj.id,
+        "code": license_obj.code,
+        "plan": license_obj.plan,
+        "duration_type": license_obj.duration_type,
+        "duration_days": license_obj.duration_days,
+        "start_date": license_obj.start_date,
+        "expiry_date": license_obj.expiry_date,
+        "status": license_obj.status,
+        "activated_at": license_obj.activated_at,
+    }
+
+
+class LicenseMeView(APIView):
+    """
+    Trial/license status for the current business. The frontend calls this
+    right after login/business-select to decide Dashboard vs the License
+    Required screen — exempted from HasActiveSubscription (see
+    bewosai.permissions) so a locked-out business can still find out *why*.
+    """
+
+    def get(self, request):
+        business = get_business(request)
+        if not business:
+            return api_response(False, "No business selected.", status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "success": True,
+            "has_active_subscription": business.has_active_subscription,
+            "is_grandfathered": business.is_grandfathered,
+            "is_trial_active": business.is_trial_active,
+            "trial_expiry_date": business.trial_expiry_date,
+            "license": _license_payload(business.active_license),
+        })
+
+
+class LicenseActivateView(APIView):
+    """
+    POST {"code": "A7K9P"} — activates a license Super Admin generated for
+    the current business. Also exempted from HasActiveSubscription, since a
+    business with no active subscription is exactly who needs to call this.
+    """
+
+    def post(self, request):
+        business = get_business(request)
+        if not business:
+            return api_response(False, "No business selected.", status.HTTP_400_BAD_REQUEST)
+
+        code = (request.data.get("code") or "").strip().upper()
+        if not code:
+            return api_response(False, "Enter a license code.", status.HTTP_400_BAD_REQUEST)
+
+        from superadmin.models import License, LicenseAuditLog
+
+        license_obj = License.objects.filter(code=code).first()
+        if license_obj is None:
+            return api_response(False, "Invalid license code.", status.HTTP_404_NOT_FOUND)
+
+        if license_obj.business_id != business.id:
+            return api_response(
+                False, "This license code is not assigned to this account.", status.HTTP_403_FORBIDDEN,
+            )
+
+        if license_obj.status == License.STATUS_REVOKED:
+            return api_response(False, "This license has been revoked.", status.HTTP_400_BAD_REQUEST)
+
+        if timezone.localdate() >= license_obj.expiry_date:
+            if license_obj.status != License.STATUS_EXPIRED:
+                license_obj.status = License.STATUS_EXPIRED
+                license_obj.save(update_fields=["status"])
+            return api_response(False, "This license has expired.", status.HTTP_400_BAD_REQUEST)
+
+        if license_obj.status != License.STATUS_ACTIVE:
+            license_obj.status = License.STATUS_ACTIVE
+            license_obj.activated_at = timezone.now()
+            license_obj.save(update_fields=["status", "activated_at"])
+            LicenseAuditLog.objects.create(
+                actor=request.user, action=LicenseAuditLog.ACTION_ACTIVATED,
+                business=business, license=license_obj,
+                new_value=f"active until {license_obj.expiry_date}",
+            )
+
+        return Response({
+            "success": True,
+            "message": f"License activated successfully. Premium access is active until {license_obj.expiry_date}.",
+            "license": _license_payload(license_obj),
+        })

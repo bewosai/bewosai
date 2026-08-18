@@ -2,7 +2,7 @@ from rest_framework import generics, filters, parsers, permissions
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
-from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
+from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature
 from bewosai.utils import get_bid, require_business
 from .models import BankAccount, BankTransaction
 from .serializers import BankAccountSerializer, BankTransactionSerializer
@@ -10,7 +10,7 @@ from .serializers import BankAccountSerializer, BankTransactionSerializer
 
 class _RequireBanking:
     """Gated by the Super Admin 'Banking' feature switch."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("banking")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("banking")]
 
 
 class BankAccountListCreateView(_RequireBanking, generics.ListCreateAPIView):

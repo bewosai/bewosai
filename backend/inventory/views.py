@@ -5,7 +5,7 @@ from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import F
 
-from bewosai.permissions import BusinessNotArchivedForWrites, IsPremiumBusiness, require_feature
+from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, IsPremiumBusiness, require_feature
 from bewosai.utils import get_bid, require_business
 from .models import Category, Unit, Product, StockMovement
 from .serializers import CategorySerializer, UnitSerializer, ProductSerializer, StockMovementSerializer
@@ -22,7 +22,7 @@ def _validate_category_unit(validated_data, business):
 
 class _RequireInventory:
     """Gated by the Super Admin 'Inventory' feature switch."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("inventory")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("inventory")]
 
 
 class CategoryListCreateView(_RequireInventory, generics.ListCreateAPIView):
@@ -168,7 +168,7 @@ class StockMovementListCreateView(_RequireInventory, generics.ListCreateAPIView)
 class ProductBulkImportView(APIView):
     """Bulk create products from Excel import. Accepts list of product objects. Premium only."""
 
-    permission_classes = [IsPremiumBusiness, require_feature("excel_import")]
+    permission_classes = [IsPremiumBusiness, HasActiveSubscription, require_feature("excel_import")]
 
     def post(self, request):
         bid = get_bid(request)

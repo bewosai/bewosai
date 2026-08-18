@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from django.db.models import Sum, Count, F, DecimalField
 from django.db.models.functions import TruncDay, Coalesce
 
-from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
+from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature
 from bewosai.utils import get_business
 from sales.models import Sale, SaleItem, SaleReturn, SaleReturnItem
 from expenses.models import Expense
@@ -20,7 +20,7 @@ class _RequireReports:
     """Gated by the Super Admin 'Reports' feature switch. Not applied to
     DashboardSummaryView — that's the home screen, not the dedicated Reports
     section, so it stays available even if 'reports' is switched off."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("reports")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("reports")]
 
 # Cost of a sold unit: prefer the unit_cost snapshotted on the SaleItem at
 # sale time; fall back to the product's current purchase_price only for

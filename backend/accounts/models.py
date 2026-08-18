@@ -3,7 +3,7 @@ from django.db import models, transaction
 from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.utils import timezone
-from datetime import timedelta
+from datetime import date, timedelta
 
 
 ACCOUNT_PERSONAL = "personal"
@@ -168,11 +168,57 @@ class Business(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # 120 days for now while the app is new, so people have real room to try
+    # it out before needing a license — tighten this once there's an
+    # established user base.
+    TRIAL_DAYS = 120
+    # Businesses created before licensing shipped are grandfathered — their
+    # trial would already read as expired since it's computed from
+    # created_at, and retroactively locking out every existing business the
+    # moment this feature deploys would break the live app for everyone
+    # already using it. Only businesses created from this date on are
+    # actually subject to trial/license enforcement.
+    LICENSING_STARTS = date(2026, 8, 19)
+
     def __str__(self):
         return self.name
 
     class Meta:
         verbose_name_plural = "businesses"
+
+    @property
+    def trial_expiry_date(self):
+        """Computed from created_at rather than stored — nothing to drift
+        out of sync, and every business (including ones created before this
+        field existed) gets a well-defined trial window for free."""
+        created = self.created_at.date() if self.created_at else timezone.localdate()
+        return created + timedelta(days=self.TRIAL_DAYS)
+
+    @property
+    def is_trial_active(self):
+        return timezone.localdate() < self.trial_expiry_date
+
+    @property
+    def active_license(self):
+        from superadmin.models import License
+
+        return (
+            self.licenses.filter(status=License.STATUS_ACTIVE, expiry_date__gt=timezone.localdate())
+            .order_by("-expiry_date")
+            .first()
+        )
+
+    @property
+    def is_grandfathered(self):
+        created = self.created_at.date() if self.created_at else timezone.localdate()
+        return created < self.LICENSING_STARTS
+
+    @property
+    def has_active_subscription(self):
+        """The single source of truth for 'can this business use the app right
+        now' — grandfathered, or trial window, or a currently-active license.
+        Server time only; never trust a client-supplied date."""
+        return self.is_grandfathered or self.is_trial_active or self.active_license is not None
 
 
 class StaffMember(models.Model):

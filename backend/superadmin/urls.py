@@ -35,4 +35,15 @@ urlpatterns = [
     # user needs to read it, not just platform admins.
     path("features/", views.FeatureManagementListView.as_view()),
     path("features/<slug:key>/toggle/", views.FeatureToggleView.as_view()),
+
+    # Licensing (admin only)
+    path("licenses/", views.LicenseListView.as_view()),
+    path("licenses/years/", views.LicenseYearsView.as_view()),  # before <pk>
+    path("licenses/generate/", views.LicenseGenerateView.as_view()),
+    path("licenses/audit-log/", views.LicenseAuditLogListView.as_view()),
+    path("licenses/<int:pk>/", views.LicenseDetailView.as_view()),
+    path("licenses/<int:pk>/extend/", views.LicenseExtendView.as_view()),
+    path("licenses/<int:pk>/revoke/", views.LicenseRevokeView.as_view()),
+    path("licenses/<int:pk>/reassign/", views.LicenseReassignView.as_view()),
+    path("businesses/<int:pk>/features/", views.BusinessFeaturePermissionsView.as_view()),
 ]

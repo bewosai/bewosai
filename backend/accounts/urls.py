@@ -16,4 +16,6 @@ urlpatterns = [
     path("businesses/<int:business_id>/staff/", views.StaffListView.as_view()),
     path("businesses/<int:business_id>/staff/<int:pk>/", views.StaffDetailView.as_view()),
     path("staff-activity/", views.StaffActivityView.as_view(), name="staff-activity"),
+    path("licenses/me/", views.LicenseMeView.as_view()),
+    path("licenses/activate/", views.LicenseActivateView.as_view()),
 ]

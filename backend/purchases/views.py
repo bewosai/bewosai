@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.utils import timezone
 
-from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
+from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature
 from bewosai.utils import get_business
 from .models import Purchase, PurchaseReturn
 from .serializers import PurchaseSerializer, PurchaseReturnSerializer
@@ -13,7 +13,7 @@ from .serializers import PurchaseSerializer, PurchaseReturnSerializer
 
 class _RequirePurchases:
     """Gated by the Super Admin 'Purchases' feature switch."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("purchases")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("purchases")]
 
 
 def _next_bill_number(business):

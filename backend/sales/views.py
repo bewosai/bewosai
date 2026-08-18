@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 
-from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
+from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature
 from bewosai.utils import get_bid, require_business
 from .models import Sale, SaleReturn, Quotation
 from .serializers import SaleSerializer, SaleReturnSerializer, QuotationSerializer
@@ -13,7 +13,7 @@ from .serializers import SaleSerializer, SaleReturnSerializer, QuotationSerializ
 
 class _RequirePos:
     """Gated by the Super Admin 'POS / Sales' feature switch."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, require_feature("pos")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("pos")]
 
 
 def _next_invoice_number(business_id):
