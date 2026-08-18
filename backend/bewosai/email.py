@@ -146,6 +146,10 @@ def _send_via_sendgrid(to_email: str, otp_code: str, api_key: str) -> bool:
 
 def _send_via_smtp(to_email: str, otp_code: str) -> bool:
     try:
+        # Gmail's SMTP servers reject mail whose From address doesn't match
+        # the authenticated account (or a verified alias of it), so this
+        # can't use the generic DEFAULT_FROM_EMAIL — it must be the same
+        # mailbox EMAIL_HOST_USER logged in as.
         django_send_mail(
             subject="Your Bewosai Verification Code",
             message=(
@@ -153,7 +157,7 @@ def _send_via_smtp(to_email: str, otp_code: str) -> bool:
                 "Valid for 10 minutes. Never share this code.\n\n"
                 "— Bewosai Team"
             ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=f"Bewosai <{settings.EMAIL_HOST_USER}>",
             recipient_list=[to_email],
             html_message=_otp_html(otp_code, to_email),
             fail_silently=False,
