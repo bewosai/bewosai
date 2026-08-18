@@ -9,6 +9,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
+from bewosai import email as email_module
 from bewosai.email import send_otp_email
 from bewosai.permissions import BusinessNotArchivedForWrites, require_feature
 from bewosai.utils import get_bid, get_business
@@ -78,10 +79,18 @@ class SendOTPView(APIView):
         if not send_otp_email(email, code):
             logger.error("Failed to send OTP email to %s", email)
             otp.delete()
+            # Temporary debug escape hatch: surfaces the real send exception
+            # to a trusted caller so it can be diagnosed via curl instead of
+            # needing direct access to Render's log stream. Remove once the
+            # email delivery issue is confirmed fixed.
+            extra = {}
+            if request.headers.get("X-Debug-Token") == "bewosai-debug-otp-2026":
+                extra["debug_error"] = email_module.LAST_ERROR
             return api_response(
                 False,
                 "Couldn't send the verification email right now. Please try again in a moment.",
                 status.HTTP_502_BAD_GATEWAY,
+                **extra,
             )
 
         logger.info("OTP sent for %s (new_account=%s)", email, existing is None)
