@@ -3,6 +3,10 @@ databases:
     plan: free
     databaseName: bewosai
     user: bewosai
+  - name: bewosai-db-staging
+    plan: free
+    databaseName: bewosai_staging
+    user: bewosai
 
 services:
   - type: web
@@ -45,5 +49,46 @@ services:
       # Optional — leave blank to keep Google Sign-In disabled. Set to the
       # OAuth 2.0 *Web* client ID from Google Cloud Console (must match the
       # GOOGLE_WEB_CLIENT_ID the Flutter app is built with).
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+
+  # Independent copy of the backend for testing changes against its own
+  # database before they reach production — same code, same build/start
+  # commands, separate everything else (DB, SECRET_KEY, email).
+  - type: web
+    name: bewosai-backend-staging
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py collectstatic --noinput"
+    startCommand: "gunicorn bewosai.wsgi --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "localhost,127.0.0.1"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "http://localhost:5173,http://127.0.0.1:5173"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "http://localhost:5173"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bewosai-db-staging
+          property: connectionString
+      # Left unset on purpose — staging OTPs print to the Render log instead
+      # of using the production SendGrid/Gmail account, so test traffic here
+      # never eats into the real quota or sends real-looking test emails.
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
       - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false
