@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { AppSettingsProvider } from "./context/AppSettingsContext";
 import { FeatureProvider } from "./context/FeatureContext";
+import { LicenseProvider } from "./context/LicenseContext";
 import App from "./App";
 import "./index.css";
 
@@ -12,7 +13,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <AppSettingsProvider>
       <AuthProvider>
         <FeatureProvider>
-          <App />
+          <LicenseProvider>
+            <App />
+          </LicenseProvider>
         </FeatureProvider>
       </AuthProvider>
     </AppSettingsProvider>

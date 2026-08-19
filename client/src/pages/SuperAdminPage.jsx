@@ -12,12 +12,13 @@ import {
   CalendarDays, ChevronLeft, ChevronRight, Plus, Edit2,
   Trash2, MessageSquare, Bell, Search, RefreshCw, Loader,
   TrendingUp, AlertTriangle, ToggleLeft, ToggleRight, Crown,
-  SlidersHorizontal, Monitor, Smartphone,
+  SlidersHorizontal, Monitor, Smartphone, KeyRound,
 } from "lucide-react";
+import LicensesTab from "./superadmin/LicensesTab";
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
-function Badge({ label, color = "gray" }) {
+export function Badge({ label, color = "gray" }) {
   const map = {
     green: "bg-green-500/10 text-green-400",
     red: "bg-red-500/10 text-red-400",
@@ -33,7 +34,7 @@ function Badge({ label, color = "gray" }) {
   );
 }
 
-function ConfirmDialog({ title, body, onConfirm, onCancel, dangerous = false }) {
+export function ConfirmDialog({ title, body, onConfirm, onCancel, dangerous = false }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-navy-700 bg-navy-900 p-6 space-y-4">
@@ -1146,6 +1147,7 @@ export default function SuperAdminPage() {
     { id: "businesses", label: `Businesses (${businesses.length})`, icon: Building2 },
     { id: "users", label: `Users (${users.length})`, icon: Users },
     { id: "features", label: "Feature Management", icon: SlidersHorizontal },
+    { id: "licenses", label: "Licenses", icon: KeyRound },
     { id: "announcements", label: "Announcements", icon: Bell },
     { id: "tickets", label: `Tickets (${tickets.filter(t => t.status === "OPEN").length} open)`, icon: MessageSquare },
   ];
@@ -1185,6 +1187,7 @@ export default function SuperAdminPage() {
           {tab === "businesses" && <BusinessesTab businesses={businesses} onRefresh={() => load(false)} />}
           {tab === "users" && <UsersTab users={users} onRefresh={() => load(false)} />}
           {tab === "features" && <FeaturesTab features={featureList} onRefresh={() => load(false)} />}
+          {tab === "licenses" && <LicensesTab businesses={businesses} />}
           {tab === "announcements" && <AnnouncementsTab announcements={announcements} onRefresh={() => load(false)} />}
           {tab === "tickets" && <TicketsTab tickets={tickets} onRefresh={() => load(false)} />}
         </>

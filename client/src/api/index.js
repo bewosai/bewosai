@@ -176,6 +176,11 @@ export const reports = {
   staffActivity: (p) => api.get("/auth/staff-activity/", { params: p }),
 };
 
+export const licenses = {
+  me: () => api.get("/auth/licenses/me/"),
+  activate: (code) => api.post("/auth/licenses/activate/", { code }),
+};
+
 export const superadmin = {
   stats: () => api.get("/superadmin/stats/"),
 
@@ -202,6 +207,20 @@ export const superadmin = {
 
   features: () => api.get("/superadmin/features/"),
   toggleFeature: (key, d) => api.patch(`/superadmin/features/${key}/toggle/`, d),
+
+  licenseList: (params) => api.get("/superadmin/licenses/", { params }),
+  licenseYears: () => api.get("/superadmin/licenses/years/"),
+  generateLicense: (d) => api.post("/superadmin/licenses/generate/", d),
+  licenseDetail: (id) => api.get(`/superadmin/licenses/${id}/`),
+  updateLicense: (id, d) => api.patch(`/superadmin/licenses/${id}/`, d),
+  extendLicense: (id, d) => api.post(`/superadmin/licenses/${id}/extend/`, d),
+  revokeLicense: (id) => api.post(`/superadmin/licenses/${id}/revoke/`),
+  reassignLicense: (id, businessId) => api.post(`/superadmin/licenses/${id}/reassign/`, { business: businessId }),
+  licenseAuditLog: (params) => api.get("/superadmin/licenses/audit-log/", { params }),
+
+  businessFeaturePermissions: (businessId) => api.get(`/superadmin/businesses/${businessId}/features/`),
+  setBusinessFeaturePermission: (businessId, featureKey, enabled) =>
+    api.patch(`/superadmin/businesses/${businessId}/features/`, { feature_key: featureKey, enabled }),
 };
 
 // Effective feature availability for the current business — same endpoint

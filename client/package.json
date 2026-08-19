@@ -3,10 +3,43 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "vite build && electron .",
+    "electron:build": "vite build && electron-builder --win",
+    "electron:publish": "vite build && electron-builder --win --publish always"
+  },
+  "build": {
+    "appId": "com.bewosai.desktop",
+    "productName": "Bewosai",
+    "copyright": "Copyright © 2026 Bewosai",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/icons/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Bewosai"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "KabitaaMahato",
+      "repo": "bewosyapp"
+    }
   },
   "dependencies": {
     "axios": "^1.7.7",
@@ -20,6 +53,12 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
+    "electron-serve": "^3.0.1",
+    "electron-updater": "^6.8.9",
+    "png-to-ico": "^3.0.2",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4.2.1",
     "vite": "^5.4.10",
     "vite-plugin-pwa": "^1.3.0"

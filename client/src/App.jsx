@@ -8,6 +8,7 @@ import ChooseProfilePage from "./pages/ChooseProfile";
 import LandingPage from "./pages/LandingPage";
 import CreateBusinessPage from "./pages/CreateBusiness";
 import SelectBusinessPage from "./pages/SelectBusiness";
+import LicenseRequiredPage from "./pages/LicenseRequired";
 
 // Business layout + pages
 import AppLayout from "./components/layout/AppLayout";
@@ -60,6 +61,7 @@ export default function App() {
       {/* Post-login setup */}
       <Route path="/create-business" element={<RequireAuth><CreateBusinessPage /></RequireAuth>} />
       <Route path="/select-business" element={<RequireAuth><SelectBusinessPage /></RequireAuth>} />
+      <Route path="/license-required" element={<RequireAuth><LicenseRequiredPage /></RequireAuth>} />
 
       {/* ── PERSONAL routes ── */}
       <Route
