@@ -31,9 +31,9 @@ class StaffService {
   Future<StaffMember> updateStaff(int businessId, int staffId, {String? role, Map<String, dynamic>? permissions, bool? isActive}) async {
     try {
       final res = await _dio.patch('/auth/businesses/$businessId/staff/$staffId/', data: {
-        if (role != null) 'role': role,
-        if (permissions != null) 'permissions': permissions,
-        if (isActive != null) 'is_active': isActive,
+        'role': ?role,
+        'permissions': ?permissions,
+        'is_active': ?isActive,
       });
       return StaffMember.fromJson(res.data as Map<String, dynamic>);
     } catch (e) {

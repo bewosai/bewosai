@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+
 import '../../../../core/network/api_client.dart';
 import '../models/business_model.dart';
 import '../models/user_model.dart';
@@ -115,8 +119,8 @@ class AuthService {
   Future<AppUser> updateMe({String? name, String? phone}) async {
     try {
       final res = await _dio.patch('/auth/me/', data: {
-        if (name != null) 'name': name,
-        if (phone != null) 'phone': phone,
+        'name': ?name,
+        'phone': ?phone,
       });
       return AppUser.fromJson(res.data as Map<String, dynamic>);
     } catch (e) {
@@ -144,9 +148,19 @@ class AuthService {
     }
   }
 
-  Future<Business> updateBusiness(int id, Map<String, dynamic> fields) async {
+  Future<Business> updateBusiness(int id, Map<String, dynamic> fields, {File? logo}) async {
     try {
-      final res = await _dio.patch('/auth/businesses/$id/', data: fields);
+      final Response res;
+      if (logo == null) {
+        res = await _dio.patch('/auth/businesses/$id/', data: fields);
+      } else {
+        final map = <String, dynamic>{...fields};
+        map['logo'] = await MultipartFile.fromFile(
+          logo.path,
+          filename: logo.path.split(RegExp(r'[/\\]')).last,
+        );
+        res = await _dio.patch('/auth/businesses/$id/', data: FormData.fromMap(map));
+      }
       return Business.fromJson(res.data as Map<String, dynamic>);
     } catch (e) {
       throw ApiClient.toApiException(e);

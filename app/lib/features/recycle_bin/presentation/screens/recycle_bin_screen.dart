@@ -151,11 +151,12 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
                                                     'This cannot be undone.',
                                                 confirmLabel: 'Delete Forever',
                                               );
-                                          if (confirmed)
+                                          if (confirmed) {
                                             provider.permanentlyDelete(
                                               item.type,
                                               item.id,
                                             );
+                                          }
                                         },
                                       ),
                                     ],

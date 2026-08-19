@@ -32,15 +32,16 @@ class ExpenseUseCases {
     );
   }
 
-  /// Create when [id] is null; update when [id] is set.
-  /// [receiptImage] is only used on create.
+  /// Create when [id] is null; update when [id] is set. [receiptImage] is
+  /// only sent when the user actually picked/changed a photo — updating
+  /// without it leaves the existing receipt image untouched.
   Future<Expense> saveExpense(
     Expense expense, {
     int? id,
     File? receiptImage,
   }) {
     if (id != null) {
-      return _repository.update(id, expense);
+      return _repository.update(id, expense, receiptImage: receiptImage);
     }
     return _repository.create(expense, receiptImage: receiptImage);
   }

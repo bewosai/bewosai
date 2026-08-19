@@ -21,4 +21,7 @@ class PartyUseCases {
   Future<PartyPayment> addPayment(PartyPayment payment) => _repository.createPayment(payment);
 
   Future<void> deletePayment(int id) => _repository.deletePayment(id);
+
+  Future<Map<String, dynamic>> bulkImportParties(List<Map<String, dynamic>> rows) =>
+      _repository.bulkImport(rows);
 }

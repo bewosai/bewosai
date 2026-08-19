@@ -6,6 +6,8 @@ import '../../../../core/i18n/translations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../inventory/presentation/screens/inventory_import_screen.dart';
+import '../../../parties/presentation/screens/party_import_screen.dart';
 
 class _MoreTile {
   final IconData icon;
@@ -31,6 +33,21 @@ class MoreScreen extends StatelessWidget {
       _MoreTile(Icons.account_balance_outlined, t('banking'), () => context.push('/banking'), feature: 'banking'),
       _MoreTile(Icons.bar_chart_outlined, t('reports'), () => context.push('/reports'), feature: 'reports'),
       _MoreTile(Icons.badge_outlined, t('staff'), () => context.push('/staff'), feature: 'staff_management'),
+    ].where((tile) => tile.feature == null || features.isEnabled(tile.feature!)).toList();
+
+    final importTiles = [
+      _MoreTile(
+        Icons.inventory_2_outlined,
+        'Import Products',
+        () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InventoryImportScreen())),
+        feature: 'excel_import',
+      ),
+      _MoreTile(
+        Icons.people_outline,
+        'Import Parties',
+        () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PartyImportScreen())),
+        feature: 'excel_import',
+      ),
     ].where((tile) => tile.feature == null || features.isEnabled(tile.feature!)).toList();
 
     return Scaffold(
@@ -94,6 +111,19 @@ class MoreScreen extends StatelessWidget {
                   for (var i = 0; i < businessTiles.length; i++) ...[
                     if (i > 0) _divider(),
                     _tile(context, businessTiles[i].icon, businessTiles[i].label, businessTiles[i].onTap),
+                  ],
+                ],
+              ),
+            ],
+            if (importTiles.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              const SectionHeader(title: 'Bulk Import'),
+              const SizedBox(height: 10),
+              AppSectionCard(
+                children: [
+                  for (var i = 0; i < importTiles.length; i++) ...[
+                    if (i > 0) _divider(),
+                    _tile(context, importTiles[i].icon, importTiles[i].label, importTiles[i].onTap),
                   ],
                 ],
               ),

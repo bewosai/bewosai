@@ -1,8 +1,14 @@
+import 'dart:io';
+
+import 'package:excel/excel.dart' as xls;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/date_range_utils.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../parties/presentation/providers/party_provider.dart';
 import '../../data/models/report_models.dart';
@@ -1089,6 +1095,9 @@ class _BankStatementTab extends StatefulWidget {
 
 class _BankStatementTabState extends State<_BankStatementTab> {
   BankAccountSummary? _selected;
+  DateRangePreset _preset = DateRangePreset.thisMonth;
+  DateRange _range = DateRangeUtils.forPreset(DateRangePreset.thisMonth);
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -1096,6 +1105,132 @@ class _BankStatementTabState extends State<_BankStatementTab> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ReportProvider>().loadBankAccounts();
     });
+  }
+
+  void _loadStatement() {
+    final account = _selected;
+    if (account == null) return;
+    context.read<ReportProvider>().loadBankStatement(account.id, from: _range.from, to: _range.to);
+  }
+
+  Future<void> _changeRange() async {
+    final result = await showModalBottomSheet<(DateRangePreset, DateRange)>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Select Period', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              ),
+            ),
+            for (final preset in [DateRangePreset.thisMonth, DateRangePreset.lastMonth, DateRangePreset.thisYear, DateRangePreset.allTime])
+              ListTile(
+                title: Text(preset.label),
+                trailing: preset == _preset ? const Icon(Icons.check, color: AppColors.orange) : null,
+                onTap: () => Navigator.pop(ctx, (preset, DateRangeUtils.forPreset(preset))),
+              ),
+            ListTile(
+              title: const Text('Custom Range'),
+              trailing: _preset == DateRangePreset.custom ? const Icon(Icons.check, color: AppColors.orange) : null,
+              onTap: () async {
+                final from = await AppDatePicker.pick(
+                  ctx,
+                  initialDate: _range.from ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
+                );
+                if (from == null || !ctx.mounted) return;
+                final to = await AppDatePicker.pick(
+                  ctx,
+                  initialDate: _range.to ?? DateTime.now(),
+                  firstDate: from,
+                  lastDate: DateTime(2100),
+                );
+                if (to == null || !ctx.mounted) return;
+                Navigator.pop(ctx, (DateRangePreset.custom, DateRange(from, to)));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    setState(() {
+      _preset = result.$1;
+      _range = result.$2;
+    });
+    _loadStatement();
+  }
+
+  Future<void> _exportExcel(BankStatement s) async {
+    setState(() => _exporting = true);
+    try {
+      final excel = xls.Excel.createExcel();
+      const sheetName = 'Statement';
+      final sheet = excel[sheetName];
+      sheet.appendRow([xls.TextCellValue(s.account.accountName), xls.TextCellValue(_periodLabel())]);
+      sheet.appendRow([xls.TextCellValue('Opening Balance'), xls.TextCellValue(Formatters.amount(s.openingBalance))]);
+      sheet.appendRow([]);
+      sheet.appendRow([
+        xls.TextCellValue('Date'),
+        xls.TextCellValue('Type'),
+        xls.TextCellValue('Description'),
+        xls.TextCellValue('Credit'),
+        xls.TextCellValue('Debit'),
+        xls.TextCellValue('Balance'),
+      ]);
+      for (final e in s.entries) {
+        sheet.appendRow([
+          xls.TextCellValue(Formatters.date(e.date)),
+          xls.TextCellValue(Formatters.transactionTypeLabel(e.type)),
+          xls.TextCellValue(e.description),
+          xls.TextCellValue(e.credit > 0 ? Formatters.amount(e.credit) : ''),
+          xls.TextCellValue(e.debit > 0 ? Formatters.amount(e.debit) : ''),
+          xls.TextCellValue(Formatters.amount(e.balance)),
+        ]);
+      }
+      sheet.appendRow([]);
+      sheet.appendRow([xls.TextCellValue('Closing Balance'), xls.TextCellValue(Formatters.amount(s.closingBalance))]);
+
+      final defaultSheet = excel.getDefaultSheet();
+      if (defaultSheet != null && defaultSheet != sheetName) {
+        excel.delete(defaultSheet);
+      }
+      final bytes = excel.encode();
+      if (bytes == null) throw Exception('encode failed');
+
+      final dir = await getTemporaryDirectory();
+      final safeName = s.account.accountName.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
+      final file = File('${dir.path}/bewosai_statement_$safeName.xlsx');
+      await file.writeAsBytes(bytes);
+      if (!mounted) return;
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], text: '${s.account.accountName} bank statement — ${_periodLabel()}'),
+      );
+    } catch (_) {
+      if (mounted) showAppSnackBar(context, 'Could not export the statement', isError: true);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _shareSummary(BankStatement s) async {
+    final buffer = StringBuffer()
+      ..writeln('${s.account.accountName} — ${_periodLabel()}')
+      ..writeln('Opening: ${Formatters.currency(s.openingBalance)}')
+      ..writeln('Closing: ${Formatters.currency(s.closingBalance)}')
+      ..writeln('Total In: ${Formatters.currency(s.totalCredit)}')
+      ..writeln('Total Out: ${Formatters.currency(s.totalDebit)}');
+    await SharePlus.instance.share(ShareParams(text: buffer.toString()));
+  }
+
+  String _periodLabel() {
+    if (_range.from == null || _range.to == null) return 'All Time';
+    return '${Formatters.date(_range.from)} – ${Formatters.date(_range.to)}';
   }
 
   @override
@@ -1119,7 +1254,7 @@ class _BankStatementTabState extends State<_BankStatementTab> {
                   child: InkWell(
                     onTap: () {
                       setState(() => _selected = a);
-                      context.read<ReportProvider>().loadBankStatement(a.id);
+                      _loadStatement();
                     },
                     child: Row(
                       children: [
@@ -1152,65 +1287,127 @@ class _BankStatementTabState extends State<_BankStatementTab> {
     }
 
     final s = rp.bankStatement;
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return Column(
       children: [
-        InkWell(
-          onTap: () => setState(() => _selected = null),
-          child: Row(
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              Icon(Icons.arrow_back, size: 16, color: AppColors.textSecondary),
-              const SizedBox(width: 6),
-              Text('Back to accounts', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        if (s == null)
-          const LoadingView()
-        else ...[
-          Row(
-            children: [
-              Expanded(child: _stat('Opening', s.openingBalance, AppColors.navy600)),
-              const SizedBox(width: 10),
-              Expanded(child: _stat('Closing', s.closingBalance, s.closingBalance >= 0 ? AppColors.success : AppColors.error)),
-            ],
-          ),
-          const SizedBox(height: 20),
-          if (s.entries.isEmpty)
-            const EmptyState(icon: Icons.receipt_long_outlined, title: 'No transactions in range')
-          else
-            AppSectionCard(
-              children: s.entries.map((e) {
-                final isLast = e == s.entries.last;
-                return Padding(
-                  padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+              InkWell(
+                onTap: () => setState(() => _selected = null),
+                child: Row(
+                  children: [
+                    Icon(Icons.arrow_back, size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: 6),
+                    Text('Back to accounts', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: _changeRange,
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today_outlined, size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
                           children: [
-                            StatusBadge(label: Formatters.transactionTypeLabel(e.type), color: AppColors.navy500),
-                            if (e.description.isNotEmpty)
-                              Text(e.description, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                            TextSpan(text: '${_preset.label}  ', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                            TextSpan(
+                              text: _periodLabel(),
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            ),
                           ],
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (e.credit > 0) Text('+${Formatters.currency(e.credit)}', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w700)),
-                          if (e.debit > 0) Text('-${Formatters.currency(e.debit)}', style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w700)),
-                          Text('Bal: ${Formatters.currency(e.balance)}', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                        ],
-                      ),
-                    ],
+                    ),
+                    const Text('CHANGE', style: TextStyle(color: AppColors.orange, fontWeight: FontWeight.w700, fontSize: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (s == null)
+                const LoadingView()
+              else ...[
+                Row(
+                  children: [
+                    Expanded(child: _stat('Opening', s.openingBalance, AppColors.navy600)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _stat('Closing', s.closingBalance, s.closingBalance >= 0 ? AppColors.success : AppColors.error)),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                if (s.entries.isEmpty)
+                  const EmptyState(icon: Icons.receipt_long_outlined, title: 'No transactions in range')
+                else
+                  AppSectionCard(
+                    children: s.entries.map((e) {
+                      final isLast = e == s.entries.last;
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  StatusBadge(label: Formatters.transactionTypeLabel(e.type), color: AppColors.navy500),
+                                  if (e.description.isNotEmpty)
+                                    Text(e.description, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                if (e.credit > 0) Text('+${Formatters.currency(e.credit)}', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w700)),
+                                if (e.debit > 0) Text('-${Formatters.currency(e.debit)}', style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w700)),
+                                Text('Bal: ${Formatters.currency(e.balance)}', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
                   ),
-                );
-              }).toList(),
+              ],
+            ],
+          ),
+        ),
+        if (s != null)
+          SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: Border(top: BorderSide(color: AppColors.divider)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _exporting ? null : () => _exportExcel(s),
+                      icon: _exporting
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.grid_on_outlined, size: 16),
+                      label: const Text('Excel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _shareSummary(s),
+                      icon: const Icon(Icons.share_outlined, size: 16),
+                      label: const Text('Share'),
+                    ),
+                  ),
+                ],
+              ),
             ),
-        ],
+          ),
       ],
     );
   }

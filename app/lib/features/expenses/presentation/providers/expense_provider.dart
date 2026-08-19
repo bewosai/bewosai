@@ -64,7 +64,7 @@ class ExpenseProvider extends ChangeNotifier {
   Future<bool> save(Expense expense, {int? id, File? receiptImage}) {
     return _guard(() async {
       if (id != null) {
-        final updated = await _useCases.saveExpense(expense, id: id);
+        final updated = await _useCases.saveExpense(expense, id: id, receiptImage: receiptImage);
         expenses = [
           for (final e in expenses)
             if (e.id == id) updated else e,

@@ -17,7 +17,7 @@ abstract class ExpenseRepository {
 
   Future<Expense> create(Expense expense, {File? receiptImage});
 
-  Future<Expense> update(int id, Expense expense);
+  Future<Expense> update(int id, Expense expense, {File? receiptImage});
 
   Future<void> delete(int id);
 }

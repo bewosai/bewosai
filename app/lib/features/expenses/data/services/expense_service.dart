@@ -44,7 +44,7 @@ class ExpenseService {
         queryParameters: {
           'page_size': 500,
           'ordering': '-date',
-          if (categoryId != null) 'category': categoryId,
+          'category': ?categoryId,
           if (from != null) 'date_from': Formatters.apiDate(from),
           if (to != null) 'date_to': Formatters.apiDate(to),
         },
@@ -82,12 +82,24 @@ class ExpenseService {
     }
   }
 
-  Future<Expense> update(int id, Expense expense) async {
+  Future<Expense> update(int id, Expense expense, {File? receiptImage}) async {
     try {
-      final res = await _dio.patch(
-        '/expenses/$id/',
-        data: expense.toJson(),
-      );
+      final Response res;
+      if (receiptImage == null) {
+        res = await _dio.patch('/expenses/$id/', data: expense.toJson());
+      } else {
+        final map = <String, dynamic>{
+          for (final e in expense.toJson().entries)
+            e.key: e.value is num || e.value is bool
+                ? e.value
+                : e.value?.toString(),
+        };
+        map['receipt_image'] = await MultipartFile.fromFile(
+          receiptImage.path,
+          filename: receiptImage.path.split(RegExp(r'[/\\]')).last,
+        );
+        res = await _dio.patch('/expenses/$id/', data: FormData.fromMap(map));
+      }
       return Expense.fromJson(_asMap(res.data));
     } catch (e) {
       throw ApiClient.toApiException(e);

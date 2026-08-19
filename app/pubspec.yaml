@@ -72,6 +72,10 @@ dependencies:
   # Google Sign-In
   google_sign_in: ^6.2.2
 
+  # Excel bulk import (pick + parse + generate template .xlsx)
+  file_picker: ^12.0.0
+  excel: ^4.0.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

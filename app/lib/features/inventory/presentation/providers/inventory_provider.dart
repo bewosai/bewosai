@@ -256,6 +256,25 @@ class InventoryProvider extends ChangeNotifier {
     });
   }
 
+  /// Returns the server's {created, skipped, skipped_details} summary, or
+  /// null on a request-level failure (network/permission) — check [error].
+  Future<Map<String, dynamic>?> bulkImportProducts(List<Map<String, dynamic>> rows) async {
+    isLoading = true;
+    error = null;
+    notifyListeners();
+    try {
+      final result = await _useCases.bulkImportProducts(rows);
+      await load();
+      return result;
+    } catch (e) {
+      error = e is ApiException ? e.message : e.toString();
+      return null;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> adjustStock(StockMovement movement) {
     return _guard(() async {
       await _useCases.adjustStock(movement);

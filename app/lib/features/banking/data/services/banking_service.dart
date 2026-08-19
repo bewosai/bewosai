@@ -57,7 +57,7 @@ class BankingService {
     try {
       final res = await _dio.get('/banking/transactions/', queryParameters: {
         'page_size': 500,
-        if (accountId != null) 'account': accountId,
+        'account': ?accountId,
       });
       final data = res.data;
       final results = data is Map ? (data['results'] as List? ?? []) : (data as List);

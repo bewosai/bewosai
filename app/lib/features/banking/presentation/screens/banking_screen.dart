@@ -17,22 +17,33 @@ class BankingScreen extends StatefulWidget {
 }
 
 class _BankingScreenState extends State<BankingScreen> {
+  String _txSearch = '';
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => context.read<BankingProvider>().load());
   }
 
+  List<BankTransaction> _filteredTransactions(List<BankTransaction> transactions) {
+    if (_txSearch.isEmpty) return transactions;
+    final q = _txSearch.toLowerCase();
+    return transactions
+        .where((t) => t.description.toLowerCase().contains(q) || t.reference.toLowerCase().contains(q))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final bp = context.watch<BankingProvider>();
+    final filteredTransactions = _filteredTransactions(bp.transactions);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Banking'), actions: const [HomeLogoButton()]),
       bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'banking_fab',
-        onPressed: () => showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => const _AccountFormSheet()),
+        onPressed: () => showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => const BankAccountFormSheet()),
         icon: const Icon(Icons.add),
         label: const Text('Add Account'),
       ),
@@ -84,7 +95,7 @@ class _BankingScreenState extends State<BankingScreen> {
                                 Text(Formatters.currency(a.balance), style: const TextStyle(fontWeight: FontWeight.w800)),
                                 IconButton(
                                   icon: const Icon(Icons.edit_outlined, size: 18),
-                                  onPressed: () => showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => _AccountFormSheet(account: a)),
+                                  onPressed: () => showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => BankAccountFormSheet(account: a)),
                                 ),
                               ],
                             ),
@@ -107,12 +118,18 @@ class _BankingScreenState extends State<BankingScreen> {
                         ),
                       ],
                     ),
-                    if (bp.transactions.isEmpty)
-                      AppSectionCard(children: [Text('No transactions yet', style: TextStyle(color: AppColors.textSecondary))])
+                    const SizedBox(height: 10),
+                    SearchField(
+                      hint: 'Search description, reference',
+                      onChanged: (v) => setState(() => _txSearch = v),
+                    ),
+                    const SizedBox(height: 10),
+                    if (filteredTransactions.isEmpty)
+                      AppSectionCard(children: [Text(bp.transactions.isEmpty ? 'No transactions yet' : 'No matching transactions', style: TextStyle(color: AppColors.textSecondary))])
                     else
                       AppSectionCard(
-                        children: bp.transactions.map((t) {
-                          final isLast = t == bp.transactions.last;
+                        children: filteredTransactions.map((t) {
+                          final isLast = t == filteredTransactions.last;
                           return Padding(
                             padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
                             child: Row(
@@ -147,15 +164,15 @@ class _BankingScreenState extends State<BankingScreen> {
   }
 }
 
-class _AccountFormSheet extends StatefulWidget {
+class BankAccountFormSheet extends StatefulWidget {
   final BankAccount? account;
-  const _AccountFormSheet({this.account});
+  const BankAccountFormSheet({super.key, this.account});
 
   @override
-  State<_AccountFormSheet> createState() => _AccountFormSheetState();
+  State<BankAccountFormSheet> createState() => _BankAccountFormSheetState();
 }
 
-class _AccountFormSheetState extends State<_AccountFormSheet> {
+class _BankAccountFormSheetState extends State<BankAccountFormSheet> {
   final _formKey = GlobalKey<FormState>();
   late final _nameController = TextEditingController(text: widget.account?.accountName ?? '');
   late final _bankController = TextEditingController(text: widget.account?.bankName ?? '');

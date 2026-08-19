@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../../data/models/business_model.dart';
 import '../../data/models/user_model.dart';
 import '../../data/services/auth_service.dart';
@@ -12,7 +14,7 @@ abstract class AuthRepository {
   Future<AppUser> updateMe({String? name, String? phone});
   Future<List<Business>> myBusinesses();
   Future<Business> createBusiness(Business business);
-  Future<Business> updateBusiness(int id, Map<String, dynamic> fields);
+  Future<Business> updateBusiness(int id, Map<String, dynamic> fields, {File? logo});
   Future<void> deleteBusiness(int id);
   Future<Business> closeFiscalYear(int id);
 }

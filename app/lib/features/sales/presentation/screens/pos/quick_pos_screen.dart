@@ -553,7 +553,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                                   onChanged: (v) async {
                                     if (v) {
                                       final granted = await NotificationService.instance.requestPermission();
-                                      if (!mounted) return;
+                                      if (!context.mounted) return;
                                       if (!granted) {
                                         showAppSnackBar(
                                           context,

@@ -62,7 +62,7 @@ class SelectBusinessScreen extends StatelessWidget {
                 Expanded(
                   child: ListView.separated(
                     itemCount: auth.businesses.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, i) {
                       final b = auth.businesses[i];
                       final isArchived = b.status == 'ARCHIVED';

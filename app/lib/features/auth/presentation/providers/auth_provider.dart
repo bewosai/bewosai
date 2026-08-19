@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -245,11 +247,11 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<bool> updateCurrentBusiness(Map<String, dynamic> fields) =>
+  Future<bool> updateCurrentBusiness(Map<String, dynamic> fields, {File? logo}) =>
       _guard(() async {
         if (currentBusiness == null) return false;
         final updated =
-            await _businessUseCases.updateBusiness(currentBusiness!.id, fields);
+            await _businessUseCases.updateBusiness(currentBusiness!.id, fields, logo: logo);
         currentBusiness = updated;
         await _storage.saveCurrentBusiness(updated.toRawJson());
         businesses =

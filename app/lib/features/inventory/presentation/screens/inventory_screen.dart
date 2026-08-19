@@ -7,6 +7,7 @@ import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../data/models/inventory_model.dart';
 import '../providers/inventory_provider.dart';
+import 'inventory_import_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
   final bool initialLowStockFilter;
@@ -60,7 +61,16 @@ class _InventoryScreenState extends State<InventoryScreen>
       appBar: standalone
           ? AppBar(
               title: Text(widget.initialLowStockFilter ? 'Low Stock Products' : 'Inventory'),
-              actions: const [HomeLogoButton()],
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.upload_file_outlined),
+                  tooltip: 'Import Products',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const InventoryImportScreen()),
+                  ),
+                ),
+                const HomeLogoButton(),
+              ],
             )
           : null,
       bottomNavigationBar: standalone
@@ -224,7 +234,20 @@ class _ProductsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        SearchField(hint: 'Search products', onChanged: onSearch),
+        Row(
+          children: [
+            Expanded(child: SearchField(hint: 'Search products', onChanged: onSearch)),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.upload_file_outlined),
+              tooltip: 'Import Products',
+              style: IconButton.styleFrom(backgroundColor: AppColors.surface, side: BorderSide(color: AppColors.divider)),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const InventoryImportScreen()),
+              ),
+            ),
+          ],
+        ),
         if (lowStockOnly) ...[
           const SizedBox(height: 10),
           AppFilterChip(
@@ -327,11 +350,12 @@ class _UnitsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final units = context.watch<InventoryProvider>().units;
-    if (units.isEmpty)
+    if (units.isEmpty) {
       return const EmptyState(
         icon: Icons.straighten_outlined,
         title: 'No units yet',
       );
+    }
     return ListView(
       padding: const EdgeInsets.all(16),
       children: units
@@ -383,11 +407,12 @@ class _CategoriesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final categories = context.watch<InventoryProvider>().categories;
-    if (categories.isEmpty)
+    if (categories.isEmpty) {
       return const EmptyState(
         icon: Icons.category_outlined,
         title: 'No categories yet',
       );
+    }
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Wrap(

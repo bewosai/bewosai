@@ -58,7 +58,7 @@ class PartyService {
     try {
       final res = await _dio.get('/parties/payments/', queryParameters: {
         'page_size': 200,
-        if (partyId != null) 'party': partyId,
+        'party': ?partyId,
       });
       final data = res.data;
       final results = data is Map ? (data['results'] as List? ?? []) : (data as List);

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -7,6 +9,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/receipt_image_picker.dart';
 import '../../data/models/expense_model.dart';
 import '../providers/expense_provider.dart';
 
@@ -241,7 +244,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                         await showDeleteConfirmDialog(context);
                                     if (!confirmed || !mounted) return;
                                     final ok = await provider.delete(e.id);
-                                    if (!mounted) return;
+                                    if (!context.mounted) return;
                                     if (!ok) {
                                       showAppSnackBar(
                                         context,
@@ -283,6 +286,8 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
   int? _category;
   bool _saving = false;
   bool _categoryInitialized = false;
+  File? _receiptImageFile;
+  String? _receiptImageUrl;
 
   @override
   void initState() {
@@ -295,6 +300,23 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
     _date = e?.date ?? DateTime.now();
     _paymentMethod = e?.paymentMethod ?? 'CASH';
     _category = e?.category;
+    _receiptImageUrl = e?.receiptImageUrl;
+  }
+
+  Future<void> _pickReceiptImage() async {
+    final path = await pickReceiptImagePath(context);
+    if (path == null || !mounted) return;
+    setState(() {
+      _receiptImageFile = File(path);
+      _receiptImageUrl = null;
+    });
+  }
+
+  void _removeReceiptImage() {
+    setState(() {
+      _receiptImageFile = null;
+      _receiptImageUrl = null;
+    });
   }
 
   @override
@@ -321,6 +343,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
     final ok = await context.read<ExpenseProvider>().save(
       expense,
       id: widget.expense?.id,
+      receiptImage: _receiptImageFile,
     );
     if (!mounted) return;
     setState(() => _saving = false);
@@ -387,7 +410,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
-                value:
+                initialValue:
                     _category != null &&
                         categories.any((c) => c.id == _category)
                     ? _category
@@ -402,7 +425,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: AppConstants.paymentMethods.contains(_paymentMethod)
+                initialValue: AppConstants.paymentMethods.contains(_paymentMethod)
                     ? _paymentMethod
                     : 'CASH',
                 decoration: const InputDecoration(labelText: 'Payment Method'),
@@ -421,6 +444,15 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                 controller: _descriptionController,
                 decoration: const InputDecoration(labelText: 'Description'),
                 maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              Text('Receipt Photo (optional)', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              const SizedBox(height: 8),
+              ReceiptImagePicker(
+                imageFile: _receiptImageFile,
+                imageUrl: _receiptImageUrl,
+                onTap: _pickReceiptImage,
+                onRemove: _removeReceiptImage,
               ),
               const SizedBox(height: 20),
               PrimaryButton(

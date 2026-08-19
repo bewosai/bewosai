@@ -107,7 +107,7 @@ class InventoryService {
         queryParameters: {
           'page_size': 500,
           if (search != null && search.isNotEmpty) 'search': search,
-          if (categoryId != null) 'category': categoryId,
+          'category': ?categoryId,
           if (lowStock == true) 'low_stock': 1,
           if (itemType != null && itemType.isNotEmpty) 'item_type': itemType,
         },
@@ -172,7 +172,7 @@ class InventoryService {
         '/inventory/stock-movements/',
         queryParameters: {
           'page_size': 200,
-          if (productId != null) 'product': productId,
+          'product': ?productId,
         },
       );
       return _parseList(res.data, StockMovement.fromJson);

@@ -136,6 +136,25 @@ class PartyProvider extends ChangeNotifier {
         return true;
       });
 
+  /// Returns the server's {created, skipped, skipped_details} summary, or
+  /// null on a request-level failure (network/permission) — check [error].
+  Future<Map<String, dynamic>?> bulkImportParties(List<Map<String, dynamic>> rows) async {
+    isLoading = true;
+    error = null;
+    notifyListeners();
+    try {
+      final result = await _useCases.bulkImportParties(rows);
+      await load();
+      return result;
+    } catch (e) {
+      error = e is ApiException ? e.message : e.toString();
+      return null;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
   List<Party> get customers => parties.where((p) => p.isCustomer).toList();
   List<Party> get suppliers => parties.where((p) => p.isSupplier).toList();
   double get totalReceivable =>

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../../domain/repositories/auth_repository.dart';
 import '../models/business_model.dart';
 import '../models/user_model.dart';
@@ -38,7 +40,8 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Business> createBusiness(Business business) => _service.createBusiness(business);
 
   @override
-  Future<Business> updateBusiness(int id, Map<String, dynamic> fields) => _service.updateBusiness(id, fields);
+  Future<Business> updateBusiness(int id, Map<String, dynamic> fields, {File? logo}) =>
+      _service.updateBusiness(id, fields, logo: logo);
 
   @override
   Future<void> deleteBusiness(int id) => _service.deleteBusiness(id);

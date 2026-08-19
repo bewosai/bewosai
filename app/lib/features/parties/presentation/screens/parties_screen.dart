@@ -8,6 +8,7 @@ import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../data/models/party_model.dart';
 import '../providers/party_provider.dart';
+import 'party_import_screen.dart';
 
 class PartiesScreen extends StatefulWidget {
   final bool openAddOnStart;
@@ -40,8 +41,9 @@ class _PartiesScreenState extends State<PartiesScreen> {
 
   List<Party> _filtered(List<Party> parties) {
     var list = parties;
-    if (_filter != 'ALL')
+    if (_filter != 'ALL') {
       list = list.where((p) => p.partyType == _filter).toList();
+    }
     if (_search.isNotEmpty) {
       final q = _search.toLowerCase();
       list = list
@@ -67,7 +69,19 @@ class _PartiesScreenState extends State<PartiesScreen> {
       // same as TransactionsScreen), but this screen is also pushed
       // standalone (e.g. the Dashboard's "Add Party" shortcut), where it had
       // no title, no back button, and no way back to Dashboard at all.
-      appBar: AppBar(title: const Text('Parties'), actions: const [HomeLogoButton()]),
+      appBar: AppBar(
+        title: const Text('Parties'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.upload_file_outlined),
+            tooltip: 'Import Parties',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PartyImportScreen()),
+            ),
+          ),
+          const HomeLogoButton(),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'parties_fab',
         onPressed: _openAddSheet,
@@ -293,13 +307,14 @@ class _PartiesScreenState extends State<PartiesScreen> {
                                         if (!confirmed) return;
                                         final ok = await provider.delete(p.id);
                                         if (!context.mounted) return;
-                                        if (!ok)
+                                        if (!ok) {
                                           showAppSnackBar(
                                             context,
                                             provider.error ??
                                                 'Failed to delete party',
                                             isError: true,
                                           );
+                                        }
                                       },
                                     ),
                                   ],

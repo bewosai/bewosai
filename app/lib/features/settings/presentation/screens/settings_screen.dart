@@ -8,6 +8,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../reports/presentation/screens/reports_hub_screen.dart';
 import 'settings_account_screen.dart';
 import 'settings_advanced_screen.dart';
+import 'settings_backup_screen.dart';
 import 'settings_business_screen.dart';
 import 'settings_preferences_screen.dart';
 import 'settings_tax_screen.dart';
@@ -103,6 +104,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: 'PAN, VAT, currency, fiscal year',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const SettingsTaxScreen()),
+                ),
+              ),
+              _MenuItem(
+                icon: Icons.cloud_done_outlined,
+                label: 'Data & Cloud Storage',
+                subtitle: 'How your data is kept safe',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsBackupScreen()),
                 ),
               ),
             ]),

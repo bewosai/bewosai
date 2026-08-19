@@ -41,8 +41,8 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
   }
 
   @override
-  Future<Expense> update(int id, Expense expense) {
-    return _service.update(id, expense);
+  Future<Expense> update(int id, Expense expense, {File? receiptImage}) {
+    return _service.update(id, expense, receiptImage: receiptImage);
   }
 
   @override

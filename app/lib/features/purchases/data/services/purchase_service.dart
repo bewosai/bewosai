@@ -10,7 +10,7 @@ class PurchaseService {
     try {
       final res = await _dio.get('/purchases/', queryParameters: {
         'page_size': 500,
-        if (supplierId != null) 'supplier': supplierId,
+        'supplier': ?supplierId,
         if (from != null) 'date_from': from.toIso8601String().split('T').first,
         if (to != null) 'date_to': to.toIso8601String().split('T').first,
       });

@@ -15,6 +15,8 @@ class StaffScreen extends StatefulWidget {
 }
 
 class _StaffScreenState extends State<StaffScreen> {
+  String _search = '';
+
   @override
   void initState() {
     super.initState();
@@ -27,6 +29,14 @@ class _StaffScreenState extends State<StaffScreen> {
   Widget build(BuildContext context) {
     final sp = context.watch<StaffProvider>();
     final businessId = context.watch<AuthProvider>().currentBusiness?.id;
+    final filteredStaff = _search.isEmpty
+        ? sp.staff
+        : sp.staff.where((s) {
+            final q = _search.toLowerCase();
+            return s.userName.toLowerCase().contains(q) ||
+                s.userEmail.toLowerCase().contains(q) ||
+                s.role.toLowerCase().contains(q);
+          }).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -57,7 +67,23 @@ class _StaffScreenState extends State<StaffScreen> {
                       )
                     : ListView(
                         padding: const EdgeInsets.all(16),
-                        children: sp.staff
+                        children: [
+                          SearchField(
+                            hint: 'Search name, email, role',
+                            onChanged: (v) => setState(() => _search = v),
+                          ),
+                          const SizedBox(height: 10),
+                          if (filteredStaff.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 24),
+                              child: Center(
+                                child: Text(
+                                  'No matching staff',
+                                  style: TextStyle(color: AppColors.textSecondary),
+                                ),
+                              ),
+                            ),
+                          ...filteredStaff
                             .map(
                               (s) => Padding(
                                 padding: const EdgeInsets.only(bottom: 10),
@@ -122,16 +148,17 @@ class _StaffScreenState extends State<StaffScreen> {
                                                   message:
                                                       'Remove ${s.userName.isNotEmpty ? s.userName : s.userEmail} from this business?',
                                                 );
-                                            if (confirmed)
+                                            if (confirmed) {
                                               provider.remove(businessId, s.id);
+                                            }
                                           },
                                         ),
                                     ],
                                   ),
                                 ),
                               ),
-                            )
-                            .toList(),
+                            ),
+                        ],
                       ),
               ),
       ),

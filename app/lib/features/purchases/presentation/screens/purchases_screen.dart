@@ -40,8 +40,9 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
 
   List<Purchase> _filtered(List<Purchase> purchases) {
     var list = purchases;
-    if (_filter != 'ALL')
+    if (_filter != 'ALL') {
       list = list.where((p) => p.status == _filter).toList();
+    }
     if (_search.isNotEmpty) {
       final q = _search.toLowerCase();
       list = list
@@ -693,8 +694,9 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                                   firstDate: DateTime(2020),
                                   lastDate: DateTime(2100),
                                 );
-                                if (picked != null)
+                                if (picked != null) {
                                   setState(() => _purchaseDate = picked);
+                                }
                               },
                               child: InputDecorator(
                                 decoration: const InputDecoration(
@@ -715,8 +717,9 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                                   firstDate: DateTime(2020),
                                   lastDate: DateTime(2100),
                                 );
-                                if (picked != null)
+                                if (picked != null) {
                                   setState(() => _dueDate = picked);
+                                }
                               },
                               child: InputDecorator(
                                 decoration: const InputDecoration(

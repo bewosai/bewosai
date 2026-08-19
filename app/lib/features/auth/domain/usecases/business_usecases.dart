@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../../data/models/business_model.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../repositories/auth_repository.dart';
@@ -10,7 +12,8 @@ class BusinessUseCases {
 
   Future<Business> createBusiness(Business business) => _repository.createBusiness(business);
 
-  Future<Business> updateBusiness(int id, Map<String, dynamic> fields) => _repository.updateBusiness(id, fields);
+  Future<Business> updateBusiness(int id, Map<String, dynamic> fields, {File? logo}) =>
+      _repository.updateBusiness(id, fields, logo: logo);
 
   Future<void> deleteBusiness(int id) => _repository.deleteBusiness(id);
 
