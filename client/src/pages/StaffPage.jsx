@@ -5,7 +5,7 @@ import PageHeader from "../components/shared/PageHeader";
 import SectionCard from "../components/shared/SectionCard";
 import PrimaryButton from "../components/shared/PrimaryButton";
 import { auth as authApi } from "../api";
-import { UserCheck, Plus, Shield, Eye, X, Crown, ChevronDown, ChevronUp, Check, Edit2, Trash2 } from "lucide-react";
+import { UserCheck, Plus, Shield, Eye, X, Crown, ChevronDown, ChevronUp, Check, Edit2, Trash2, Search } from "lucide-react";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 
 const ROLE_META = {
@@ -376,6 +376,7 @@ export default function StaffPage() {
   const [viewingPerms, setViewingPerms] = useState(null);
   const [editingMember, setEditingMember] = useState(null);
   const [removingMember, setRemovingMember] = useState(null);
+  const [search, setSearch] = useState("");
 
   const load = () => {
     if (!currentBusiness?.id) return;
@@ -391,6 +392,16 @@ export default function StaffPage() {
   };
 
   useEffect(load, [currentBusiness?.id]);
+
+  const filteredStaff = staff.filter((m) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (m.user_name || "").toLowerCase().includes(q) ||
+      (m.user_email || "").toLowerCase().includes(q) ||
+      (m.role || "").toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div>
@@ -425,11 +436,24 @@ export default function StaffPage() {
       </div>
 
       <SectionCard title={`Team Members (${staff.length})`}>
+        {staff.length > 0 && (
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, email, role…"
+              className="w-full rounded-xl border border-navy-700 bg-navy-950 py-2.5 pl-9 pr-3 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
+            />
+          </div>
+        )}
         {loading ? (
           <p className="py-6 text-center text-sm text-navy-400">{t("loading")}</p>
+        ) : staff.length && filteredStaff.length === 0 ? (
+          <p className="py-6 text-center text-sm text-navy-400">No matching staff</p>
         ) : staff.length ? (
           <div className="space-y-2">
-            {staff.map((member) => {
+            {filteredStaff.map((member) => {
               const meta = ROLE_META[member.role] || ROLE_META.VIEWER;
               const Icon = meta.icon;
               return (

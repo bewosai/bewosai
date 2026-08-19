@@ -78,7 +78,8 @@ export default function SettingsPage() {
     footer_text: localStorage.getItem("invoice_footer_text") || "Thank you for your business!",
     invoice_prefix: localStorage.getItem("invoice_prefix") || "INV-",
   });
-  const [logoPreview, setLogoPreview] = useState(localStorage.getItem("business_logo") || null);
+  const [logoPreview, setLogoPreview] = useState(currentBusiness?.logo || null);
+  const [logoFile, setLogoFile] = useState(null);
   const logoRef = useRef(null);
   const [businessForm, setBusinessForm] = useState({
     name: currentBusiness?.name || "",
@@ -92,13 +93,8 @@ export default function SettingsPage() {
   const handleLogoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const b64 = ev.target.result;
-      setLogoPreview(b64);
-      localStorage.setItem("business_logo", b64);
-    };
-    reader.readAsDataURL(file);
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
   };
 
   const handleSave = async () => {
@@ -108,8 +104,17 @@ export default function SettingsPage() {
     } catch {}
     if (currentBusiness?.id) {
       try {
-        const { data } = await authApi.updateBusiness(currentBusiness.id, businessForm);
+        let payload = businessForm;
+        if (logoFile) {
+          const form = new FormData();
+          Object.entries(businessForm).forEach(([k, v]) => form.append(k, v ?? ""));
+          form.append("logo", logoFile);
+          payload = form;
+        }
+        const { data } = await authApi.updateBusiness(currentBusiness.id, payload);
         selectBusiness?.(data);
+        setLogoFile(null);
+        setLogoPreview(data.logo || null);
       } catch {}
     }
     localStorage.setItem("invoice_header_color", invoiceForm.header_color);
@@ -293,7 +298,7 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <p className="text-xs text-green-400">Logo uploaded</p>
                   <button onClick={() => logoRef.current?.click()} className="text-xs text-orange-400 hover:underline">Change</button>
-                  <button onClick={() => { setLogoPreview(null); localStorage.removeItem("business_logo"); }} className="ml-2 text-xs text-red-400 hover:underline">Remove</button>
+                  <button onClick={() => { setLogoPreview(null); setLogoFile(null); }} className="ml-2 text-xs text-red-400 hover:underline">Remove</button>
                 </div>
               </div>
             ) : (

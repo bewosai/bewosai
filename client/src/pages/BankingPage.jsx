@@ -4,7 +4,7 @@ import { useTranslation } from "../utils/translations";
 import { useDateFormat } from "../context/AppSettingsContext";
 import {
   CreditCard, Plus, TrendingUp, TrendingDown, X, QrCode,
-  Trash2, Edit2, Upload, AlertTriangle, Loader, RefreshCw,
+  Trash2, Edit2, Upload, AlertTriangle, Loader, RefreshCw, Search,
 } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -226,6 +226,7 @@ export default function BankingPage() {
   const [showTxModal, setShowTxModal] = useState(false);
   const [showQr, setShowQr] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [txSearch, setTxSearch] = useState("");
 
   const loadAccounts = () => {
     setLoading(true);
@@ -267,6 +268,12 @@ export default function BankingPage() {
     if (selected) loadTransactions(selected.id);
     loadAccounts();
   };
+
+  const filteredTransactions = transactions.filter((t) => {
+    if (!txSearch.trim()) return true;
+    const q = txSearch.toLowerCase();
+    return (t.description || "").toLowerCase().includes(q) || (t.reference || "").toLowerCase().includes(q);
+  });
 
   const totalBalance = accounts.reduce((s, a) => s + Number(a.balance || 0), 0);
   const totalCredit = transactions.filter(t => t.transaction_type === "CREDIT").reduce((s, t) => s + Number(t.amount), 0);
@@ -356,13 +363,28 @@ export default function BankingPage() {
                   <Plus className="h-3.5 w-3.5" /> Add
                 </button>
               </div>
+              {transactions.length > 0 && (
+                <div className="border-b border-navy-800 px-5 py-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
+                    <input
+                      value={txSearch}
+                      onChange={(e) => setTxSearch(e.target.value)}
+                      placeholder="Search description, reference…"
+                      className="w-full rounded-lg border border-navy-700 bg-navy-800 py-2 pl-9 pr-3 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
               {txLoading ? (
                 <div className="flex justify-center py-10"><Loader className="h-5 w-5 animate-spin text-orange-500" /></div>
               ) : transactions.length === 0 ? (
                 <p className="py-10 text-center text-sm text-navy-400">No transactions yet</p>
+              ) : filteredTransactions.length === 0 ? (
+                <p className="py-10 text-center text-sm text-navy-400">No matching transactions</p>
               ) : (
                 <div className="divide-y divide-navy-800/50">
-                  {transactions.map(tx => (
+                  {filteredTransactions.map(tx => (
                     <div key={tx.id} className="flex items-center gap-3 px-5 py-3 hover:bg-navy-800/30 transition">
                       <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tx.transaction_type === "CREDIT" ? "bg-green-500/10" : "bg-red-500/10"}`}>
                         {tx.transaction_type === "CREDIT"

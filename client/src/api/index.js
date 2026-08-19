@@ -57,7 +57,10 @@ export const auth = {
   updateMe: (d) => api.patch("/auth/me/", d),
   businesses: () => api.get("/auth/businesses/"),
   createBusiness: (d) => api.post("/auth/businesses/", d),
-  updateBusiness: (id, d) => api.patch(`/auth/businesses/${id}/`, d),
+  updateBusiness: (id, d) => {
+    const isFormData = d instanceof FormData;
+    return api.patch(`/auth/businesses/${id}/`, d, isFormData ? { headers: { "Content-Type": "multipart/form-data" } } : {});
+  },
   staff: (bid) => api.get(`/auth/businesses/${bid}/staff/`),
   inviteStaff: (bid, d) => api.post(`/auth/businesses/${bid}/staff/`, d),
   updateStaff: (bid, sid, d) => api.patch(`/auth/businesses/${bid}/staff/${sid}/`, d),
