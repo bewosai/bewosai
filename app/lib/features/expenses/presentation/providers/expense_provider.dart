@@ -3,6 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/offline/app_database.dart';
+import '../../../../core/offline/connectivity_service.dart';
+import '../../../../core/offline/sync_service.dart';
+import '../../../../core/storage/token_storage.dart';
 import '../../data/models/expense_model.dart';
 import '../../domain/usecases/expense_usecases.dart';
 
@@ -69,6 +73,9 @@ class ExpenseProvider extends ChangeNotifier {
           for (final e in expenses)
             if (e.id == id) updated else e,
         ];
+      } else if (receiptImage == null && !await ConnectivityService.instance.checkOnline()) {
+        final queued = await _saveOffline(expense);
+        expenses = [queued, ...expenses];
       } else {
         final created = await _useCases.saveExpense(
           expense,
@@ -78,6 +85,22 @@ class ExpenseProvider extends ChangeNotifier {
       }
       return true;
     });
+  }
+
+  /// Queues [expense] in the local outbox instead of posting it — [SyncService]
+  /// replays it against the real API on reconnect. A receipt photo always
+  /// forces the normal online path (see [save]) since a File reference isn't
+  /// reliably safe to persist across app restarts.
+  Future<Expense> _saveOffline(Expense expense) async {
+    final businessId = await _businessId();
+    final tempId = await AppDatabase.instance.enqueueWrite('expense', businessId, expense.toJson());
+    await SyncService.instance.refreshPendingCount();
+    return expense.copyWith(id: tempId);
+  }
+
+  Future<String> _businessId() async {
+    final business = await TokenStorage.instance.currentBusiness;
+    return '${business?['id'] ?? ''}';
   }
 
   Future<bool> delete(int id) {

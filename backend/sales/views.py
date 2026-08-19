@@ -1,6 +1,8 @@
 import re
 
+from django.db import IntegrityError, transaction
 from rest_framework import generics, filters, permissions
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
@@ -68,11 +70,21 @@ class SaleListCreateView(_RequirePos, generics.ListCreateAPIView):
     def perform_create(self, serializer):
         bid = get_bid(self.request)
         inv = self.request.data.get("invoice_number") or _next_invoice_number(bid)
-        serializer.save(
-            business_id=bid,
-            invoice_number=inv,
-            created_by=self.request.user,
-        )
+        # invoice_number is client-supplied (the app fetches "next number"
+        # ahead of time so the form can show it) and only DB-unique per
+        # business — a collision is a real possibility now that Sales can be
+        # queued offline: two queued sales grabbing the same predicted
+        # number before either syncs, or another device/staff member's sale
+        # landing first. Detect it via the unique_together constraint and
+        # renumber instead of letting it 500 or silently duplicate.
+        for _ in range(5):
+            try:
+                with transaction.atomic():
+                    serializer.save(business_id=bid, invoice_number=inv, created_by=self.request.user)
+                return
+            except IntegrityError:
+                inv = _next_invoice_number(bid)
+        raise ValidationError("Could not assign a unique invoice number — please try again.")
 
 
 class SaleDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):

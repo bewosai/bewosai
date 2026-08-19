@@ -1,6 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/offline/app_database.dart';
+import '../../../../core/offline/connectivity_service.dart';
+import '../../../../core/offline/sync_service.dart';
+import '../../../../core/storage/token_storage.dart';
 import '../../data/models/purchase_model.dart';
 import '../../domain/usecases/purchase_usecases.dart';
 
@@ -31,7 +35,12 @@ class PurchaseProvider extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final result = await _useCases.savePurchase(purchase, id: id, billImage: billImage);
+      Purchase result;
+      if (id == null && billImage == null && !await ConnectivityService.instance.checkOnline()) {
+        result = await _saveOffline(purchase);
+      } else {
+        result = await _useCases.savePurchase(purchase, id: id, billImage: billImage);
+      }
       if (id != null) {
         purchases = purchases.map((p) => p.id == id ? result : p).toList();
       } else {
@@ -46,6 +55,38 @@ class PurchaseProvider extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+  }
+
+  /// Queues [purchase] in the local outbox instead of posting it, returning
+  /// a negative-ID stand-in — [SyncService] replays it against the real API
+  /// on reconnect. A bill photo always forces the normal online path (see
+  /// [save]) since a File reference isn't reliably safe to persist across
+  /// app restarts.
+  Future<Purchase> _saveOffline(Purchase purchase) async {
+    final business = await TokenStorage.instance.currentBusiness;
+    final businessId = '${business?['id'] ?? ''}';
+    final tempId = await AppDatabase.instance.enqueueWrite('purchase', businessId, purchase.toJson());
+    await SyncService.instance.refreshPendingCount();
+    return Purchase(
+      id: tempId,
+      billNumber: purchase.billNumber,
+      supplier: purchase.supplier,
+      supplierName: purchase.supplierName,
+      purchaseDate: purchase.purchaseDate,
+      dueDate: purchase.dueDate,
+      subtotal: purchase.subtotal,
+      discount: purchase.discount,
+      taxRate: purchase.taxRate,
+      taxAmount: purchase.taxAmount,
+      total: purchase.total,
+      paidAmount: purchase.paidAmount,
+      dueAmount: purchase.dueAmount,
+      paymentMethod: purchase.paymentMethod,
+      bankAccount: purchase.bankAccount,
+      status: purchase.status,
+      notes: purchase.notes,
+      items: purchase.items,
+    );
   }
 
   Future<bool> delete(int id) => _guard(() async {

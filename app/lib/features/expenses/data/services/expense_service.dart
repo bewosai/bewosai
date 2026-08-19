@@ -82,6 +82,20 @@ class ExpenseService {
     }
   }
 
+  /// Posts an already-server-shaped payload directly — used by [SyncService]
+  /// to replay an expense that was queued while offline. Receipt photos
+  /// aren't queued (a File reference isn't reliably safe to persist across
+  /// app restarts), so this is JSON-only, matching what the offline queue
+  /// actually stores.
+  Future<Expense> createRaw(Map<String, dynamic> payload) async {
+    try {
+      final res = await _dio.post('/expenses/', data: payload);
+      return Expense.fromJson(_asMap(res.data));
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
   Future<Expense> update(int id, Expense expense, {File? receiptImage}) async {
     try {
       final Response res;

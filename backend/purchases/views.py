@@ -1,9 +1,11 @@
 import re
 
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework import generics, status, parsers, permissions
+from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.utils import timezone
 
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature
 from bewosai.utils import get_business
@@ -59,11 +61,17 @@ class PurchaseListCreateView(_RequirePurchases, generics.ListCreateAPIView):
     def perform_create(self, serializer):
         biz = get_business(self.request)
         bill_number = self.request.data.get("bill_number") or _next_bill_number(biz)
-        serializer.save(
-            business=biz,
-            bill_number=bill_number,
-            created_by=self.request.user,
-        )
+        # Same collision risk as Sale.invoice_number (see sales/views.py) —
+        # client-supplied, DB-unique per business, now reachable via the
+        # offline outbox too. Renumber on collision instead of 500ing.
+        for _ in range(5):
+            try:
+                with transaction.atomic():
+                    serializer.save(business=biz, bill_number=bill_number, created_by=self.request.user)
+                return
+            except IntegrityError:
+                bill_number = _next_bill_number(biz)
+        raise ValidationError("Could not assign a unique bill number — please try again.")
 
 
 class PurchaseDetailView(_RequirePurchases, generics.RetrieveUpdateDestroyAPIView):

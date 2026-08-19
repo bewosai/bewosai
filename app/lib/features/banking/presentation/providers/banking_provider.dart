@@ -1,6 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/offline/app_database.dart';
+import '../../../../core/offline/connectivity_service.dart';
+import '../../../../core/offline/sync_service.dart';
+import '../../../../core/storage/token_storage.dart';
 import '../../data/models/banking_model.dart';
 import '../../domain/usecases/banking_usecases.dart';
 
@@ -57,6 +61,13 @@ class BankingProvider extends ChangeNotifier {
       });
 
   Future<bool> addTransaction(BankTransaction transaction) => _guard(() async {
+        if (!await ConnectivityService.instance.checkOnline()) {
+          final queued = await _saveTransactionOffline(transaction);
+          if (selectedAccountId == transaction.account) {
+            transactions = [queued, ...transactions];
+          }
+          return true;
+        }
         final created = await _useCases.addTransaction(transaction);
         if (selectedAccountId == transaction.account) {
           transactions = [created, ...transactions];
@@ -64,6 +75,27 @@ class BankingProvider extends ChangeNotifier {
         await load();
         return true;
       });
+
+  /// Queues [transaction] in the local outbox instead of posting it,
+  /// returning a negative-ID stand-in — [SyncService] replays it against the
+  /// real API on reconnect. Skips the usual post-save [load] since the
+  /// server-side balance hasn't actually moved yet.
+  Future<BankTransaction> _saveTransactionOffline(BankTransaction transaction) async {
+    final business = await TokenStorage.instance.currentBusiness;
+    final businessId = '${business?['id'] ?? ''}';
+    final tempId = await AppDatabase.instance.enqueueWrite('bank_transaction', businessId, transaction.toJson());
+    await SyncService.instance.refreshPendingCount();
+    return BankTransaction(
+      id: tempId,
+      account: transaction.account,
+      accountName: transaction.accountName,
+      transactionType: transaction.transactionType,
+      amount: transaction.amount,
+      date: transaction.date,
+      description: transaction.description,
+      reference: transaction.reference,
+    );
+  }
 
   Future<bool> deleteTransaction(int id) => _guard(() async {
         await _useCases.deleteTransaction(id);

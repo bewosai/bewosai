@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/offline/app_database.dart';
 import '../../../../core/offline/connectivity_service.dart';
+import '../../../../core/offline/sync_service.dart';
 import '../../../../core/storage/token_storage.dart';
 import '../../data/models/party_model.dart';
 import '../../domain/usecases/party_usecases.dart';
@@ -123,11 +124,38 @@ class PartyProvider extends ChangeNotifier {
   }
 
   Future<bool> addPayment(PartyPayment payment) => _guard(() async {
+        if (!await ConnectivityService.instance.checkOnline()) {
+          payments = [await _savePaymentOffline(payment), ...payments];
+          return true;
+        }
         final created = await _useCases.addPayment(payment);
         payments = [created, ...payments];
         await load();
         return true;
       });
+
+  /// Queues [payment] in the local outbox instead of posting it, returning a
+  /// negative-ID stand-in — [SyncService] replays it against the real API on
+  /// reconnect. Skips the usual post-save [load] since the server doesn't
+  /// know about this payment yet, so a refresh would just make it vanish
+  /// from the list until sync completes.
+  Future<PartyPayment> _savePaymentOffline(PartyPayment payment) async {
+    final business = await TokenStorage.instance.currentBusiness;
+    final businessId = '${business?['id'] ?? ''}';
+    final tempId = await AppDatabase.instance.enqueueWrite('party_payment', businessId, payment.toJson());
+    await SyncService.instance.refreshPendingCount();
+    return PartyPayment(
+      id: tempId,
+      party: payment.party,
+      partyName: payment.partyName,
+      paymentType: payment.paymentType,
+      amount: payment.amount,
+      paymentMethod: payment.paymentMethod,
+      bankAccount: payment.bankAccount,
+      date: payment.date,
+      note: payment.note,
+    );
+  }
 
   Future<bool> deletePayment(int id) => _guard(() async {
         await _useCases.deletePayment(id);

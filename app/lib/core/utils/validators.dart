@@ -15,7 +15,9 @@ class Validators {
     return null;
   }
 
-  static final _emailRegex = RegExp(r'^[\w.\-+]+@[\w\-]+\.[a-zA-Z]{2,}$');
+  // Domain is one or more "label." segments (supports subdomains like
+  // user@mail.example.co) followed by a final 2+ letter TLD.
+  static final _emailRegex = RegExp(r'^[\w.\-+]+@([\w\-]+\.)+[a-zA-Z]{2,}$');
 
   static String? email(String? value) {
     final v = value?.trim() ?? '';

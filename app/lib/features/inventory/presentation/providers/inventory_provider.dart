@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/offline/app_database.dart';
 import '../../../../core/offline/connectivity_service.dart';
+import '../../../../core/offline/sync_service.dart';
 import '../../../../core/storage/token_storage.dart';
 import '../../data/models/inventory_model.dart';
 import '../../domain/usecases/inventory_usecases.dart';
@@ -277,6 +278,15 @@ class InventoryProvider extends ChangeNotifier {
 
   Future<bool> adjustStock(StockMovement movement) {
     return _guard(() async {
+      if (!await ConnectivityService.instance.checkOnline()) {
+        // Just queue it — the resulting stock quantity is computed
+        // server-side, so there's nothing meaningful to optimistically
+        // update locally until this actually syncs.
+        final businessId = await _businessId();
+        await AppDatabase.instance.enqueueWrite('stock_movement', businessId, movement.toJson());
+        await SyncService.instance.refreshPendingCount();
+        return true;
+      }
       await _useCases.adjustStock(movement);
       await load();
       return true;

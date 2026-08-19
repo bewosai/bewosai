@@ -34,12 +34,15 @@ class AppDatabase {
     }
   }
 
+  static const _genericOutboxSql =
+      'CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, entity_type TEXT NOT NULL, business_id TEXT, json TEXT NOT NULL, created_at TEXT NOT NULL)';
+
   Future<Database> _open() async {
     final dir = await getDatabasesPath();
     final path = p.join(dir, 'bewosai_cache.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE cached_products (id INTEGER PRIMARY KEY, business_id TEXT, json TEXT NOT NULL)',
@@ -50,6 +53,16 @@ class AppDatabase {
         await db.execute(
           'CREATE TABLE outbox_sales (temp_id INTEGER PRIMARY KEY AUTOINCREMENT, business_id TEXT, json TEXT NOT NULL, created_at TEXT NOT NULL)',
         );
+        await db.execute(_genericOutboxSql);
+      },
+      // v1 -> v2 adds the generic outbox (Expenses/Purchases/Party payments/
+      // Bank transactions/Stock movements) alongside the original
+      // Sales-only outbox_sales table, which is left untouched so an
+      // existing install's already-queued sales are never at risk.
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute(_genericOutboxSql);
+        }
       },
     );
   }
@@ -129,5 +142,71 @@ class AppDatabase {
     final db = await _database;
     if (db == null) return;
     await db.delete('outbox_sales', where: 'temp_id = ?', whereArgs: [-tempId]);
+  }
+
+  // ── Generic outbox (Expenses / Purchases / Party payments / Bank
+  // transactions / Stock movements) ───────────────────────────────────────
+  //
+  // One shared table keyed by entity_type instead of a dedicated table per
+  // module — the Sales outbox above was written before this needed to scale
+  // to five more entity types, and duplicating that whole table+method set
+  // five times would just be the same code with the strings changed.
+
+  /// Queues [payload] for [entityType], returning a negative temp ID so the
+  /// calling provider can show it in its list immediately, the same way
+  /// [enqueueSale] already does for Sales.
+  Future<int> enqueueWrite(String entityType, String businessId, Map<String, dynamic> payload) async {
+    final db = await _database;
+    if (db == null) {
+      throw StateError('Offline saving is not available on this device.');
+    }
+    final rowId = await db.insert('outbox', {
+      'entity_type': entityType,
+      'business_id': businessId,
+      'json': jsonEncode(payload),
+      'created_at': DateTime.now().toIso8601String(),
+    });
+    return -rowId;
+  }
+
+  Future<List<Map<String, dynamic>>> pendingWrites(String entityType, String businessId) async {
+    final db = await _database;
+    if (db == null) return [];
+    final rows = await db.query(
+      'outbox',
+      where: 'entity_type = ? AND business_id = ?',
+      whereArgs: [entityType, businessId],
+      orderBy: 'id ASC',
+    );
+    return rows
+        .map((r) => {
+              'temp_id': -(r['id'] as int),
+              'created_at': r['created_at'],
+              ...jsonDecode(r['json'] as String) as Map<String, dynamic>,
+            })
+        .toList();
+  }
+
+  /// Total queued writes across every entity type for [businessId] — one
+  /// combined "X pending" count covering Sales and everything in the
+  /// generic outbox, for a single sync-status indicator in the UI.
+  Future<int> totalPendingCount(String businessId) async {
+    final db = await _database;
+    if (db == null) return 0;
+    final sales = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM outbox_sales WHERE business_id = ?',
+      [businessId],
+    );
+    final generic = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM outbox WHERE business_id = ?',
+      [businessId],
+    );
+    return (Sqflite.firstIntValue(sales) ?? 0) + (Sqflite.firstIntValue(generic) ?? 0);
+  }
+
+  Future<void> removePendingWrite(int tempId) async {
+    final db = await _database;
+    if (db == null) return;
+    await db.delete('outbox', where: 'id = ?', whereArgs: [-tempId]);
   }
 }

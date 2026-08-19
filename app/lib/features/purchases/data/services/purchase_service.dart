@@ -54,6 +54,18 @@ class PurchaseService {
     }
   }
 
+  /// Posts an already-server-shaped payload directly — used by [SyncService]
+  /// to replay a purchase queued while offline. Bill photos aren't queued,
+  /// same reasoning as expenses' receipt images.
+  Future<Purchase> createRaw(Map<String, dynamic> payload) async {
+    try {
+      final res = await _dio.post('/purchases/', data: payload);
+      return Purchase.fromJson(res.data as Map<String, dynamic>);
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
   Future<Purchase> update(int id, Purchase purchase, {File? billImage}) async {
     try {
       final res = billImage == null

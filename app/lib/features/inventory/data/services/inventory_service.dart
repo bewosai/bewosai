@@ -193,6 +193,17 @@ class InventoryService {
     }
   }
 
+  /// Posts an already-server-shaped payload directly — used by [SyncService]
+  /// to replay a stock movement queued while offline.
+  Future<StockMovement> createStockMovementRaw(Map<String, dynamic> payload) async {
+    try {
+      final res = await _dio.post('/inventory/stock-movements/', data: payload);
+      return StockMovement.fromJson(_asMap(res.data));
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   static Map<String, dynamic> _asMap(dynamic data) {

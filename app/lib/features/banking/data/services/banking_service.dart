@@ -76,6 +76,17 @@ class BankingService {
     }
   }
 
+  /// Posts an already-server-shaped payload directly — used by [SyncService]
+  /// to replay a transaction queued while offline.
+  Future<BankTransaction> createTransactionRaw(Map<String, dynamic> payload) async {
+    try {
+      final res = await _dio.post('/banking/transactions/', data: payload);
+      return BankTransaction.fromJson(res.data as Map<String, dynamic>);
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
   Future<void> deleteTransaction(int id) async {
     try {
       await _dio.delete('/banking/transactions/$id/');

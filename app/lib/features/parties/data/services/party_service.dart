@@ -77,6 +77,17 @@ class PartyService {
     }
   }
 
+  /// Posts an already-server-shaped payload directly — used by [SyncService]
+  /// to replay a payment queued while offline.
+  Future<PartyPayment> createPaymentRaw(Map<String, dynamic> payload) async {
+    try {
+      final res = await _dio.post('/parties/payments/', data: payload);
+      return PartyPayment.fromJson(res.data as Map<String, dynamic>);
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
   Future<void> deletePayment(int id) async {
     try {
       await _dio.delete('/parties/payments/$id/');
