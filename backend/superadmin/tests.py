@@ -94,7 +94,7 @@ class LicenseCodeTests(TestCase):
 
     def test_expired_or_revoked_code_is_never_reissued(self):
         business, _ = make_business(email="noreuse@example.com")
-        expired = License.objects.create(
+        License.objects.create(
             code="AAAAA", business=business, email_snapshot="x@x.com",
             duration_type=License.DURATION_7D, duration_days=7, status=License.STATUS_EXPIRED,
             start_date=timezone.localdate(), expiry_date=timezone.localdate() - timedelta(days=1),

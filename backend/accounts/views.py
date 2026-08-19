@@ -11,7 +11,7 @@ from django.utils import timezone
 from datetime import timedelta
 from bewosai.email import send_otp_email
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature
-from bewosai.utils import get_bid, get_business, require_business
+from bewosai.utils import get_bid, get_business
 from .models import User, Business, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import (
     UserSerializer, BusinessSerializer, StaffMemberSerializer, InviteStaffSerializer,
