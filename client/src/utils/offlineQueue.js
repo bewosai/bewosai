@@ -64,20 +64,40 @@ export function wrapWithOfflineQueue(axiosInstance) {
   axiosInstance.interceptors.response.use(
     (res) => res,
     async (err) => {
-      // Only queue mutations that fail with a network error (no response = offline)
+      // A response-less error also fires for timeouts, CORS failures, and
+      // the backend's Render cold-start connection resets — none of those
+      // mean the browser is actually offline. Queuing those and faking a
+      // success response (as this used to do) told the caller the write
+      // succeeded, so it would reload the list from the server and the
+      // never-actually-sent item would just be missing — "my last entry
+      // isn't showing up" with no error and no clue why. Only treat it as
+      // a real offline write when the browser itself confirms there's no
+      // connection; every other network failure surfaces as a normal,
+      // retryable error instead of a silent lie.
       const isNetworkError = !err.response && err.config;
       const isMutation = ["post", "patch", "put", "delete"].includes(
         err.config?.method?.toLowerCase()
       );
+      const isReallyOffline = typeof navigator !== "undefined" && navigator.onLine === false;
 
-      if (isNetworkError && isMutation) {
+      if (isNetworkError && isMutation && isReallyOffline) {
         enqueue({
           method: err.config.method,
           url: err.config.url,
           data: err.config.data ? JSON.parse(err.config.data) : undefined,
           params: err.config.params,
         });
-        return Promise.resolve({ data: { __queued: true }, status: 202 });
+        // Shaped like a normal axios error so every existing
+        // `e.response?.data?.detail` error handler across the app
+        // displays this without needing its own special case.
+        return Promise.reject({
+          isQueuedOffline: true,
+          response: {
+            data: {
+              detail: "You're offline. This has been saved on your device and will sync automatically once you're back online.",
+            },
+          },
+        });
       }
 
       return Promise.reject(err);

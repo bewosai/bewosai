@@ -50,13 +50,30 @@ class _BewosaiAppState extends State<BewosaiApp> {
   final _authProvider = AuthProvider();
   final _settingsProvider = createSettingsProvider()..load();
   final _saleProvider = SaleProvider();
+  final _partyProvider = PartyProvider();
+  final _inventoryProvider = InventoryProvider();
+  final _purchaseProvider = PurchaseProvider();
+  final _expenseProvider = ExpenseProvider();
+  final _bankingProvider = BankingProvider();
   final _licenseProvider = LicenseProvider();
   late final _router = buildAppRouter(_authProvider);
 
   @override
   void initState() {
     super.initState();
-    SyncService.instance.onSynced = () => _saleProvider.load();
+    // The sync drain covers Sales, Expenses, Purchases, Party payments,
+    // Bank transactions, and Stock movements — every provider whose data
+    // it can touch needs to refresh here, or a background sync can
+    // complete successfully while that screen still shows the pre-sync
+    // list until the user happens to manually reload it.
+    SyncService.instance.onSynced = () {
+      _saleProvider.load();
+      _partyProvider.load();
+      _inventoryProvider.load();
+      _purchaseProvider.load();
+      _expenseProvider.load();
+      _bankingProvider.load();
+    };
     SyncService.instance.init();
     // The backend blocks every business-scoped call with the same 403 once
     // a trial/license lapses — this is the only signal for a lapse that
@@ -69,12 +86,12 @@ class _BewosaiAppState extends State<BewosaiApp> {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _authProvider),
-        ChangeNotifierProvider(create: (_) => PartyProvider()),
-        ChangeNotifierProvider(create: (_) => InventoryProvider()),
+        ChangeNotifierProvider.value(value: _partyProvider),
+        ChangeNotifierProvider.value(value: _inventoryProvider),
         ChangeNotifierProvider.value(value: _saleProvider),
-        ChangeNotifierProvider(create: (_) => PurchaseProvider()),
-        ChangeNotifierProvider(create: (_) => ExpenseProvider()),
-        ChangeNotifierProvider(create: (_) => BankingProvider()),
+        ChangeNotifierProvider.value(value: _purchaseProvider),
+        ChangeNotifierProvider.value(value: _expenseProvider),
+        ChangeNotifierProvider.value(value: _bankingProvider),
         ChangeNotifierProvider(create: (_) => ReportProvider()),
         ChangeNotifierProvider(create: (_) => StaffProvider()),
         ChangeNotifierProvider(create: (_) => RecycleBinProvider()),
