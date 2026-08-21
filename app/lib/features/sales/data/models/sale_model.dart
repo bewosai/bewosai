@@ -46,6 +46,8 @@ class Sale {
   final int? customer;
   final String customerName;
   final String partyPhone;
+  final String partyPan;
+  final String partyAddress;
   final DateTime? saleDate;
   final DateTime? dueDate;
   final double subtotal;
@@ -77,6 +79,8 @@ class Sale {
     this.customer,
     required this.customerName,
     required this.partyPhone,
+    this.partyPan = '',
+    this.partyAddress = '',
     this.saleDate,
     this.dueDate,
     required this.subtotal,
@@ -104,6 +108,8 @@ class Sale {
         customer: json['customer'] as int?,
         customerName: (json['customer_name'] ?? json['party_name']) as String? ?? '',
         partyPhone: json['party_phone'] as String? ?? '',
+        partyPan: json['party_pan'] as String? ?? '',
+        partyAddress: json['party_address'] as String? ?? '',
         saleDate: Formatters.parseDate(json['sale_date'] as String?),
         dueDate: Formatters.parseDate(json['due_date'] as String?),
         subtotal: Formatters.toDouble(json['subtotal']),

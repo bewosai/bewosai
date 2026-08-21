@@ -1,13 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/excel_import_utils.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../data/models/inventory_model.dart';
 import '../providers/inventory_provider.dart';
 import 'inventory_import_screen.dart';
+
+// Same column order as InventoryImportScreen's template, so an exported
+// file can be edited and re-imported unchanged.
+const _kExportHeaders = [
+  'name', 'category', 'unit', 'sale_price', 'purchase_price',
+  'stock_quantity', 'low_stock_threshold', 'barcode', 'hs_code', 'description',
+];
+
+Future<void> _exportProducts(BuildContext context, List<Product> products) async {
+  try {
+    final path = await ExcelImportUtils.writeRows(
+      sheetName: 'Products',
+      headers: _kExportHeaders,
+      rows: [
+        for (final p in products)
+          [
+            p.name, p.categoryName, p.unitName,
+            p.salePrice.toString(), p.purchasePrice.toString(),
+            p.stockQuantity.toString(), p.lowStockThreshold.toString(),
+            p.barcode, p.hsCode, p.description,
+          ],
+      ],
+      fileName: 'bewosai_products_export.xlsx',
+    );
+    if (!context.mounted) return;
+    await SharePlus.instance.share(ShareParams(files: [XFile(path)], text: 'Bewosai products export'));
+  } catch (_) {
+    if (context.mounted) {
+      showAppSnackBar(context, 'Could not create the export file', isError: true);
+    }
+  }
+}
 
 class InventoryScreen extends StatefulWidget {
   final bool initialLowStockFilter;
@@ -239,6 +273,13 @@ class _ProductsTab extends StatelessWidget {
             Expanded(child: SearchField(hint: 'Search products', onChanged: onSearch)),
             const SizedBox(width: 8),
             IconButton(
+              icon: const Icon(Icons.download_outlined),
+              tooltip: 'Export Products',
+              style: IconButton.styleFrom(backgroundColor: AppColors.surface, side: BorderSide(color: AppColors.divider)),
+              onPressed: inv.products.isEmpty ? null : () => _exportProducts(context, inv.products),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
               icon: const Icon(Icons.upload_file_outlined),
               tooltip: 'Import Products',
               style: IconButton.styleFrom(backgroundColor: AppColors.surface, side: BorderSide(color: AppColors.divider)),
@@ -333,6 +374,23 @@ class _ProductsTab extends StatelessWidget {
                         builder: (_) => _StockAdjustDialog(product: p),
                       ),
                     ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: AppColors.navy400,
+                      ),
+                      tooltip: 'Delete',
+                      onPressed: () async {
+                        final provider = context.read<InventoryProvider>();
+                        final confirmed = await showDeleteConfirmDialog(
+                          context,
+                          message:
+                              'Delete "${p.name}"? It will be moved to Recycle Bin.',
+                        );
+                        if (confirmed) provider.deleteProduct(p.id);
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -385,11 +443,30 @@ class _UnitsTab extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (u.hasSecondary)
+                    if (u.hasSecondary) ...[
                       const StatusBadge(
                         label: 'Dual Unit',
                         color: AppColors.info,
                       ),
+                      const SizedBox(width: 4),
+                    ],
+                    IconButton(
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: AppColors.navy400,
+                      ),
+                      tooltip: 'Delete',
+                      onPressed: () async {
+                        final provider = context.read<InventoryProvider>();
+                        final confirmed = await showDeleteConfirmDialog(
+                          context,
+                          message:
+                              'Delete unit "${u.name}"? Products using it will keep their stock but lose this unit label.',
+                        );
+                        if (confirmed) provider.deleteUnit(u.id);
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -420,8 +497,19 @@ class _CategoriesTab extends StatelessWidget {
         runSpacing: 8,
         children: categories
             .map(
-              (c) =>
-                  ActionChip(label: Text(c.name), onPressed: () => onEdit(c)),
+              (c) => InputChip(
+                label: Text(c.name),
+                onPressed: () => onEdit(c),
+                onDeleted: () async {
+                  final provider = context.read<InventoryProvider>();
+                  final confirmed = await showDeleteConfirmDialog(
+                    context,
+                    message:
+                        'Delete category "${c.name}"? Products using it will keep their data but lose this category label.',
+                  );
+                  if (confirmed) provider.deleteCategory(c.id);
+                },
+              ),
             )
             .toList(),
       ),
@@ -436,6 +524,10 @@ class _ProductFormSheet extends StatefulWidget {
   @override
   State<_ProductFormSheet> createState() => _ProductFormSheetState();
 }
+
+// Real category/unit ids are always positive, so this can never collide —
+// used as the "+ Add New ..." option's value in the two dropdowns below.
+const _addNewSentinel = -1;
 
 class _ProductFormSheetState extends State<_ProductFormSheet> {
   final _formKey = GlobalKey<FormState>();
@@ -456,6 +548,9 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   );
   late final _barcodeController = TextEditingController(
     text: widget.product?.barcode ?? '',
+  );
+  late final _hsCodeController = TextEditingController(
+    text: widget.product?.hsCode ?? '',
   );
   late final _descriptionController = TextEditingController(
     text: widget.product?.description ?? '',
@@ -488,6 +583,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       lowStockThreshold: double.tryParse(_thresholdController.text) ?? 5,
       isLowStock: false,
       barcode: _barcodeController.text.trim(),
+      hsCode: _hsCodeController.text.trim(),
       isActive: true,
     );
     final ok = await context.read<InventoryProvider>().saveProduct(
@@ -504,6 +600,179 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     }
   }
 
+  Future<void> _quickAddCategory() async {
+    final nameController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool saving = false;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Add New Category'),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: nameController,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Category Name *'),
+              validator: (v) => Validators.required(v, 'Name'),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            PrimaryButton(
+              label: 'Save',
+              expand: false,
+              isLoading: saving,
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                setDialogState(() => saving = true);
+                final invProvider = context.read<InventoryProvider>();
+                final created = await invProvider.quickCreateCategory(
+                  Category(id: 0, name: nameController.text.trim(), description: ''),
+                );
+                if (!dialogContext.mounted) return;
+                if (created != null) {
+                  setState(() => _category = created.id);
+                  Navigator.pop(dialogContext);
+                } else {
+                  setDialogState(() => saving = false);
+                  showAppSnackBar(
+                    dialogContext,
+                    invProvider.error ?? 'Failed to add category',
+                    isError: true,
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _quickAddUnit() async {
+    final nameController = TextEditingController();
+    final abbrController = TextEditingController();
+    final secondaryController = TextEditingController();
+    final secondaryAbbrController = TextEditingController();
+    final conversionController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool saving = false;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Add New Unit'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: nameController,
+                          autofocus: true,
+                          decoration: const InputDecoration(labelText: 'Unit Name *'),
+                          validator: (v) => Validators.required(v, 'Name'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: abbrController,
+                          decoration: const InputDecoration(labelText: 'Abbreviation'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Secondary unit (optional, for dual-unit tracking)',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: secondaryController,
+                          decoration: const InputDecoration(labelText: 'Secondary Unit'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: secondaryAbbrController,
+                          decoration: const InputDecoration(labelText: 'Abbreviation'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: conversionController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Conversion factor (e.g. 1 Box = 12 Pieces)',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            PrimaryButton(
+              label: 'Save',
+              expand: false,
+              isLoading: saving,
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                setDialogState(() => saving = true);
+                final invProvider = context.read<InventoryProvider>();
+                final created = await invProvider.quickCreateUnit(
+                  Unit(
+                    id: 0,
+                    name: nameController.text.trim(),
+                    abbreviation: abbrController.text.trim(),
+                    secondaryUnit: secondaryController.text.trim(),
+                    secondaryAbbreviation: secondaryAbbrController.text.trim(),
+                    conversionFactor: double.tryParse(conversionController.text),
+                    display: '',
+                  ),
+                );
+                if (!dialogContext.mounted) return;
+                if (created != null) {
+                  setState(() => _unit = created.id);
+                  Navigator.pop(dialogContext);
+                } else {
+                  setDialogState(() => saving = false);
+                  showAppSnackBar(
+                    dialogContext,
+                    invProvider.error ?? 'Failed to add unit',
+                    isError: true,
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -512,6 +781,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _stockController.dispose();
     _thresholdController.dispose();
     _barcodeController.dispose();
+    _hsCodeController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -543,24 +813,43 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
               DropdownButtonFormField<int>(
                 initialValue: _category,
                 decoration: const InputDecoration(labelText: 'Category'),
-                items: inv.categories
-                    .map(
-                      (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v),
+                items: [
+                  const DropdownMenuItem(
+                    value: _addNewSentinel,
+                    child: Text('+ Add New Category'),
+                  ),
+                  ...inv.categories.map(
+                    (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
+                  ),
+                ],
+                onChanged: (v) {
+                  if (v == _addNewSentinel) {
+                    _quickAddCategory();
+                    return;
+                  }
+                  setState(() => _category = v);
+                },
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 initialValue: _unit,
                 decoration: const InputDecoration(labelText: 'Unit'),
-                items: inv.units
-                    .map(
-                      (u) =>
-                          DropdownMenuItem(value: u.id, child: Text(u.display)),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _unit = v),
+                items: [
+                  const DropdownMenuItem(
+                    value: _addNewSentinel,
+                    child: Text('+ Add New Unit'),
+                  ),
+                  ...inv.units.map(
+                    (u) => DropdownMenuItem(value: u.id, child: Text(u.display)),
+                  ),
+                ],
+                onChanged: (v) {
+                  if (v == _addNewSentinel) {
+                    _quickAddUnit();
+                    return;
+                  }
+                  setState(() => _unit = v);
+                },
               ),
               const SizedBox(height: 12),
               Row(
@@ -619,11 +908,26 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                 ],
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _barcodeController,
-                decoration: const InputDecoration(
-                  labelText: 'Barcode (optional)',
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _barcodeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Barcode (optional)',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _hsCodeController,
+                      decoration: const InputDecoration(
+                        labelText: 'HS Code (optional)',
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               TextFormField(

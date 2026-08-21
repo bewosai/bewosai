@@ -28,8 +28,12 @@ function ConfirmDialog({ title, body, onConfirm, onCancel }) {
   );
 }
 
+// Mirrors backend/banking/models.py BankAccount.TYPE_LIMITS — types not
+// listed here are unlimited (Cash, IME Pay, Mobile Banking, Other).
+const ACCOUNT_TYPE_LIMITS = { BANK: 2, ESEWA: 1, KHALTI: 1, CONNECT_IPS: 1 };
+
 /* ── Add/Edit Account Modal ─────────────────────────────────────────────── */
-function AccountModal({ editData, onClose, onSaved }) {
+function AccountModal({ editData, accounts = [], onClose, onSaved }) {
   const [form, setForm] = useState({
     account_name: editData?.account_name || "",
     bank_name: editData?.bank_name || "",
@@ -37,6 +41,17 @@ function AccountModal({ editData, onClose, onSaved }) {
     account_type: editData?.account_type || "CASH",
     opening_balance: editData?.opening_balance || "0",
   });
+
+  // Only counts against active accounts other than the one being edited —
+  // matches the backend's own validate_account_type exactly, so the option
+  // being disabled here always agrees with what the server would reject.
+  const countOfType = (type) => accounts.filter(a =>
+    a.account_type === type && a.is_active !== false && a.id !== editData?.id
+  ).length;
+  const isTypeFull = (type) => {
+    const limit = ACCOUNT_TYPE_LIMITS[type];
+    return limit != null && countOfType(type) >= limit;
+  };
   const [qrFile, setQrFile] = useState(null);
   const [qrPreview, setQrPreview] = useState(editData?.qr_code_url || null);
   const [saving, setSaving] = useState(false);
@@ -65,7 +80,8 @@ function AccountModal({ editData, onClose, onSaved }) {
       }
       onSaved();
     } catch (e) {
-      setError(e.response?.data?.detail || "Failed to save account.");
+      const data = e.response?.data;
+      setError(data?.detail || data?.account_type?.[0] || data?.error || "Failed to save account.");
     } finally {
       setSaving(false);
     }
@@ -87,13 +103,19 @@ function AccountModal({ editData, onClose, onSaved }) {
           <input className={field} placeholder="Account number" value={form.account_number} onChange={e => setForm(f => ({ ...f, account_number: e.target.value }))} />
           <select className={field} value={form.account_type} onChange={e => setForm(f => ({ ...f, account_type: e.target.value }))}>
             <option value="CASH">Cash (Petty Cash)</option>
-            <option value="BANK">Bank</option>
-            <option value="ESEWA">eSewa</option>
-            <option value="KHALTI">Khalti</option>
+            <option value="BANK" disabled={isTypeFull("BANK")}>Bank{isTypeFull("BANK") ? ` (limit ${ACCOUNT_TYPE_LIMITS.BANK} reached)` : ""}</option>
+            <option value="ESEWA" disabled={isTypeFull("ESEWA")}>eSewa{isTypeFull("ESEWA") ? " (limit reached)" : ""}</option>
+            <option value="KHALTI" disabled={isTypeFull("KHALTI")}>Khalti{isTypeFull("KHALTI") ? " (limit reached)" : ""}</option>
+            <option value="CONNECT_IPS" disabled={isTypeFull("CONNECT_IPS")}>Connect IPS{isTypeFull("CONNECT_IPS") ? " (limit reached)" : ""}</option>
             <option value="IME_PAY">IME Pay</option>
             <option value="MOBILE_BANKING">Mobile Banking</option>
             <option value="OTHER">Other</option>
           </select>
+          {isTypeFull(form.account_type) && (
+            <p className="text-xs text-amber-400">
+              You've reached the limit for this account type — remove or deactivate one first, or pick another type.
+            </p>
+          )}
           <input type="number" className={field} placeholder="Opening balance (Rs.)" value={form.opening_balance} onChange={e => setForm(f => ({ ...f, opening_balance: e.target.value }))} />
 
           {/* QR Code Upload */}
@@ -123,7 +145,7 @@ function AccountModal({ editData, onClose, onSaved }) {
           </div>
 
           <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50">
+            <button type="submit" disabled={saving || isTypeFull(form.account_type)} className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50">
               {saving ? "Saving..." : editData?.id ? "Save Changes" : "Add Account"}
             </button>
             <button type="button" onClick={onClose} className="rounded-xl border border-navy-700 px-4 py-2.5 text-sm text-navy-400 hover:bg-navy-800">Cancel</button>
@@ -415,6 +437,7 @@ export default function BankingPage() {
       {showAccountModal && (
         <AccountModal
           editData={editAccount}
+          accounts={accounts}
           onClose={() => { setShowAccountModal(false); setEditAccount(null); }}
           onSaved={() => { setShowAccountModal(false); setEditAccount(null); loadAccounts(); }}
         />

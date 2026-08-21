@@ -2,9 +2,20 @@ import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import KeyboardShortcutsModal from "../common/KeyboardShortcutsModal";
+import HelpSupportModal from "../common/HelpSupportModal";
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+
+  useKeyboardShortcuts({
+    onToggleSidebar: () => setSidebarOpen((o) => !o),
+    onShowHelp: () => setShowHelp(true),
+    onShowShortcuts: () => setShowShortcuts(true),
+  });
 
   return (
     <div className="flex h-screen overflow-hidden bg-navy-950 text-white">
@@ -21,6 +32,14 @@ export default function AppLayout() {
           </div>
         </main>
       </div>
+
+      {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      {showHelp && (
+        <HelpSupportModal
+          onClose={() => setShowHelp(false)}
+          onShowShortcuts={() => { setShowHelp(false); setShowShortcuts(true); }}
+        />
+      )}
     </div>
   );
 }

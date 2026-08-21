@@ -23,18 +23,21 @@ class SaleSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source="customer.name", read_only=True)
     party_name    = serializers.CharField(source="customer.name", read_only=True)
     party_phone   = serializers.CharField(source="customer.phone", read_only=True)
+    party_pan     = serializers.CharField(source="customer.pan_number", read_only=True, default="")
+    party_address = serializers.CharField(source="customer.address", read_only=True, default="")
 
     class Meta:
         model = Sale
         fields = (
             "id", "invoice_number", "customer", "customer_name", "party_name", "party_phone",
+            "party_pan", "party_address",
             "sale_date", "due_date", "subtotal", "discount", "tax_rate", "tax_amount", "total",
             "paid_amount", "due_amount", "payment_method", "bank_account", "status", "sale_type",
             "reminder_enabled", "reminder_at",
             "notes", "items", "created_at",
         )
         read_only_fields = ("id", "tax_amount", "total", "due_amount", "created_at",
-                            "customer_name", "party_name", "party_phone")
+                            "customer_name", "party_name", "party_phone", "party_pan", "party_address")
 
     def validate(self, data):
         business = require_business(self.context["request"])

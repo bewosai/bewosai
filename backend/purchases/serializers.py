@@ -20,17 +20,22 @@ class PurchaseItemSerializer(serializers.ModelSerializer):
 
 class PurchaseSerializer(serializers.ModelSerializer):
     items = PurchaseItemSerializer(many=True, required=False)
-    bill_number    = serializers.CharField(required=False, allow_blank=True)
-    supplier_name  = serializers.CharField(source="supplier.name", read_only=True)
+    bill_number      = serializers.CharField(required=False, allow_blank=True)
+    supplier_name    = serializers.CharField(source="supplier.name", read_only=True)
+    supplier_phone   = serializers.CharField(source="supplier.phone", read_only=True, default="")
+    supplier_pan     = serializers.CharField(source="supplier.pan_number", read_only=True, default="")
+    supplier_address = serializers.CharField(source="supplier.address", read_only=True, default="")
     bill_image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Purchase
-        fields = ["id", "bill_number", "supplier", "supplier_name", "purchase_date", "due_date",
+        fields = ["id", "bill_number", "supplier", "supplier_name", "supplier_phone", "supplier_pan",
+                  "supplier_address", "purchase_date", "due_date",
                   "subtotal", "discount", "tax_rate", "tax_amount", "total", "paid_amount", "due_amount",
                   "payment_method", "bank_account", "status", "notes", "bill_image", "bill_image_url",
                   "is_deleted", "items", "created_at"]
-        read_only_fields = ["tax_amount", "total", "due_amount", "created_at", "bill_image_url"]
+        read_only_fields = ["tax_amount", "total", "due_amount", "created_at", "bill_image_url",
+                            "supplier_name", "supplier_phone", "supplier_pan", "supplier_address"]
 
     def validate(self, data):
         business = require_business(self.context["request"])

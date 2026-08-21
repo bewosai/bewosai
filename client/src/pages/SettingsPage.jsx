@@ -7,6 +7,7 @@ import { auth as authApi } from "../api";
 import {
   Sun, Moon, Globe, Eye, EyeOff, Calendar, Building2,
   Upload, Save, Bell, Shield, Palette, User, Check, FileText, BarChart3, ChevronRight,
+  FileSpreadsheet,
 } from "lucide-react";
 
 function SettingCard({ title, icon: Icon, children }) {
@@ -68,7 +69,7 @@ export default function SettingsPage() {
           toggleTheme, toggleLanguage, togglePrivateMode, toggleDateMode,
           setTheme, setLanguage, setDateMode, setCurrency } = useAppSettings();
   const { t } = useTranslation();
-  const { currentBusiness, user, selectBusiness } = useAuth();
+  const { currentBusiness, user, updateBusinessInList } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -112,7 +113,7 @@ export default function SettingsPage() {
           payload = form;
         }
         const { data } = await authApi.updateBusiness(currentBusiness.id, payload);
-        selectBusiness?.(data);
+        updateBusinessInList?.(data);
         setLogoFile(null);
         setLogoPreview(data.logo || null);
       } catch {}
@@ -164,6 +165,26 @@ export default function SettingsPage() {
                 {language === "ne"
                   ? "स्टक, बिक्री, नगद, बैंक र थप प्रतिवेदनहरू"
                   : "Stock, sales, cash, bank statements & more"}
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-navy-500 shrink-0" />
+          </button>
+        </SettingCard>
+
+        {/* Bulk Import */}
+        <SettingCard title={language === "ne" ? "ब्याच आयात" : "Bulk Import"} icon={FileSpreadsheet}>
+          <button
+            onClick={() => navigate("/import")}
+            className="flex w-full items-center justify-between rounded-xl border border-navy-800 bg-navy-950 px-4 py-3 text-left transition hover:border-orange-500/50"
+          >
+            <div>
+              <p className="text-sm font-medium text-white">
+                {language === "ne" ? "Excel बाट आयात गर्नुहोस्" : "Import from Excel"}
+              </p>
+              <p className="text-xs text-navy-500 mt-0.5">
+                {language === "ne"
+                  ? "उत्पादन वा पार्टीहरू ब्याचमा थप्नुहोस्"
+                  : "Add many products or parties at once"}
               </p>
             </div>
             <ChevronRight className="h-4 w-4 text-navy-500 shrink-0" />

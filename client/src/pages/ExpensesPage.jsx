@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Search, Edit2, Trash2, X, AlertCircle, Upload, Image, Eye } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
@@ -7,6 +8,7 @@ import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext";
 import { expenses as expensesApi } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
+import { useEscToClose } from "../hooks/useEscToClose";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -40,6 +42,8 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 /* ─── Expense Modal ─── */
 function ExpenseModal({ onClose, onSaved, editData, categories }) {
+  useEscToClose(onClose);
+
   const [form, setForm] = useState(editData ? {
     amount: editData.amount || "",
     date: editData.date || today(),
@@ -226,6 +230,16 @@ export default function ExpensesPage() {
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
   const [viewReceiptImage, setViewReceiptImage] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Alt+E (see useKeyboardShortcuts) lands here as ?action=add.
+  useEffect(() => {
+    if (searchParams.get("action") === "add") {
+      setEditItem(null);
+      setShowModal(true);
+      setSearchParams((prev) => { prev.delete("action"); return prev; }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const load = () => {
     setLoading(true);

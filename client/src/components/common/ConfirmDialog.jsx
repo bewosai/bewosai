@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { useEscToClose } from "../../hooks/useEscToClose";
 
 /**
  * Reusable confirmation dialog.
@@ -11,6 +12,8 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }) {
+  useEscToClose(onCancel);
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-navy-800 bg-navy-900 p-6 shadow-2xl">

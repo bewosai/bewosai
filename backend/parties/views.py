@@ -7,7 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, IsPremiumBusiness, require_feature
 from bewosai.utils import get_bid, get_business
-from .models import Party, PartyPayment
+from .models import Party, PartyPayment, PaymentAllocation
 from .serializers import PartySerializer, PartyPaymentSerializer
 
 
@@ -123,6 +123,7 @@ class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
                 sale.paid_amount += apply
                 sale.reconciled_amount += apply
                 sale.save()                 # triggers due_amount = total - paid_amount
+                PaymentAllocation.objects.create(payment=payment, sale=sale, amount=apply)
                 remaining -= apply
 
         elif payment.payment_type == "OUT":
@@ -137,6 +138,7 @@ class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
                 purchase.paid_amount += apply
                 purchase.reconciled_amount += apply
                 purchase.save()
+                PaymentAllocation.objects.create(payment=payment, purchase=purchase, amount=apply)
                 remaining -= apply
 
 
@@ -163,8 +165,26 @@ class PartyPaymentDetailView(_RequirePayments, generics.RetrieveUpdateDestroyAPI
 
     def perform_destroy(self, instance):
         from banking.models import BankTransaction
+        self._unreconcile_payment(instance)
         BankTransaction.objects.filter(reference=f"PARTYPAYMENT-{instance.id}").delete()
         instance.delete()
+
+    @staticmethod
+    def _unreconcile_payment(payment):
+        """Undo _reconcile_payment's effect so a deleted payment doesn't
+        leave the sales/purchases it was applied to (and therefore the
+        party's balance) permanently understated."""
+        for allocation in payment.allocations.select_related("sale", "purchase"):
+            if allocation.sale is not None:
+                sale = allocation.sale
+                sale.paid_amount -= allocation.amount
+                sale.reconciled_amount -= allocation.amount
+                sale.save()
+            elif allocation.purchase is not None:
+                purchase = allocation.purchase
+                purchase.paid_amount -= allocation.amount
+                purchase.reconciled_amount -= allocation.amount
+                purchase.save()
 
 
 class PartyLedgerView(_RequireParties, APIView):
@@ -288,6 +308,8 @@ class PartyBulkImportView(APIView):
 
     permission_classes = [IsPremiumBusiness, HasActiveSubscription, require_feature("excel_import")]
 
+    MAX_ROWS = 500
+
     def post(self, request):
         bid = get_bid(request)
         if not bid:
@@ -295,14 +317,35 @@ class PartyBulkImportView(APIView):
         rows = request.data.get("parties", [])
         if not isinstance(rows, list):
             return Response({"error": "Expected 'parties' list."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(rows) > self.MAX_ROWS:
+            return Response(
+                {"error": f"Import is limited to {self.MAX_ROWS} rows at a time — this file has {len(rows)}. Split it into smaller files and import each separately."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         valid_types = [t for t, _ in Party.TYPE_CHOICES]
+        # Case-insensitive so re-uploading the same file (or one that
+        # overlaps an earlier import) doesn't silently create duplicate
+        # parties — Party has no DB-level unique constraint on name.
+        existing_names = {
+            n.lower() for n in Party.objects.filter(business_id=bid, is_deleted=False).values_list("name", flat=True)
+        }
+        seen_in_file = set()
+
         created, skipped = [], []
         for row in rows:
             name = (row.get("name") or "").strip()
             if not name:
                 skipped.append({"row": row, "reason": "Missing name"})
                 continue
+            key = name.lower()
+            if key in existing_names:
+                skipped.append({"row": row, "reason": f'A party named "{name}" already exists'})
+                continue
+            if key in seen_in_file:
+                skipped.append({"row": row, "reason": f'Duplicate "{name}" elsewhere in this file'})
+                continue
+            seen_in_file.add(key)
             party_type = (row.get("party_type") or "CUSTOMER").strip().upper()
             if party_type not in valid_types:
                 party_type = "CUSTOMER"

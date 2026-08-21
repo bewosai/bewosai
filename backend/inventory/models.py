@@ -1,3 +1,4 @@
+from django.core.validators import MinValueValidator
 from django.db import models
 from accounts.models import Business, User
 
@@ -13,6 +14,7 @@ class Category(models.Model):
     class Meta:
         unique_together = ("business", "name")
         verbose_name_plural = "categories"
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
@@ -41,6 +43,7 @@ class Unit(models.Model):
 
     class Meta:
         unique_together = ("business", "name")
+        ordering = ["name"]
 
     def __str__(self):
         if self.secondary_unit and self.conversion_factor:
@@ -90,24 +93,28 @@ class Product(models.Model):
     description = models.TextField(blank=True)
 
     purchase_price = models.DecimalField(
-        max_digits=12, decimal_places=2, default=0
+        max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)]
     )
     sale_price = models.DecimalField(
-        max_digits=12, decimal_places=2, default=0
+        max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)]
     )
 
     # Stock — PRODUCT only (SERVICE forced to 0 in save())
     stock_quantity = models.DecimalField(
-        max_digits=12, decimal_places=3, default=0
+        max_digits=12, decimal_places=3, default=0, validators=[MinValueValidator(0)]
     )
     low_stock_threshold = models.DecimalField(
-        max_digits=12, decimal_places=3, default=5
+        max_digits=12, decimal_places=3, default=5, validators=[MinValueValidator(0)]
     )
     min_stock_level = models.DecimalField(
-        max_digits=12, decimal_places=3, default=0
+        max_digits=12, decimal_places=3, default=0, validators=[MinValueValidator(0)]
     )
 
     barcode = models.CharField(max_length=100, blank=True)
+    hs_code = models.CharField(
+        max_length=20, blank=True,
+        help_text="Harmonized System code — Nepal customs/VAT classification, shown on some tax invoices.",
+    )
     image = models.ImageField(upload_to="products/", null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)

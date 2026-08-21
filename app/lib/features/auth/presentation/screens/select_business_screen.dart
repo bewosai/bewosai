@@ -15,29 +15,45 @@ class SelectBusinessScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Business'),
-        leading: auth.canCancelSwitchBusiness
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Cancel',
-                onPressed: auth.isLoading
-                    ? null
-                    : () => context.read<AuthProvider>().cancelSwitchBusiness(),
-              )
-            : null,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: auth.isLoading
-                ? null
-                : () => context.read<AuthProvider>().logout(),
-          ),
-        ],
-      ),
-      body: SafeArea(
+    return PopScope(
+      // The system/gesture back button bypasses the AppBar's leading
+      // button entirely, so without this it could pop straight to a stale
+      // route still holding the old currentBusiness (e.g. Dashboard) —
+      // this screen only exists because currentBusiness was just cleared,
+      // so route must go through cancelSwitchBusiness() (which restores it
+      // safely) rather than a raw Navigator pop.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (!auth.isLoading && auth.canCancelSwitchBusiness) {
+          context.read<AuthProvider>().cancelSwitchBusiness();
+        }
+        // Nothing to cancel back to (mandatory first-time picker) — block
+        // the pop; Logout in the AppBar is the way out from here.
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Select Business'),
+          leading: auth.canCancelSwitchBusiness
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Cancel',
+                  onPressed: auth.isLoading
+                      ? null
+                      : () => context.read<AuthProvider>().cancelSwitchBusiness(),
+                )
+              : null,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Logout',
+              onPressed: auth.isLoading
+                  ? null
+                  : () => context.read<AuthProvider>().logout(),
+            ),
+          ],
+        ),
+        body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -146,6 +162,7 @@ class SelectBusinessScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

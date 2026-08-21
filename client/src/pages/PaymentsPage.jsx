@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus, ArrowDownLeft, ArrowUpRight, Wallet, Clock,
   AlertTriangle, Check, Printer, X, AlertCircle, ChevronDown,
 } from "lucide-react";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext";
-import { parties as partiesApi } from "../api/index.js";
+import { parties as partiesApi, banking as bankingApi } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
 import { PAYMENT_METHODS, CURRENCY } from "../constants";
 import Modal from "../components/common/Modal";
@@ -31,11 +32,13 @@ function PaymentModal({ type, onClose, onSaved }) {
     party: "",
     amount: "",
     payment_method: "CASH",
+    bank_account: "",
     date: today(),
     note: "",
     payment_type: type, // "IN" or "OUT"
   });
   const [parties, setParties] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
   const [partySearch, setPartySearch] = useState("");
   const [showDrop, setShowDrop] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -43,15 +46,20 @@ function PaymentModal({ type, onClose, onSaved }) {
 
   useEffect(() => {
     const partyType = type === "IN" ? "CUSTOMER" : "SUPPLIER";
-    partiesApi.list({ business: bid, party_type: partyType })
+    // page_size: every party must be searchable here, not just the first
+    // page — this list is a search-to-select picker, not a paged table.
+    partiesApi.list({ business: bid, party_type: partyType, page_size: 1000 })
       .then(r => setParties(r.data.results ?? r.data))
       .catch(() => {});
     // Also load "BOTH" type
-    partiesApi.list({ business: bid, party_type: "BOTH" })
+    partiesApi.list({ business: bid, party_type: "BOTH", page_size: 1000 })
       .then(r => setParties(prev => {
         const ids = new Set(prev.map(p => p.id));
         return [...prev, ...(r.data.results ?? r.data).filter(p => !ids.has(p.id))];
       }))
+      .catch(() => {});
+    bankingApi.accounts({ business: bid, page_size: 1000 })
+      .then(r => setBankAccounts(r.data.results ?? r.data))
       .catch(() => {});
   }, [type]);
 
@@ -64,6 +72,10 @@ function PaymentModal({ type, onClose, onSaved }) {
     setError("");
     if (!form.party) { setError("Please select a party."); return; }
     if (!form.amount || parseFloat(form.amount) <= 0) { setError("Enter a valid amount."); return; }
+    if (form.payment_method !== "CASH" && !form.bank_account) {
+      setError("Select which account this payment should hit.");
+      return;
+    }
     setSaving(true);
     try {
       await partiesApi.addPayment({
@@ -71,12 +83,13 @@ function PaymentModal({ type, onClose, onSaved }) {
         payment_type: form.payment_type,
         amount: parseFloat(form.amount),
         payment_method: form.payment_method,
+        bank_account: form.payment_method === "CASH" ? null : form.bank_account,
         date: form.date,
         note: form.note,
       });
       onSaved();
     } catch (e) {
-      setError(e.response?.data?.detail || "Failed to save payment.");
+      setError(e.response?.data?.detail || e.response?.data?.bank_account?.[0] || "Failed to save payment.");
     } finally {
       setSaving(false);
     }
@@ -163,12 +176,35 @@ function PaymentModal({ type, onClose, onSaved }) {
         {/* Payment Method */}
         <div>
           <label className="mb-1 block text-xs font-semibold text-navy-400">Payment Method</label>
-          <select className={F} value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}>
+          <select className={F} value={form.payment_method}
+            onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}>
             {PAYMENT_METHODS.filter(m => PARTY_PAYMENT_METHOD_VALUES.includes(m.value)).map(m => (
               <option key={m.value} value={m.value}>{m.label}</option>
             ))}
           </select>
         </div>
+
+        {/* Bank Account — only for non-cash methods, so the payment
+            actually shows up on that account's Bank Statement instead of
+            payment_method being purely cosmetic. */}
+        {form.payment_method !== "CASH" && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-navy-400">Account *</label>
+            {bankAccounts.length === 0 ? (
+              <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                No bank accounts yet — add one in Banking, or switch this to Cash.
+              </p>
+            ) : (
+              <select className={F} value={form.bank_account}
+                onChange={e => setForm(f => ({ ...f, bank_account: e.target.value }))}>
+                <option value="">Select account…</option>
+                {bankAccounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.account_name}{a.bank_name ? ` (${a.bank_name})` : ""}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
 
         {/* Date */}
         <div>
@@ -257,10 +293,23 @@ export default function PaymentsPage() {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null); // "IN" | "OUT" | null
   const [deleting, setDeleting] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Alt+I / Alt+O (see useKeyboardShortcuts) land here as ?action=in|out —
+  // open the matching modal once, then drop the param so a refresh or
+  // browser-back doesn't keep reopening it.
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (action === "in" || action === "out") {
+      setModal(action.toUpperCase());
+      setSearchParams((prev) => { prev.delete("action"); return prev; }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const load = () => {
     setLoading(true);
-    partiesApi.payments({ business: bid })
+    partiesApi.payments({ business: bid, page_size: 1000 })
       .then(r => setPayments(r.data.results ?? r.data))
       .catch(() => setPayments([]))
       .finally(() => setLoading(false));
@@ -289,10 +338,13 @@ export default function PaymentsPage() {
   });
 
   const handleDelete = async () => {
+    setDeleteError("");
     try {
       await partiesApi.deletePayment(deleting.id);
-    } catch {}
-    setPayments(prev => prev.filter(p => p.id !== deleting.id));
+      setPayments(prev => prev.filter(p => p.id !== deleting.id));
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || err.response?.data?.detail || "Could not delete this payment.");
+    }
     setDeleting(null);
   };
 
@@ -312,14 +364,14 @@ export default function PaymentsPage() {
             className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 transition"
           >
             <ArrowDownLeft className="h-4 w-4" />
-            {language === "ne" ? "भुक्तानी प्राप्त" : "Payment In"}
+            {language === "ne" ? "पाउनुपर्ने" : "To Receive"}
           </button>
           <button
             onClick={() => setModal("OUT")}
             className="flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition"
           >
             <ArrowUpRight className="h-4 w-4" />
-            {language === "ne" ? "भुक्तानी गर्नुहोस्" : "Payment Out"}
+            {language === "ne" ? "दिनुपर्ने" : "To Give"}
           </button>
         </div>
       </div>
@@ -360,6 +412,13 @@ export default function PaymentsPage() {
           </p>
         </div>
       </div>
+
+      {deleteError && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-400">
+          <span className="flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {deleteError}</span>
+          <button onClick={() => setDeleteError("")}><X className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
 
       {/* Tabs + Search */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

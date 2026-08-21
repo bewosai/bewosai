@@ -14,7 +14,7 @@ import {
   Wifi, WifiOff, RefreshCw,
 } from "lucide-react";
 
-function buildNavItems(t, language, isPremium) {
+function buildNavItems(t, language) {
   return [
     { name: t("dashboard"), path: "/dashboard", icon: LayoutDashboard },
     {
@@ -55,9 +55,7 @@ function buildNavItems(t, language, isPremium) {
     { name: t("reports"), path: "/reports", icon: BarChart3, feature: "reports" },
     { name: t("settings"), path: "/settings", icon: Settings },
     { name: t("recycleBin"), path: "/recycle-bin", icon: Trash2 },
-    ...(isPremium
-      ? [{ name: language === "ne" ? "Excel आयात" : "Import Excel", path: "/import", icon: FileSpreadsheet, feature: "excel_import" }]
-      : []),
+    { name: language === "ne" ? "Excel आयात" : "Import Excel", path: "/import", icon: FileSpreadsheet, feature: "excel_import" },
   ];
 }
 
@@ -125,7 +123,7 @@ export default function Sidebar({ open, setOpen }) {
   const { t, language } = useTranslation();
   const { isFeatureEnabled } = useFeatures();
   const { isOnline, pendingCount, isSyncing, flush } = useOfflineSync(api);
-  const navItems = buildNavItems(t, language, currentBusiness?.plan === "PREMIUM")
+  const navItems = buildNavItems(t, language)
     .filter((item) => !item.feature || isFeatureEnabled(item.feature));
 
   return (

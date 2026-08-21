@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx";
 import PageHeader from "../components/shared/PageHeader";
 import SectionCard from "../components/shared/SectionCard";
 import PrimaryButton from "../components/shared/PrimaryButton";
@@ -8,18 +10,36 @@ import { inventory as inventoryApi } from "../api";
 import {
   Package, Plus, Search, AlertTriangle, X, Tag,
   Layers, Ruler, ChevronDown, ChevronUp, Edit2, ArrowUpDown, Trash2,
+  Upload, Download,
 } from "lucide-react";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+
+/* ── Export current products to .xlsx — same columns the bulk-import
+   template uses, so an exported file can be edited and re-imported. ── */
+function exportProductsToExcel(products) {
+  const headers = ["name", "category", "unit", "sale_price", "purchase_price", "stock_quantity", "low_stock_threshold", "barcode", "hs_code", "description"];
+  const rows = products.map(p => [
+    p.name, p.category_name || "", p.unit_name || "", p.sale_price, p.purchase_price,
+    p.stock_quantity, p.low_stock_threshold, p.barcode || "", p.hs_code || "", p.description || "",
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws["!cols"] = headers.map(() => ({ wch: 20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Products");
+  XLSX.writeFile(wb, `products_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
 
 /* ── Field style ── */
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500";
 
 /* ── Unit management modal (primary + secondary) ── */
-function UnitModal({ onClose, onSaved, units }) {
+function UnitModal({ onClose, onSaved, units, initial }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({
-    name: "", abbreviation: "",
-    secondary_unit: "", secondary_abbreviation: "", conversion_factor: "",
+    name: initial?.name || "", abbreviation: initial?.abbreviation || "",
+    secondary_unit: initial?.secondary_unit || "",
+    secondary_abbreviation: initial?.secondary_abbreviation || "",
+    conversion_factor: initial?.conversion_factor ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -30,18 +50,20 @@ function UnitModal({ onClose, onSaved, units }) {
     if (!form.name.trim()) { setErr("Unit name is required."); return; }
     setSaving(true);
     try {
-      await inventoryApi.createUnit({ ...form, business: bid });
-      onSaved();
+      const { data } = initial?.id
+        ? await inventoryApi.updateUnit(initial.id, form)
+        : await inventoryApi.createUnit({ ...form, business: bid });
+      onSaved(data);
     } catch (er) {
       setErr(er.response?.data?.name?.[0] || "Failed to save unit.");
     } finally { setSaving(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-2xl border border-navy-700 bg-navy-900 p-6">
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="font-bold text-white">Add Unit</h2>
+          <h2 className="font-bold text-white">{initial?.id ? "Edit Unit" : "Add Unit"}</h2>
           <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
         </div>
         {err && <p className="mb-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
@@ -107,9 +129,9 @@ function UnitModal({ onClose, onSaved, units }) {
   );
 }
 
-/* ── Add category modal ── */
-function CategoryModal({ onClose, onSaved, categories }) {
-  const [name, setName] = useState("");
+/* ── Add/Edit category modal ── */
+function CategoryModal({ onClose, onSaved, categories, initial }) {
+  const [name, setName] = useState(initial?.name || "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const bid = localStorage.getItem("business_id");
@@ -119,18 +141,20 @@ function CategoryModal({ onClose, onSaved, categories }) {
     if (!name.trim()) { setErr("Category name is required."); return; }
     setSaving(true);
     try {
-      await inventoryApi.createCategory({ name: name.trim(), business: bid });
-      onSaved();
+      const { data } = initial?.id
+        ? await inventoryApi.updateCategory(initial.id, { name: name.trim() })
+        : await inventoryApi.createCategory({ name: name.trim(), business: bid });
+      onSaved(data);
     } catch (er) {
       setErr(er.response?.data?.name?.[0] || "Failed to save category.");
     } finally { setSaving(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-navy-700 bg-navy-900 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-bold text-white">Add Category</h2>
+          <h2 className="font-bold text-white">{initial?.id ? "Edit Category" : "Add Category"}</h2>
           <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
         </div>
         {err && <p className="mb-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
@@ -157,18 +181,22 @@ function CategoryModal({ onClose, onSaved, categories }) {
 }
 
 /* ── Add/Edit product modal ── */
-function ProductModal({ onClose, onSaved, categories, units, initial }) {
+function ProductModal({ onClose, onSaved, categories, units, initial, onCategoryCreated, onUnitCreated }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({
     name: "", purchase_price: "", sale_price: "",
     stock_quantity: "", low_stock_threshold: "5",
-    barcode: "", description: "",
+    barcode: "", hs_code: "", description: "",
     ...initial,
     category: initial?.category ?? "",
     unit: initial?.unit ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  // So a product's category/unit can be created on the spot instead of
+  // cancelling this form to go manage them separately first.
+  const [showQuickAddCategory, setShowQuickAddCategory] = useState(false);
+  const [showQuickAddUnit, setShowQuickAddUnit] = useState(false);
   const selectedUnit = units.find((u) => String(u.id) === String(form.unit));
 
   const submit = async (e) => {
@@ -177,16 +205,21 @@ function ProductModal({ onClose, onSaved, categories, units, initial }) {
     setSaving(true);
     try {
       const bid = localStorage.getItem("business_id");
+      // This form has no image upload — `initial` (spread into form state
+      // above) carries the server's existing image URL as a plain string,
+      // which DRF's ImageField rejects if sent back as-is in the payload.
+      const { image, ...payload } = form;
       if (initial?.id) {
-        await inventoryApi.updateProduct(initial.id, form);
+        await inventoryApi.updateProduct(initial.id, payload);
       } else {
-        await inventoryApi.createProduct({ ...form, business: bid });
+        await inventoryApi.createProduct({ ...payload, business: bid });
       }
       onSaved();
     } catch { setErr("Failed to save product."); } finally { setSaving(false); }
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-lg rounded-2xl border border-navy-700 bg-navy-900 p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="mb-5 flex items-center justify-between">
@@ -200,12 +233,20 @@ function ProductModal({ onClose, onSaved, categories, units, initial }) {
             placeholder="Product name *" className={F} />
 
           <div className="grid grid-cols-2 gap-3">
-            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={F}>
+            <select value={form.category} onChange={(e) => {
+              if (e.target.value === "__new__") { setShowQuickAddCategory(true); return; }
+              setForm({ ...form, category: e.target.value });
+            }} className={F}>
               <option value="">Category</option>
+              <option value="__new__">+ Add New Category</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className={F}>
+            <select value={form.unit} onChange={(e) => {
+              if (e.target.value === "__new__") { setShowQuickAddUnit(true); return; }
+              setForm({ ...form, unit: e.target.value });
+            }} className={F}>
               <option value="">Unit</option>
+              <option value="__new__">+ Add New Unit</option>
               {units.map((u) => (
                 <option key={u.id} value={u.id}>{u.display || u.name}</option>
               ))}
@@ -251,9 +292,14 @@ function ProductModal({ onClose, onSaved, categories, units, initial }) {
             </div>
           </div>
 
-          <input value={form.barcode}
-            onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-            placeholder="Barcode (optional)" className={F} />
+          <div className="grid grid-cols-2 gap-3">
+            <input value={form.barcode}
+              onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+              placeholder="Barcode (optional)" className={F} />
+            <input value={form.hs_code}
+              onChange={(e) => setForm({ ...form, hs_code: e.target.value })}
+              placeholder="HS Code (optional)" className={F} />
+          </div>
           <textarea value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             placeholder="Description (optional)" rows={2} className={`${F} resize-none`} />
@@ -267,6 +313,29 @@ function ProductModal({ onClose, onSaved, categories, units, initial }) {
         </form>
       </div>
     </div>
+    {showQuickAddCategory && (
+      <CategoryModal
+        categories={categories}
+        onClose={() => setShowQuickAddCategory(false)}
+        onSaved={(created) => {
+          onCategoryCreated(created);
+          setForm((f) => ({ ...f, category: created.id }));
+          setShowQuickAddCategory(false);
+        }}
+      />
+    )}
+    {showQuickAddUnit && (
+      <UnitModal
+        units={units}
+        onClose={() => setShowQuickAddUnit(false)}
+        onSaved={(created) => {
+          onUnitCreated(created);
+          setForm((f) => ({ ...f, unit: created.id }));
+          setShowQuickAddUnit(false);
+        }}
+      />
+    )}
+    </>
   );
 }
 
@@ -448,26 +517,49 @@ function ProductCard({ product, onEdit, onAdjust, onDelete }) {
 /* ── Main page ── */
 export default function InventoryPage() {
   const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [units, setUnits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("products"); // products | units | categories
+  const [lowStockOnly, setLowStockOnly] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showAddUnit, setShowAddUnit] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [adjustingProduct, setAdjustingProduct] = useState(null);
   const [deletingProduct, setDeletingProduct] = useState(null);
+  const [editingUnit, setEditingUnit] = useState(null);
+  const [deletingUnit, setDeletingUnit] = useState(null);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [deletingCategory, setDeletingCategory] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
+
+  // The Sidebar / Dashboard link to specific inventory views by URL
+  // (/inventory/low-stock, /inventory/categories, ...) — without this the
+  // page always opened on the Products tab regardless of which link was
+  // clicked, silently dropping the user's intent.
+  useEffect(() => {
+    if (location.pathname === "/inventory/low-stock") {
+      setActiveTab("products");
+      setLowStockOnly(true);
+    } else if (location.pathname === "/inventory/categories") {
+      setActiveTab("categories");
+    } else if (location.pathname === "/inventory/stock") {
+      setActiveTab("units");
+    }
+  }, [location.pathname]);
 
   const load = () => {
     const bid = localStorage.getItem("business_id");
     setLoading(true);
     Promise.all([
-      inventoryApi.products({ business: bid }),
-      inventoryApi.categories({ business: bid }),
-      inventoryApi.units({ business: bid }),
+      inventoryApi.products({ business: bid, page_size: 1000 }),
+      inventoryApi.categories({ business: bid, page_size: 1000 }),
+      inventoryApi.units({ business: bid, page_size: 1000 }),
     ])
       .then(([p, c, u]) => {
         setProducts(p.data.results ?? p.data);
@@ -479,9 +571,11 @@ export default function InventoryPage() {
 
   useEffect(load, []);
 
-  const filtered = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = products.filter((p) => {
+    const q = search.toLowerCase();
+    const matchesSearch = !q || p.name.toLowerCase().includes(q) || (p.barcode || "").toLowerCase().includes(q);
+    return matchesSearch && (!lowStockOnly || p.is_low_stock);
+  });
   const lowStockCount = products.filter((p) => p.is_low_stock).length;
 
   return (
@@ -490,7 +584,13 @@ export default function InventoryPage() {
         title={t("inventory")}
         subtitle="Manage products, categories, units, and stock levels."
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <PrimaryButton variant="outline" onClick={() => exportProductsToExcel(products)} disabled={products.length === 0}>
+              <Download className="h-4 w-4" /> Export
+            </PrimaryButton>
+            <PrimaryButton variant="outline" onClick={() => navigate("/import?type=products")}>
+              <Upload className="h-4 w-4" /> Bulk Import
+            </PrimaryButton>
             <PrimaryButton variant="outline" onClick={() => setShowAddCategory(true)}>
               <Tag className="h-4 w-4" /> Category
             </PrimaryButton>
@@ -524,6 +624,13 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      {deleteError && (
+        <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-400">
+          <span className="flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {deleteError}</span>
+          <button onClick={() => setDeleteError("")}><X className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="mb-4 flex gap-1 rounded-xl border border-navy-800 bg-navy-900 p-1 w-fit">
         {[
@@ -544,14 +651,22 @@ export default function InventoryPage() {
       {/* Products tab */}
       {activeTab === "products" && (
         <SectionCard title={`Products (${filtered.length})`}>
-          <div className="mb-4 flex items-center gap-2 rounded-xl border border-navy-700 bg-navy-950 px-3 py-2">
-            <Search className="h-4 w-4 shrink-0 text-navy-500" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search products…"
-              className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-navy-500" />
-            {search && <button onClick={() => setSearch("")}><X className="h-4 w-4 text-navy-400" /></button>}
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex flex-1 items-center gap-2 rounded-xl border border-navy-700 bg-navy-950 px-3 py-2">
+              <Search className="h-4 w-4 shrink-0 text-navy-500" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name or barcode…"
+                className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-navy-500" />
+              {search && <button onClick={() => setSearch("")}><X className="h-4 w-4 text-navy-400" /></button>}
+            </div>
+            <button onClick={() => setLowStockOnly((v) => !v)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                lowStockOnly ? "border-red-500/40 bg-red-500/10 text-red-400" : "border-navy-700 text-navy-400 hover:text-white"
+              }`}>
+              <AlertTriangle className="h-3.5 w-3.5" /> Low Stock Only
+            </button>
           </div>
-          {lowStockCount > 0 && (
+          {lowStockCount > 0 && !lowStockOnly && (
             <div className="mb-3 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-400">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               {lowStockCount} product{lowStockCount > 1 ? "s" : ""} running low on stock
@@ -573,7 +688,11 @@ export default function InventoryPage() {
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <Package className="h-12 w-12 text-navy-700" />
               <p className="text-sm text-navy-400">
-                {search ? "No products match your search." : "No products yet."}
+                {search
+                  ? "No products match your search."
+                  : lowStockOnly
+                  ? "No products are running low on stock."
+                  : "No products yet."}
               </p>
               {!search && (
                 <PrimaryButton onClick={() => { setEditingProduct(null); setShowAddProduct(true); }}>
@@ -627,6 +746,14 @@ export default function InventoryPage() {
                         Dual Unit
                       </span>
                     )}
+                    <button onClick={() => setEditingUnit(u)}
+                      className="rounded-lg border border-navy-700 p-1.5 text-navy-400 transition hover:border-orange-500/50 hover:text-orange-400">
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => setDeletingUnit(u)}
+                      className="rounded-lg border border-navy-700 p-1.5 text-navy-400 transition hover:border-red-500/50 hover:text-red-400">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -653,9 +780,17 @@ export default function InventoryPage() {
           ) : (
             <div className="flex flex-wrap gap-2 py-2">
               {categories.map((c) => (
-                <span key={c.id} className="rounded-xl border border-navy-700 bg-navy-950 px-3 py-2 text-sm font-medium text-white">
+                <div key={c.id} className="flex items-center gap-2 rounded-xl border border-navy-700 bg-navy-950 pl-3 pr-1.5 py-1.5 text-sm font-medium text-white">
                   {c.name}
-                </span>
+                  <button onClick={() => setEditingCategory(c)}
+                    className="rounded-lg p-1 text-navy-400 transition hover:text-orange-400">
+                    <Edit2 className="h-3 w-3" />
+                  </button>
+                  <button onClick={() => setDeletingCategory(c)}
+                    className="rounded-lg p-1 text-navy-400 transition hover:text-red-400">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -668,6 +803,8 @@ export default function InventoryPage() {
           initial={editingProduct}
           categories={categories}
           units={units}
+          onCategoryCreated={(c) => setCategories((prev) => [...prev, c])}
+          onUnitCreated={(u) => setUnits((prev) => [...prev, u])}
           onClose={() => { setShowAddProduct(false); setEditingProduct(null); }}
           onSaved={() => { setShowAddProduct(false); setEditingProduct(null); load(); }}
         />
@@ -679,11 +816,27 @@ export default function InventoryPage() {
           onSaved={() => { setShowAddUnit(false); load(); }}
         />
       )}
+      {editingUnit && (
+        <UnitModal
+          initial={editingUnit}
+          units={units}
+          onClose={() => setEditingUnit(null)}
+          onSaved={() => { setEditingUnit(null); load(); }}
+        />
+      )}
       {showAddCategory && (
         <CategoryModal
           categories={categories}
           onClose={() => setShowAddCategory(false)}
           onSaved={() => { setShowAddCategory(false); load(); }}
+        />
+      )}
+      {editingCategory && (
+        <CategoryModal
+          initial={editingCategory}
+          categories={categories}
+          onClose={() => setEditingCategory(null)}
+          onSaved={() => { setEditingCategory(null); load(); }}
         />
       )}
       {adjustingProduct && (
@@ -697,11 +850,48 @@ export default function InventoryPage() {
         <ConfirmDialog
           message={`Delete product "${deletingProduct.name}"? It will be moved to Recycle Bin.`}
           onConfirm={async () => {
-            try { await inventoryApi.deleteProduct(deletingProduct.id); } catch {}
+            setDeleteError("");
+            try {
+              await inventoryApi.deleteProduct(deletingProduct.id);
+              load();
+            } catch (err) {
+              setDeleteError(err.response?.data?.error || err.response?.data?.detail || `Could not delete "${deletingProduct.name}".`);
+            }
             setDeletingProduct(null);
-            load();
           }}
           onCancel={() => setDeletingProduct(null)}
+        />
+      )}
+      {deletingUnit && (
+        <ConfirmDialog
+          message={`Delete unit "${deletingUnit.name}"? Products using it will keep their stock but lose this unit label.`}
+          onConfirm={async () => {
+            setDeleteError("");
+            try {
+              await inventoryApi.deleteUnit(deletingUnit.id);
+              load();
+            } catch (err) {
+              setDeleteError(err.response?.data?.error || err.response?.data?.detail || `Could not delete "${deletingUnit.name}".`);
+            }
+            setDeletingUnit(null);
+          }}
+          onCancel={() => setDeletingUnit(null)}
+        />
+      )}
+      {deletingCategory && (
+        <ConfirmDialog
+          message={`Delete category "${deletingCategory.name}"? Products using it will keep their data but lose this category label.`}
+          onConfirm={async () => {
+            setDeleteError("");
+            try {
+              await inventoryApi.deleteCategory(deletingCategory.id);
+              load();
+            } catch (err) {
+              setDeleteError(err.response?.data?.error || err.response?.data?.detail || `Could not delete "${deletingCategory.name}".`);
+            }
+            setDeletingCategory(null);
+          }}
+          onCancel={() => setDeletingCategory(null)}
         />
       )}
     </div>

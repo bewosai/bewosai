@@ -65,6 +65,7 @@ class AppConstants {
     'BANK',
     'ESEWA',
     'KHALTI',
+    'CONNECT_IPS',
     'IME_PAY',
     'MOBILE_BANKING',
     'OTHER',
@@ -74,9 +75,20 @@ class AppConstants {
     'BANK': 'Bank',
     'ESEWA': 'eSewa',
     'KHALTI': 'Khalti',
+    'CONNECT_IPS': 'Connect IPS',
     'IME_PAY': 'IME Pay',
     'MOBILE_BANKING': 'Mobile Banking',
     'OTHER': 'Other',
+  };
+
+  // How many active accounts of a given type one business may have —
+  // mirrors backend/banking/models.py BankAccount.TYPE_LIMITS. Types not
+  // listed here (Cash, IME Pay, Mobile Banking, Other) are unlimited.
+  static const Map<String, int> bankAccountTypeLimits = {
+    'BANK': 2,
+    'ESEWA': 1,
+    'KHALTI': 1,
+    'CONNECT_IPS': 1,
   };
 
   // Party types — parties.Party TYPE_CHOICES

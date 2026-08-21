@@ -191,6 +191,15 @@ else:
         "CORS_ALLOWED_ORIGINS",
         default="http://localhost:5173,http://127.0.0.1:5173,https://bewosaiapp.vercel.app",
     ).split(",")
+    # Vercel gives every preview deployment (per-branch or per-push) its own
+    # subdomain, e.g. bewosaiapp-git-<branch>-<team>.vercel.app or
+    # bewosaiapp-<hash>-<team>.vercel.app — none of those exact hosts can be
+    # listed in CORS_ALLOWED_ORIGINS ahead of time, so match anything under
+    # the bewosaiapp project by regex instead of hardcoding each one.
+    CORS_ALLOWED_ORIGIN_REGEXES = config(
+        "CORS_ALLOWED_ORIGIN_REGEXES",
+        default=r"^https://bewosaiapp[a-zA-Z0-9-]*\.vercel\.app$",
+    ).split(",")
 
 CORS_ALLOW_CREDENTIALS = True
 

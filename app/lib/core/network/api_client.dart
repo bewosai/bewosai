@@ -77,6 +77,14 @@ class ApiClient {
           }
         }
 
+        if (e.response?.statusCode == 403) {
+          final data = e.response?.data;
+          final detail = data is Map ? data['detail'] : null;
+          if (detail is String && detail.contains('license code')) {
+            onSubscriptionRequired?.call();
+          }
+        }
+
         return handler.next(e);
       },
     ));
@@ -86,6 +94,14 @@ class ApiClient {
 
   late final Dio _dio;
   Dio get dio => _dio;
+
+  /// Set once from main.dart to LicenseProvider.markBlocked. ApiClient has
+  /// no Provider access of its own, so this is the same "plain callback set
+  /// from the app root" pattern SyncService.onSynced already uses. Fired
+  /// when the backend's HasActiveSubscription permission blocks a call
+  /// mid-session — a trial/license can lapse well after the last explicit
+  /// status check, and this is the only signal that catches it.
+  void Function()? onSubscriptionRequired;
 
   static const int _maxRetries = 2;
 
@@ -124,9 +140,17 @@ class ApiClient {
           // api_response() — check every shape so real backend messages
           // ("Incorrect code", "This code has expired", ...) always surface
           // instead of falling back to a generic status-code string.
-          final msg = (data is Map ? (data['error'] ?? data['message'] ?? data['detail']) : null) ??
-              'Server error (${error.response?.statusCode})';
-          return ApiException(msg.toString());
+          var msg = data is Map ? (data['error'] ?? data['message'] ?? data['detail']) : null;
+          // DRF field-level validation errors (e.g. a serializer's
+          // validate_<field> raising ValidationError) come back as
+          // {"field_name": ["message"]} instead of any of the three keys
+          // above — take the first field's first message rather than
+          // falling through to a generic "Server error (400)".
+          if (msg == null && data is Map && data.isNotEmpty) {
+            final firstValue = data.values.first;
+            msg = firstValue is List && firstValue.isNotEmpty ? firstValue.first : firstValue;
+          }
+          return ApiException((msg ?? 'Server error (${error.response?.statusCode})').toString());
         default:
           return ApiException(error.message ?? 'An unexpected error occurred.');
       }

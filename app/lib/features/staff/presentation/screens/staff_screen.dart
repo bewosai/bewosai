@@ -28,7 +28,17 @@ class _StaffScreenState extends State<StaffScreen> {
   @override
   Widget build(BuildContext context) {
     final sp = context.watch<StaffProvider>();
-    final businessId = context.watch<AuthProvider>().currentBusiness?.id;
+    final currentBusiness = context.watch<AuthProvider>().currentBusiness;
+    final businessId = currentBusiness?.id;
+
+    // Mirrors the backend's own FREE_STAFF_LIMIT check (accounts/views.py) —
+    // shown proactively so a Free-plan owner isn't surprised by the
+    // rejection only after filling out the whole invite form.
+    const freeStaffLimit = 1;
+    final nonOwnerCount = sp.staff.where((s) => s.role != 'OWNER').length;
+    final isFreePlan = currentBusiness?.plan != 'PREMIUM';
+    final atStaffLimit = isFreePlan && nonOwnerCount >= freeStaffLimit;
+
     final filteredStaff = _search.isEmpty
         ? sp.staff
         : sp.staff.where((s) {
@@ -46,11 +56,14 @@ class _StaffScreenState extends State<StaffScreen> {
       bottomNavigationBar: const AppBottomNav(currentIndex: 4),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'staff_fab',
-        onPressed: () => showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => const _InviteStaffSheet(),
-        ),
+        onPressed: atStaffLimit
+            ? null
+            : () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => const _InviteStaffSheet(),
+                ),
+        backgroundColor: atStaffLimit ? AppColors.textSecondary : null,
         icon: const Icon(Icons.person_add_alt_outlined),
         label: const Text('Invite'),
       ),
@@ -72,6 +85,24 @@ class _StaffScreenState extends State<StaffScreen> {
                             hint: 'Search name, email, role',
                             onChanged: (v) => setState(() => _search = v),
                           ),
+                          if (atStaffLimit) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.orangeLight,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Your Free plan allows up to $freeStaffLimit staff member besides the owner — upgrade to Premium to invite more.',
+                                style: const TextStyle(
+                                  color: AppColors.orangeDark,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 10),
                           if (filteredStaff.isEmpty)
                             Padding(

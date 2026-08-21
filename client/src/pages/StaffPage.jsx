@@ -145,7 +145,8 @@ function InviteModal({ businessId, onClose, onSaved }) {
       await authApi.inviteStaff(businessId, { ...form, permissions });
       onSaved();
     } catch (er) {
-      setErr(er.response?.data?.email?.[0] || "Failed to invite staff.");
+      const data = er.response?.data;
+      setErr(data?.error || data?.email?.[0] || data?.detail || "Failed to invite staff.");
     } finally { setSaving(false); }
   };
 
@@ -393,6 +394,14 @@ export default function StaffPage() {
 
   useEffect(load, [currentBusiness?.id]);
 
+  // Mirrors the backend's own FREE_STAFF_LIMIT check (accounts/views.py) —
+  // shown proactively so a Free-plan owner isn't surprised by the rejection
+  // only after filling out the whole invite form.
+  const FREE_STAFF_LIMIT = 1;
+  const nonOwnerCount = staff.filter((m) => m.role !== "OWNER" && m.is_active !== false).length;
+  const isFreePlan = currentBusiness?.plan !== "PREMIUM";
+  const atStaffLimit = isFreePlan && nonOwnerCount >= FREE_STAFF_LIMIT;
+
   const filteredStaff = staff.filter((m) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -409,11 +418,19 @@ export default function StaffPage() {
         title={t("staffManagement")}
         subtitle="Invite team members and manage their access roles."
         action={
-          <PrimaryButton onClick={() => setShowInvite(true)}>
+          <PrimaryButton onClick={() => setShowInvite(true)} disabled={atStaffLimit}>
             <Plus className="h-4 w-4" /> {t("inviteStaff")}
           </PrimaryButton>
         }
       />
+
+      {atStaffLimit && (
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-orange-500/20 bg-orange-500/5 px-4 py-3">
+          <p className="text-sm text-orange-300">
+            Your Free plan allows up to {FREE_STAFF_LIMIT} staff member{FREE_STAFF_LIMIT !== 1 ? "s" : ""} besides the owner — upgrade to Premium to invite more.
+          </p>
+        </div>
+      )}
 
       {/* Roles overview */}
       <div className="mb-6 grid gap-3 sm:grid-cols-4">

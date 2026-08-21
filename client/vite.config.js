@@ -56,16 +56,19 @@ export default defineConfig({
       workbox: {
         // Cache all JS/CSS/HTML assets
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        // Network-first for API calls (so fresh data when online)
+        // API calls always go to the network, never the cache. Business
+        // data (stock, balances, invoices) must be correct across devices —
+        // a NetworkFirst strategy would silently serve a stale cached
+        // response whenever the request is slow, e.g. the Render free-tier
+        // backend waking from an idle cold start (can take 30-60s, far past
+        // any timeout short enough to still feel responsive). Every page
+        // already has its own loading/error UI, so there's nothing gained
+        // by the service worker papering over a slow or failed request with
+        // out-of-date numbers.
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache",
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
-              networkTimeoutSeconds: 5,
-            },
+            handler: "NetworkOnly",
           },
         ],
       },

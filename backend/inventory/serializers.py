@@ -37,7 +37,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "id", "name", "category", "category_name", "unit", "unit_name",
             "description", "purchase_price", "sale_price", "selling_price",
             "stock_quantity", "low_stock_threshold", "is_low_stock",
-            "barcode", "image", "is_active", "created_at",
+            "barcode", "hs_code", "image", "is_active", "created_at",
         )
         read_only_fields = ("id", "created_at", "is_low_stock", "selling_price")
 

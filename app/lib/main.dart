@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'core/features/feature_provider.dart';
+import 'core/licensing/license_provider.dart';
+import 'core/network/api_client.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/offline/sync_service.dart';
 import 'core/theme/app_colors.dart';
@@ -21,6 +23,7 @@ import 'features/settings/presentation/providers/settings_provider.dart';
 import 'features/settings/settings_dependencies.dart';
 import 'features/staff/presentation/providers/staff_provider.dart';
 import 'router/app_router.dart';
+import 'shared/widgets/license_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +50,7 @@ class _BewosaiAppState extends State<BewosaiApp> {
   final _authProvider = AuthProvider();
   final _settingsProvider = createSettingsProvider()..load();
   final _saleProvider = SaleProvider();
+  final _licenseProvider = LicenseProvider();
   late final _router = buildAppRouter(_authProvider);
 
   @override
@@ -54,6 +58,10 @@ class _BewosaiAppState extends State<BewosaiApp> {
     super.initState();
     SyncService.instance.onSynced = () => _saleProvider.load();
     SyncService.instance.init();
+    // The backend blocks every business-scoped call with the same 403 once
+    // a trial/license lapses — this is the only signal for a lapse that
+    // happens mid-session, well after LicenseProvider's last explicit check.
+    ApiClient.instance.onSubscriptionRequired = () => _licenseProvider.markBlocked();
   }
 
   @override
@@ -76,6 +84,13 @@ class _BewosaiAppState extends State<BewosaiApp> {
           update: (_, auth, featureProvider) {
             featureProvider!.syncBusiness(auth.currentBusiness?.id);
             return featureProvider;
+          },
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, LicenseProvider>(
+          create: (_) => _licenseProvider,
+          update: (_, auth, licenseProvider) {
+            licenseProvider!.syncBusiness(auth.currentBusiness?.id);
+            return licenseProvider;
           },
         ),
       ],
@@ -106,6 +121,7 @@ class _BewosaiAppState extends State<BewosaiApp> {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
+            builder: (context, child) => LicenseGate(child: child!),
             routerConfig: _router,
           );
         },

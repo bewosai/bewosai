@@ -181,8 +181,30 @@ class _BankAccountFormSheetState extends State<BankAccountFormSheet> {
   late String _type = widget.account?.accountType ?? 'CASH';
   bool _saving = false;
 
+  // Mirrors the backend's own validate_account_type: counts active
+  // accounts of [type] other than the one being edited, so the limit
+  // agrees exactly with what the server would reject.
+  int _countOfType(String type) => context
+      .read<BankingProvider>()
+      .accounts
+      .where((a) => a.accountType == type && a.isActive && a.id != widget.account?.id)
+      .length;
+
+  bool _isTypeFull(String type) {
+    final limit = AppConstants.bankAccountTypeLimits[type];
+    return limit != null && _countOfType(type) >= limit;
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isTypeFull(_type)) {
+      showAppSnackBar(
+        context,
+        'You can only have ${AppConstants.bankAccountTypeLimits[_type]} ${AppConstants.bankAccountTypeLabels[_type]} account(s). Remove or deactivate one first.',
+        isError: true,
+      );
+      return;
+    }
     setState(() => _saving = true);
     final account = BankAccount(
       id: widget.account?.id ?? 0,
@@ -194,10 +216,15 @@ class _BankAccountFormSheetState extends State<BankAccountFormSheet> {
       balance: 0,
       isActive: true,
     );
-    final ok = await context.read<BankingProvider>().saveAccount(account, id: widget.account?.id);
+    final provider = context.read<BankingProvider>();
+    final ok = await provider.saveAccount(account, id: widget.account?.id);
     if (!mounted) return;
     setState(() => _saving = false);
-    if (ok) Navigator.pop(context);
+    if (ok) {
+      Navigator.pop(context);
+    } else {
+      showAppSnackBar(context, provider.error ?? 'Failed to save account', isError: true);
+    }
   }
 
   @override
@@ -217,9 +244,25 @@ class _BankAccountFormSheetState extends State<BankAccountFormSheet> {
               DropdownButtonFormField<String>(
                 initialValue: _type,
                 decoration: const InputDecoration(labelText: 'Account Type'),
-                items: AppConstants.bankAccountTypes.map((t) => DropdownMenuItem(value: t, child: Text(AppConstants.bankAccountTypeLabels[t] ?? t))).toList(),
+                items: AppConstants.bankAccountTypes.map((t) {
+                  final full = _isTypeFull(t);
+                  final label = AppConstants.bankAccountTypeLabels[t] ?? t;
+                  return DropdownMenuItem(
+                    value: t,
+                    enabled: !full,
+                    child: Text(full ? '$label (limit reached)' : label),
+                  );
+                }).toList(),
                 onChanged: (v) => setState(() => _type = v ?? 'CASH'),
               ),
+              if (_isTypeFull(_type))
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    "You've reached the limit for this account type — remove or deactivate one first, or pick another type.",
+                    style: TextStyle(fontSize: 11, color: AppColors.warning),
+                  ),
+                ),
               const SizedBox(height: 12),
               TextFormField(controller: _bankController, decoration: const InputDecoration(labelText: 'Bank Name (optional)')),
               const SizedBox(height: 12),
@@ -227,7 +270,11 @@ class _BankAccountFormSheetState extends State<BankAccountFormSheet> {
               const SizedBox(height: 12),
               TextFormField(controller: _openingController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Opening Balance')),
               const SizedBox(height: 20),
-              PrimaryButton(label: 'Save Account', isLoading: _saving, onPressed: _submit),
+              PrimaryButton(
+                label: 'Save Account',
+                isLoading: _saving,
+                onPressed: _isTypeFull(_type) ? null : _submit,
+              ),
             ],
           ),
         ),

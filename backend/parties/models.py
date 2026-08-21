@@ -87,3 +87,23 @@ class PartyPayment(models.Model):
 
     class Meta:
         ordering = ["-date", "-created_at"]
+
+
+class PaymentAllocation(models.Model):
+    """
+    Exactly which Sale/Purchase a PartyPayment's amount was applied to, and
+    how much — recorded by PartyPaymentListCreateView._reconcile_payment as
+    it walks the party's oldest outstanding invoices. Without this, deleting
+    a payment had no way to know which invoices to roll back, so it left
+    their paid_amount/reconciled_amount (and therefore due_amount and the
+    party's balance) permanently wrong. Exactly one of sale/purchase is set.
+    """
+    payment = models.ForeignKey(PartyPayment, on_delete=models.CASCADE, related_name="allocations")
+    sale = models.ForeignKey(
+        "sales.Sale", on_delete=models.CASCADE, null=True, blank=True, related_name="payment_allocations",
+    )
+    purchase = models.ForeignKey(
+        "purchases.Purchase", on_delete=models.CASCADE, null=True, blank=True, related_name="payment_allocations",
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)

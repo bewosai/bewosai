@@ -206,12 +206,19 @@ class ImportResultCard extends StatelessWidget {
   final String itemLabelPlural;
   final VoidCallback onImportMore;
 
+  /// Optional — when provided, shows a "Download failed rows" action so the
+  /// user can fix just the rows that were skipped instead of re-checking
+  /// the whole spreadsheet by hand. The screen owns the actual export (it
+  /// has the file-writing/share plumbing); this widget just surfaces it.
+  final VoidCallback? onDownloadFailedRows;
+
   const ImportResultCard({
     super.key,
     required this.result,
     required this.itemLabelSingular,
     required this.itemLabelPlural,
     required this.onImportMore,
+    this.onDownloadFailedRows,
   });
 
   @override
@@ -249,6 +256,21 @@ class ImportResultCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Text('•  ${(s as Map)['reason'] ?? 'Unknown error'}', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                ),
+              if (skippedDetails.length > 10)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text('…and ${skippedDetails.length - 10} more', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                ),
+              if (onDownloadFailedRows != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: TextButton.icon(
+                    onPressed: onDownloadFailedRows,
+                    icon: const Icon(Icons.download_outlined, size: 16),
+                    label: const Text('Download failed rows to fix & re-upload'),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+                  ),
                 ),
             ],
           ),

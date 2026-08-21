@@ -23,6 +23,7 @@ class ExpenseCategory(models.Model):
     class Meta:
         unique_together = ("business", "name")
         verbose_name_plural = "expense categories"
+        ordering = ["name"]
 
     def __str__(self):
         return self.name

@@ -1,14 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/excel_import_utils.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../data/models/party_model.dart';
 import '../providers/party_provider.dart';
 import 'party_import_screen.dart';
+
+// Same column order as PartyImportScreen's template, so an exported file
+// can be edited and re-imported unchanged.
+const _kExportHeaders = ['name', 'party_type', 'phone', 'email', 'address', 'opening_balance'];
+
+Future<void> _exportParties(BuildContext context, List<Party> parties) async {
+  try {
+    final path = await ExcelImportUtils.writeRows(
+      sheetName: 'Parties',
+      headers: _kExportHeaders,
+      rows: [
+        for (final p in parties)
+          [p.name, p.partyType, p.phone, p.email, p.address, p.openingBalance.toString()],
+      ],
+      fileName: 'bewosai_parties_export.xlsx',
+    );
+    if (!context.mounted) return;
+    await SharePlus.instance.share(ShareParams(files: [XFile(path)], text: 'Bewosai parties export'));
+  } catch (_) {
+    if (context.mounted) {
+      showAppSnackBar(context, 'Could not create the export file', isError: true);
+    }
+  }
+}
 
 class PartiesScreen extends StatefulWidget {
   final bool openAddOnStart;
@@ -73,6 +99,11 @@ class _PartiesScreenState extends State<PartiesScreen> {
         title: const Text('Parties'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.download_outlined),
+            tooltip: 'Export Parties',
+            onPressed: pp.parties.isEmpty ? null : () => _exportParties(context, pp.parties),
+          ),
+          IconButton(
             icon: const Icon(Icons.upload_file_outlined),
             tooltip: 'Import Parties',
             onPressed: () => Navigator.of(context).push(
@@ -120,7 +151,7 @@ class _PartiesScreenState extends State<PartiesScreen> {
                           color: AppColors.navy600,
                         ),
                         KpiCard.currency(
-                          label: 'Receivable',
+                          label: 'To Receive',
                           value: pp.totalReceivable,
                           icon: Icons.call_received,
                           color: AppColors.warning,
@@ -228,9 +259,9 @@ class _PartiesScreenState extends State<PartiesScreen> {
                                         ),
                                         Text(
                                           p.balance > 0
-                                              ? 'Receivable'
+                                              ? 'To Receive'
                                               : (p.balance < 0
-                                                    ? 'Payable'
+                                                    ? 'To Give'
                                                     : 'Settled'),
                                           style: TextStyle(
                                             fontSize: 11,

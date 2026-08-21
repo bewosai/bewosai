@@ -684,6 +684,17 @@ class LicenseActivateView(APIView):
                 new_value=f"active until {license_obj.expiry_date}",
             )
 
+        # Deliberately outside the "just transitioned to active" branch above
+        # and re-checked on every call, not just the first: a business whose
+        # license was activated before this sync existed would otherwise stay
+        # permanently stuck on the Free plan, since re-submitting the same
+        # already-ACTIVE code would skip the block entirely. Making this
+        # idempotent means simply re-entering the code fixes it — no admin
+        # or database intervention needed.
+        if license_obj.plan == Business.PLAN_PREMIUM and business.plan != Business.PLAN_PREMIUM:
+            business.plan = Business.PLAN_PREMIUM
+            business.save(update_fields=["plan"])
+
         return Response({
             "success": True,
             "message": f"License activated successfully. Premium access is active until {license_obj.expiry_date}.",

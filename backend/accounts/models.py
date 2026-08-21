@@ -185,6 +185,7 @@ class Business(models.Model):
 
     class Meta:
         verbose_name_plural = "businesses"
+        ordering = ["-created_at"]
 
     @property
     def trial_expiry_date(self):
@@ -242,6 +243,7 @@ class StaffMember(models.Model):
 
     class Meta:
         unique_together = ("user", "business")
+        ordering = ["joined_at"]
 
     def __str__(self):
         return f"{self.user.name} – {self.business.name} ({self.role})"

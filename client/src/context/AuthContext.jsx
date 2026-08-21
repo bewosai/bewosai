@@ -105,6 +105,36 @@ export function AuthProvider({ children }) {
     setCurrentBusiness(biz);
   }, []);
 
+  /** After creating a business: add it to the switch-business list (not
+   * just select it) — selectBusiness alone left newly created businesses
+   * missing from Select Business / the Topbar switcher until the next
+   * full login, since neither the `businesses` state nor its localStorage
+   * copy ever learned about it. */
+  const addBusiness = useCallback((biz) => {
+    setBusinesses((prev) => {
+      const next = [...prev, biz];
+      localStorage.setItem("businesses", JSON.stringify(next));
+      return next;
+    });
+    selectBusiness(biz);
+  }, [selectBusiness]);
+
+  /** Keeps `businesses` (and the currently selected one, if it's the one
+   * that changed) in sync after an edit — e.g. renaming a business in
+   * Settings must be reflected in the switcher list too. */
+  const updateBusinessInList = useCallback((biz) => {
+    setBusinesses((prev) => {
+      const next = prev.map((b) => (b.id === biz.id ? biz : b));
+      localStorage.setItem("businesses", JSON.stringify(next));
+      return next;
+    });
+    setCurrentBusiness((prev) => {
+      if (prev?.id !== biz.id) return prev;
+      localStorage.setItem("current_business", JSON.stringify(biz));
+      return biz;
+    });
+  }, []);
+
   const logout = useCallback(async () => {
     const refresh = localStorage.getItem("refresh");
     try { await authApi.logout(refresh); } catch {}
@@ -119,6 +149,7 @@ export function AuthProvider({ children }) {
       user, businesses, currentBusiness,
       loading, isLoggedIn,
       sendOtp, verifyOtp, setAccountType, logout, selectBusiness,
+      addBusiness, updateBusinessInList,
     }}>
       {children}
     </AuthContext.Provider>

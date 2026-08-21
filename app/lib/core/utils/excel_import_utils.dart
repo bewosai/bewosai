@@ -29,11 +29,26 @@ class ExcelImportUtils {
     required List<String> headers,
     required List<String> exampleRow,
     required String fileName,
+  }) =>
+      writeRows(sheetName: sheetName, headers: headers, rows: [exampleRow], fileName: fileName);
+
+  /// Builds an .xlsx with a header row plus one row per entry in [rows] —
+  /// same shape as [writeTemplate] but for exporting the current data
+  /// (bulk download) instead of a single example. Same column order as the
+  /// matching bulk-import template, so an exported file can be edited and
+  /// re-imported unchanged.
+  static Future<String> writeRows({
+    required String sheetName,
+    required List<String> headers,
+    required List<List<String>> rows,
+    required String fileName,
   }) async {
     final excel = xls.Excel.createExcel();
     final sheet = excel[sheetName];
     sheet.appendRow(headers.map((h) => xls.TextCellValue(h)).toList());
-    sheet.appendRow(exampleRow.map((v) => xls.TextCellValue(v)).toList());
+    for (final row in rows) {
+      sheet.appendRow(row.map((v) => xls.TextCellValue(v)).toList());
+    }
 
     final defaultSheet = excel.getDefaultSheet();
     if (defaultSheet != null && defaultSheet != sheetName) {

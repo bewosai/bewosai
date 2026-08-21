@@ -191,7 +191,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     final stockController = TextEditingController(text: '0');
     final formKey = GlobalKey<FormState>();
     bool saving = false;
-//Add a profile and eye buttom like other page with same functionality with back bu
+
     await showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -402,6 +402,14 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       showAppSnackBar(
         context,
         'Add at least one item with quantity',
+        isError: true,
+      );
+      return;
+    }
+    if (_paymentMethod != 'CASH' && _bankAccountId == null) {
+      showAppSnackBar(
+        context,
+        'Select which account this payment should hit',
         isError: true,
       );
       return;
@@ -750,6 +758,52 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                           ),
                         ],
                       ),
+                      // Only for non-cash methods, so the sale actually
+                      // shows up on that account's Bank Statement instead
+                      // of payment method being purely cosmetic.
+                      if (_paymentMethod != 'CASH') ...[
+                        const SizedBox(height: 10),
+                        Builder(
+                          builder: (context) {
+                            final bankAccounts = context
+                                .watch<BankingProvider>()
+                                .accounts
+                                .where((a) => a.isActive)
+                                .toList();
+                            if (bankAccounts.isEmpty) {
+                              return Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.warning.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  'No bank accounts yet — add one in Banking, or switch this to Cash.',
+                                  style: TextStyle(fontSize: 12, color: AppColors.warning),
+                                ),
+                              );
+                            }
+                            return DropdownButtonFormField<int>(
+                              initialValue: bankAccounts.any((a) => a.id == _bankAccountId)
+                                  ? _bankAccountId
+                                  : null,
+                              decoration: const InputDecoration(labelText: 'Account *'),
+                              items: bankAccounts
+                                  .map(
+                                    (a) => DropdownMenuItem(
+                                      value: a.id,
+                                      child: Text(
+                                        a.bankName.isNotEmpty ? '${a.accountName} (${a.bankName})' : a.accountName,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) => setState(() => _bankAccountId = v),
+                            );
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       _totalsRow(
                         _isAdvance ? 'Advance (Overpaid)' : 'Balance Due',

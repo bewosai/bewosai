@@ -1,10 +1,13 @@
 import { X } from "lucide-react";
+import { useEscToClose } from "../../hooks/useEscToClose";
 
 /**
  * Reusable modal container.
  * Props: title, onClose, size ("sm" | "md" | "lg" | "xl"), children, footer
  */
 export default function Modal({ title, onClose, size = "md", children, footer }) {
+  useEscToClose(onClose);
+
   const widths = {
     sm: "max-w-md",
     md: "max-w-xl",

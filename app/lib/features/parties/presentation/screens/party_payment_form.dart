@@ -105,7 +105,7 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SheetHeader(title: _isIn ? 'Receive' : 'Give'),
+          SheetHeader(title: _isIn ? 'To Receive' : 'To Give'),
           Text(
             _isIn ? 'Record money received from a customer' : 'Record money paid to a supplier',
             textAlign: TextAlign.center,

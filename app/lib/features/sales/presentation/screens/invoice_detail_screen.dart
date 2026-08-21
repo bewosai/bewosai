@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/calendar/nepali_calendar_service.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../shared/pdf/bill_pdf.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/models/sale_model.dart';
 import '../../data/services/sale_service.dart';
 import '../providers/sale_provider.dart';
@@ -74,6 +78,53 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  void _print() {
+    final s = _sale;
+    if (s == null) return;
+    final business = context.read<AuthProvider>().currentBusiness;
+    final paymentModeLabel = s.paidAmount <= 0 && s.dueAmount > 0
+        ? 'Credit'
+        : (AppConstants.paymentMethodLabels[s.paymentMethod] ?? s.paymentMethod);
+    showBillPrintDialog(
+      context,
+      documentTitle: 'Sales Details',
+      data: BillPdfData(
+        businessName: business?.name ?? '',
+        businessPhone: business?.phone ?? '',
+        businessAddress: business?.address ?? '',
+        businessPan: business?.panNumber ?? '',
+        number: s.invoiceNumber,
+        partyLabel: 'Party',
+        partyName: s.customerName.isNotEmpty ? s.customerName : 'Walk-in',
+        partyPan: s.partyPan,
+        partyAddress: s.partyAddress,
+        date: Formatters.date(s.saleDate),
+        miti: s.saleDate != null ? NepaliCalendarService.fromDateTime(s.saleDate!) : null,
+        dueDate: s.dueDate != null ? Formatters.date(s.dueDate) : null,
+        paymentModeLabel: paymentModeLabel,
+        items: s.items
+            .map(
+              (i) => BillPdfItem(
+                name: i.productName,
+                quantity: i.quantity,
+                unitPrice: i.unitPrice,
+                discountAmount: i.discountAmount,
+                total: i.total,
+              ),
+            )
+            .toList(),
+        subtotal: s.subtotal,
+        discount: s.discount,
+        taxRate: s.taxRate,
+        taxAmount: s.taxAmount,
+        total: s.total,
+        paidAmount: s.paidAmount,
+        dueAmount: s.dueAmount,
+        notes: s.notes,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = _sale;
@@ -82,6 +133,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         title: Text(s?.invoiceNumber ?? 'Invoice'),
         actions: [
           if (s != null) ...[
+            IconButton(
+              icon: const Icon(Icons.print_outlined),
+              onPressed: _print,
+            ),
             IconButton(
               icon: const Icon(Icons.share_outlined),
               onPressed: _shareWhatsApp,

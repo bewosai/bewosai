@@ -63,6 +63,32 @@ html, body, #root { height: 100%; }
   .no-print { display: none !important; }
   body { background: white !important; color: #0a2540 !important; }
   .print-only { display: block !important; }
+
+  /* Printing a bill (Sales/Purchases PrintModal, id="print-area") must show
+     only the bill itself — before this, the whole app underneath the modal
+     (sidebar, topbar, dashboard content) printed right along with it, since
+     nothing hid the rest of the document. Force A4 so the customer's copy
+     is a fixed, predictable size regardless of their printer/browser
+     default page size. */
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body:has(#print-area) * {
+    visibility: hidden;
+  }
+  #print-area,
+  #print-area * {
+    visibility: visible;
+  }
+  #print-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: white !important;
+    color: #1f2937 !important;
+  }
 }
 .print-only { display: none; }
 

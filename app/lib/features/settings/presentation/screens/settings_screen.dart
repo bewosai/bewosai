@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/features/feature_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../inventory/presentation/screens/inventory_import_screen.dart';
+import '../../../parties/presentation/screens/party_import_screen.dart';
 import '../../../reports/presentation/screens/reports_hub_screen.dart';
 import 'settings_account_screen.dart';
 import 'settings_advanced_screen.dart';
@@ -56,6 +59,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final features = context.watch<FeatureProvider>();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings'), actions: const [HomeLogoButton()]),
@@ -115,6 +119,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ]),
+            if (features.isEnabled('excel_import')) ...[
+              const SizedBox(height: 20),
+              const _GroupLabel('DATA'),
+              _MenuGroup(items: [
+                _MenuItem(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Bulk Import Products',
+                  subtitle: 'Add many products at once from an Excel file',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const InventoryImportScreen()),
+                  ),
+                ),
+                _MenuItem(
+                  icon: Icons.people_outline,
+                  label: 'Bulk Import Parties',
+                  subtitle: 'Add many customers/suppliers at once from an Excel file',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const PartyImportScreen()),
+                  ),
+                ),
+              ]),
+            ],
             const SizedBox(height: 20),
             const _GroupLabel('DANGER ZONE'),
             _MenuGroup(items: [

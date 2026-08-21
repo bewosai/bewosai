@@ -2,10 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/calendar/nepali_calendar_service.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
+import '../../../../shared/pdf/bill_pdf.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../banking/presentation/providers/banking_provider.dart';
@@ -36,6 +38,51 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
       context.read<PartyProvider>().load();
       context.read<InventoryProvider>().load();
     });
+  }
+
+  void _print(Purchase p) {
+    final business = context.read<AuthProvider>().currentBusiness;
+    final paymentModeLabel = p.paidAmount <= 0 && p.dueAmount > 0
+        ? 'Credit'
+        : (AppConstants.paymentMethodLabels[p.paymentMethod] ?? p.paymentMethod);
+    showBillPrintDialog(
+      context,
+      documentTitle: 'Purchase Details',
+      data: BillPdfData(
+        businessName: business?.name ?? '',
+        businessPhone: business?.phone ?? '',
+        businessAddress: business?.address ?? '',
+        businessPan: business?.panNumber ?? '',
+        number: p.billNumber,
+        partyLabel: 'Supplier',
+        partyName: p.supplierName.isNotEmpty ? p.supplierName : 'Unknown',
+        partyPan: p.supplierPan,
+        partyAddress: p.supplierAddress,
+        date: Formatters.date(p.purchaseDate),
+        miti: p.purchaseDate != null ? NepaliCalendarService.fromDateTime(p.purchaseDate!) : null,
+        dueDate: p.dueDate != null ? Formatters.date(p.dueDate) : null,
+        paymentModeLabel: paymentModeLabel,
+        items: p.items
+            .map(
+              (i) => BillPdfItem(
+                name: i.productName,
+                quantity: i.quantity,
+                unitPrice: i.unitPrice,
+                discountAmount: i.discountAmount,
+                total: i.total,
+              ),
+            )
+            .toList(),
+        subtotal: p.subtotal,
+        discount: p.discount,
+        taxRate: p.taxRate,
+        taxAmount: p.taxAmount,
+        total: p.total,
+        paidAmount: p.paidAmount,
+        dueAmount: p.dueAmount,
+        notes: p.notes,
+      ),
+    );
   }
 
   List<Purchase> _filtered(List<Purchase> purchases) {
@@ -190,6 +237,14 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                                     const SizedBox(height: 4),
                                     StatusBadge(label: p.status),
                                   ],
+                                ),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.print_outlined,
+                                    color: AppColors.textSecondary,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => _print(p),
                                 ),
                                 IconButton(
                                   icon: const Icon(

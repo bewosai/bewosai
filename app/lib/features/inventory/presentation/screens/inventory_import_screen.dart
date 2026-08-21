@@ -10,11 +10,14 @@ import '../providers/inventory_provider.dart';
 
 const _kTemplateHeaders = [
   'name',
+  'category',
+  'unit',
   'sale_price',
   'purchase_price',
   'stock_quantity',
   'low_stock_threshold',
   'barcode',
+  'hs_code',
   'description',
 ];
 
@@ -44,7 +47,7 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
       final path = await ExcelImportUtils.writeTemplate(
         sheetName: 'Products',
         headers: _kTemplateHeaders,
-        exampleRow: const ['Coca Cola 500ml', '60', '45', '100', '10', '12345678', 'Cold drink'],
+        exampleRow: const ['Coca Cola 500ml', 'Beverages', 'Piece', '60', '45', '100', '10', '12345678', '22021010', 'Cold drink'],
         fileName: 'bewosai_products_template.xlsx',
       );
       if (!mounted) return;
@@ -87,11 +90,16 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
       }
       rows.add({
         'name': name,
+        // Matched (or created) by name on this business — see
+        // ProductBulkImportView on the backend.
+        'category': map['category'] ?? '',
+        'unit': map['unit'] ?? '',
         'sale_price': double.tryParse(rawSalePrice) ?? 0,
         'purchase_price': double.tryParse(map['purchase_price'] ?? '') ?? 0,
         'stock_quantity': double.tryParse(map['stock_quantity'] ?? '') ?? 0,
         'low_stock_threshold': double.tryParse(map['low_stock_threshold'] ?? '') ?? 5,
         'barcode': map['barcode'] ?? '',
+        'hs_code': map['hs_code'] ?? '',
         'description': map['description'] ?? '',
       });
     }
@@ -137,6 +145,38 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
     });
   }
 
+  // Writes every skipped row back out as .xlsx (original columns + why it
+  // was skipped) so the user can fix just those rows and re-upload,
+  // instead of re-checking a whole spreadsheet by hand.
+  Future<void> _downloadFailedRows() async {
+    final details = (_result?['skipped_details'] as List?) ?? [];
+    if (details.isEmpty) return;
+    final columns = <String>{};
+    for (final d in details) {
+      final row = (d as Map)['row'] as Map?;
+      if (row != null) columns.addAll(row.keys.map((k) => k.toString()));
+    }
+    final headers = [...columns, 'reason'];
+    try {
+      final path = await ExcelImportUtils.writeRows(
+        sheetName: 'Failed rows',
+        headers: headers,
+        rows: [
+          for (final d in details)
+            [
+              for (final c in columns) ((d as Map)['row'] as Map?)?[c]?.toString() ?? '',
+              (d as Map)['reason']?.toString() ?? '',
+            ],
+        ],
+        fileName: 'products_import_failed_rows.xlsx',
+      );
+      if (!mounted) return;
+      await SharePlus.instance.share(ShareParams(files: [XFile(path)], text: 'Failed product import rows'));
+    } catch (_) {
+      if (mounted) showAppSnackBar(context, 'Could not create the file', isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FeatureGate(
@@ -153,6 +193,9 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
                   itemLabelSingular: 'product',
                   itemLabelPlural: 'products',
                   onImportMore: _reset,
+                  onDownloadFailedRows: ((_result!['skipped_details'] as List?)?.isNotEmpty ?? false)
+                      ? _downloadFailedRows
+                      : null,
                 )
               else if (_rows != null)
                 ImportPreviewSection(

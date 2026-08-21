@@ -134,6 +134,38 @@ class _PartyImportScreenState extends State<PartyImportScreen> {
     });
   }
 
+  // Writes every skipped row back out as .xlsx (original columns + why it
+  // was skipped) so the user can fix just those rows and re-upload,
+  // instead of re-checking a whole spreadsheet by hand.
+  Future<void> _downloadFailedRows() async {
+    final details = (_result?['skipped_details'] as List?) ?? [];
+    if (details.isEmpty) return;
+    final columns = <String>{};
+    for (final d in details) {
+      final row = (d as Map)['row'] as Map?;
+      if (row != null) columns.addAll(row.keys.map((k) => k.toString()));
+    }
+    final headers = [...columns, 'reason'];
+    try {
+      final path = await ExcelImportUtils.writeRows(
+        sheetName: 'Failed rows',
+        headers: headers,
+        rows: [
+          for (final d in details)
+            [
+              for (final c in columns) ((d as Map)['row'] as Map?)?[c]?.toString() ?? '',
+              (d as Map)['reason']?.toString() ?? '',
+            ],
+        ],
+        fileName: 'parties_import_failed_rows.xlsx',
+      );
+      if (!mounted) return;
+      await SharePlus.instance.share(ShareParams(files: [XFile(path)], text: 'Failed party import rows'));
+    } catch (_) {
+      if (mounted) showAppSnackBar(context, 'Could not create the file', isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FeatureGate(
@@ -150,6 +182,9 @@ class _PartyImportScreenState extends State<PartyImportScreen> {
                   itemLabelSingular: 'party',
                   itemLabelPlural: 'parties',
                   onImportMore: _reset,
+                  onDownloadFailedRows: ((_result!['skipped_details'] as List?)?.isNotEmpty ?? false)
+                      ? _downloadFailedRows
+                      : null,
                 )
               else if (_rows != null)
                 ImportPreviewSection(

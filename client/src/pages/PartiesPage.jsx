@@ -1,5 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import * as XLSX from "xlsx";
 import { useAuth } from "../context/AuthContext";
+import { useEscToClose } from "../hooks/useEscToClose";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount } from "../context/AppSettingsContext";
 import PageHeader from "../components/shared/PageHeader";
@@ -16,8 +19,22 @@ import {
   Users, UserCheck, Truck, Plus, Search, X, ChevronRight,
   Phone, Mail, MapPin, TrendingUp, TrendingDown, DollarSign,
   Edit2, Trash2, BookOpen, ArrowDownLeft, ArrowUpRight,
-  ShoppingCart, Package, Loader,
+  ShoppingCart, Package, Loader, Upload, Download,
 } from "lucide-react";
+
+/* ── Export current parties to .xlsx — same columns the bulk-import
+   template uses, so an exported file can be edited and re-imported. ── */
+function exportPartiesToExcel(parties) {
+  const headers = ["name", "party_type", "phone", "email", "address", "opening_balance"];
+  const rows = parties.map(p => [
+    p.name, p.party_type, p.phone || "", p.email || "", p.address || "", p.opening_balance ?? 0,
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws["!cols"] = headers.map(() => ({ wch: 20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Parties");
+  XLSX.writeFile(wb, `parties_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
 
 /* ── helpers ── */
 const TYPE_META = {
@@ -28,6 +45,7 @@ const TYPE_META = {
 
 /* ── Party form modal ── */
 function PartyModal({ initial, onClose, onSaved }) {
+  useEscToClose(onClose);
   const { t } = useTranslation();
   const [form, setForm] = useState({
     name: "", party_type: "CUSTOMER", phone: "", email: "",
@@ -141,7 +159,7 @@ function PartyCard({ party, onEdit, onDelete, onLedger }) {
             {balanceLabel}
           </p>
           <p className="text-[10px] text-navy-500">
-            {balance > 0 ? "Receivable" : balance < 0 ? "Payable" : "Settled"}
+            {balance > 0 ? "To Receive" : balance < 0 ? "To Give" : "Settled"}
           </p>
         </div>
       </div>
@@ -296,6 +314,7 @@ export default function PartiesPage() {
   const { currentBusiness } = useAuth();
   const { t } = useTranslation();
   const maskAmount = usePrivateAmount();
+  const navigate = useNavigate();
 
   const [parties, setParties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -305,10 +324,20 @@ export default function PartiesPage() {
   const [editing, setEditing] = useState(null);
   const [ledgerParty, setLedgerParty] = useState(null);
   const [deletingParty, setDeletingParty] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Alt+N (see useKeyboardShortcuts) lands here as ?action=add.
+  useEffect(() => {
+    if (searchParams.get("action") === "add") {
+      setEditing(null);
+      setShowModal(true);
+      setSearchParams((prev) => { prev.delete("action"); return prev; }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const load = () => {
     setLoading(true);
-    partiesApi.list({ business: currentBusiness?.id })
+    partiesApi.list({ business: currentBusiness?.id, page_size: 1000 })
       .then((r) => setParties(r.data.results ?? r.data))
       .finally(() => setLoading(false));
   };
@@ -361,9 +390,17 @@ export default function PartiesPage() {
         title={t("parties")}
         subtitle="Manage customers, suppliers, and track balances."
         action={
-          <PrimaryButton onClick={() => { setEditing(null); setShowModal(true); }}>
-            <Plus className="h-4 w-4" /> Add Party
-          </PrimaryButton>
+          <div className="flex flex-wrap gap-2">
+            <PrimaryButton variant="outline" onClick={() => exportPartiesToExcel(parties)} disabled={parties.length === 0}>
+              <Download className="h-4 w-4" /> Export
+            </PrimaryButton>
+            <PrimaryButton variant="outline" onClick={() => navigate("/import?type=parties")}>
+              <Upload className="h-4 w-4" /> Bulk Import
+            </PrimaryButton>
+            <PrimaryButton onClick={() => { setEditing(null); setShowModal(true); }}>
+              <Plus className="h-4 w-4" /> Add Party
+            </PrimaryButton>
+          </div>
         }
       />
 
@@ -392,7 +429,7 @@ export default function PartiesPage() {
         </div>
         <div className="rounded-2xl border border-orange-500/20 bg-orange-500/5 p-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-navy-400">Receivable</p>
+            <p className="text-xs text-navy-400">To Receive</p>
             <TrendingUp className="h-4 w-4 text-orange-400" />
           </div>
           <p className="mt-1.5 text-xl font-bold text-orange-400">

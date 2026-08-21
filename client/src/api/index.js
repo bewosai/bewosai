@@ -43,6 +43,18 @@ api.interceptors.response.use(
         window.location.href = "/login";
       }
     }
+    // The backend's HasActiveSubscription permission blocks every
+    // business-scoped endpoint with this exact 403 once a trial/license
+    // lapses. LicenseContext only checks status on login/business-switch, so
+    // if it lapses mid-session this is the only signal we get — broadcast it
+    // so LicenseContext can flip state and ProtectedRoute can redirect.
+    if (
+      err.response?.status === 403 &&
+      typeof err.response?.data?.detail === "string" &&
+      err.response.data.detail.includes("license code")
+    ) {
+      window.dispatchEvent(new Event("bewosai:subscription-required"));
+    }
     return Promise.reject(err);
   }
 );
@@ -75,8 +87,12 @@ export const inventory = {
   bulkImportProducts: (products) => api.post("/inventory/products/bulk-import/", { products }),
   categories: (p) => api.get("/inventory/categories/", { params: p }),
   createCategory: (d) => api.post("/inventory/categories/", d),
+  updateCategory: (id, d) => api.patch(`/inventory/categories/${id}/`, d),
+  deleteCategory: (id) => api.delete(`/inventory/categories/${id}/`),
   units: (p) => api.get("/inventory/units/", { params: p }),
   createUnit: (d) => api.post("/inventory/units/", d),
+  updateUnit: (id, d) => api.patch(`/inventory/units/${id}/`, d),
+  deleteUnit: (id) => api.delete(`/inventory/units/${id}/`),
   stockMovements: (p) => api.get("/inventory/stock-movements/", { params: p }),
   addStockMovement: (d) => api.post("/inventory/stock-movements/", d),
 };

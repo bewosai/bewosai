@@ -45,6 +45,9 @@ class Purchase {
   final String billNumber;
   final int? supplier;
   final String supplierName;
+  final String supplierPhone;
+  final String supplierPan;
+  final String supplierAddress;
   final DateTime? purchaseDate;
   final DateTime? dueDate;
   final double subtotal;
@@ -68,6 +71,9 @@ class Purchase {
     required this.billNumber,
     this.supplier,
     required this.supplierName,
+    this.supplierPhone = '',
+    this.supplierPan = '',
+    this.supplierAddress = '',
     this.purchaseDate,
     this.dueDate,
     required this.subtotal,
@@ -92,6 +98,9 @@ class Purchase {
         billNumber: json['bill_number'] as String? ?? '',
         supplier: json['supplier'] as int?,
         supplierName: json['supplier_name'] as String? ?? '',
+        supplierPhone: json['supplier_phone'] as String? ?? '',
+        supplierPan: json['supplier_pan'] as String? ?? '',
+        supplierAddress: json['supplier_address'] as String? ?? '',
         purchaseDate: Formatters.parseDate(json['purchase_date'] as String?),
         dueDate: Formatters.parseDate(json['due_date'] as String?),
         subtotal: Formatters.toDouble(json['subtotal']),

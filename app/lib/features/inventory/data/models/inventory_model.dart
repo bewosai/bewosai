@@ -152,6 +152,9 @@ class Product {
   final double lowStockThreshold;
   final bool isLowStock;
   final String barcode;
+  /// Harmonized System code — Nepal customs/VAT classification, shown on
+  /// some tax invoices. Optional.
+  final String hsCode;
   final String? image;
   final bool isActive;
   final DateTime? createdAt;
@@ -171,6 +174,7 @@ class Product {
     required this.lowStockThreshold,
     required this.isLowStock,
     required this.barcode,
+    this.hsCode = '',
     this.image,
     required this.isActive,
     this.createdAt,
@@ -199,6 +203,7 @@ class Product {
       isLowStock: json['is_low_stock'] == true ||
           json['is_low_stock']?.toString().toLowerCase() == 'true',
       barcode: json['barcode']?.toString() ?? '',
+      hsCode: json['hs_code']?.toString() ?? '',
       image: json['image']?.toString(),
       isActive: json['is_active'] == null
           ? true
@@ -222,6 +227,7 @@ class Product {
       'stock_quantity': isSvc ? 0 : stockQuantity,
       'low_stock_threshold': isSvc ? 0 : lowStockThreshold,
       'barcode': barcode,
+      'hs_code': hsCode,
       'is_active': isActive,
     };
   }
@@ -244,6 +250,7 @@ class Product {
         'low_stock_threshold': lowStockThreshold,
         'is_low_stock': isLowStock,
         'barcode': barcode,
+        'hs_code': hsCode,
         'image': image,
         'is_active': isActive,
         'created_at': createdAt?.toIso8601String(),
@@ -264,6 +271,7 @@ class Product {
     double? lowStockThreshold,
     bool? isLowStock,
     String? barcode,
+    String? hsCode,
     String? image,
     bool? isActive,
     DateTime? createdAt,
@@ -285,6 +293,7 @@ class Product {
       lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
       isLowStock: isLowStock ?? this.isLowStock,
       barcode: barcode ?? this.barcode,
+      hsCode: hsCode ?? this.hsCode,
       image: image ?? this.image,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,

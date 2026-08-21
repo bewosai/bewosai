@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { inventory as inventoryApi, parties as partiesApi } from "../api/index";
 import { useTranslation } from "../utils/translations";
@@ -8,15 +9,24 @@ import {
   Package, Users, ChevronRight, RefreshCw, Loader, Lock, Crown,
 } from "lucide-react";
 
+// Matches the backend's ProductBulkImportView/PartyBulkImportView.MAX_ROWS —
+// checked here too so an oversized file is rejected immediately instead of
+// only after a round-trip to the server.
+const MAX_IMPORT_ROWS = 500;
+const MAX_IMPORT_BYTES = 1024 * 1024; // 1MB — matches Flutter's ExcelImportUtils.maxBytes
+
 /* ── helpers ── */
 function downloadTemplate(type) {
   let headers, rows, filename;
 
   if (type === "products") {
-    headers = ["name", "sale_price", "purchase_price", "stock_quantity", "low_stock_threshold", "barcode", "description"];
+    // category/unit are matched (or created) by name on your account — leave
+    // blank if a product doesn't need one. hs_code is the Nepal customs/VAT
+    // classification code, also optional.
+    headers = ["name", "category", "unit", "sale_price", "purchase_price", "stock_quantity", "low_stock_threshold", "barcode", "hs_code", "description"];
     rows = [
-      ["Coca Cola 500ml", 60, 45, 100, 10, "12345678", "Cold drink"],
-      ["Biscuit Pack", 25, 18, 200, 20, "", "Snack item"],
+      ["Coca Cola 500ml", "Beverages", "Piece", 60, 45, 100, 10, "12345678", "22021010", "Cold drink"],
+      ["Biscuit Pack", "Snacks", "Piece", 25, 18, 200, 20, "", "", "Snack item"],
     ];
     filename = "products_template.xlsx";
   } else {
@@ -33,6 +43,20 @@ function downloadTemplate(type) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, type === "products" ? "Products" : "Parties");
   XLSX.writeFile(wb, filename);
+}
+
+// Writes every skipped row back out as .xlsx (original columns + why it was
+// skipped) so the user can fix just those rows and re-upload, instead of
+// re-checking a whole spreadsheet by hand against a list capped at 5 lines.
+function downloadFailedRows(skippedDetails, type) {
+  const columns = [...new Set(skippedDetails.flatMap(s => Object.keys(s.row || {})))];
+  const headers = [...columns, "reason"];
+  const rows = skippedDetails.map(s => [...columns.map(c => s.row?.[c] ?? ""), s.reason]);
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws["!cols"] = headers.map(() => ({ wch: 20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Failed rows");
+  XLSX.writeFile(wb, `${type}_import_failed_rows.xlsx`);
 }
 
 function parseExcel(file, type) {
@@ -66,11 +90,11 @@ function ImportTab({ type }) {
 
   const isProducts = type === "products";
   const previewCols = isProducts
-    ? ["name", "sale_price", "purchase_price", "stock_quantity"]
+    ? ["name", "category", "sale_price", "purchase_price", "stock_quantity"]
     : ["name", "party_type", "phone", "email", "opening_balance"];
 
   const colLabel = {
-    name: "Name", sale_price: "Sale Price", purchase_price: "Buy Price",
+    name: "Name", category: "Category", sale_price: "Sale Price", purchase_price: "Buy Price",
     stock_quantity: "Stock", party_type: "Type", phone: "Phone",
     email: "Email", opening_balance: "Opening Bal",
   };
@@ -79,9 +103,17 @@ function ImportTab({ type }) {
     if (!file) return;
     setResult(null);
     setErrors([]);
+    if (file.size > MAX_IMPORT_BYTES) {
+      setErrors([`This file is ${(file.size / (1024 * 1024)).toFixed(1)}MB — only files up to 1MB are supported.`]);
+      setFileName(file.name);
+      return;
+    }
     try {
       const parsed = await parseExcel(file, type);
       const errs = [];
+      if (parsed.length > MAX_IMPORT_ROWS) {
+        errs.push(`This file has ${parsed.length} rows — import is limited to ${MAX_IMPORT_ROWS} at a time. Split it into smaller files and import each separately.`);
+      }
       parsed.forEach((r, i) => {
         if (!r.name) errs.push(`Row ${i + 2}: "name" is required`);
         if (isProducts && r.sale_price && isNaN(Number(r.sale_price)))
@@ -163,11 +195,19 @@ function ImportTab({ type }) {
               {result.skipped > 0 && ` ${result.skipped} rows skipped.`}
             </p>
             {result.skipped_details?.length > 0 && (
-              <ul className="mt-2 space-y-1">
-                {result.skipped_details.slice(0, 5).map((s, i) => (
-                  <li key={i} className="text-xs text-red-400">• {s.reason} ({s.row?.name || "unknown"})</li>
-                ))}
-              </ul>
+              <>
+                <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                  {result.skipped_details.map((s, i) => (
+                    <li key={i} className="text-xs text-red-400">• {s.reason} ({s.row?.name || "unknown"})</li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => downloadFailedRows(result.skipped_details, type)}
+                  className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-orange-400 hover:underline"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download failed rows to fix &amp; re-upload
+                </button>
+              </>
             )}
             <button onClick={reset} className="mt-3 text-xs text-orange-400 hover:underline">Import more</button>
           </div>
@@ -195,7 +235,7 @@ function ImportTab({ type }) {
                 <p className="font-semibold text-white text-sm">
                   {language === "ne" ? "फाइल छान्नुहोस् वा यहाँ छोड्नुहोस्" : "Click to select or drag & drop file here"}
                 </p>
-                <p className="text-xs text-navy-500 mt-1">.xlsx, .xls, .csv supported</p>
+                <p className="text-xs text-navy-500 mt-1">Only Excel files up to {MAX_IMPORT_ROWS} entries & 1MB are supported.</p>
               </>
             )}
           </div>
@@ -307,7 +347,10 @@ function UpgradePrompt() {
 export default function ImportPage() {
   const { language } = useTranslation();
   const { currentBusiness } = useAuth();
-  const [activeTab, setActiveTab] = useState("products");
+  const [searchParams] = useSearchParams();
+  // Lets Inventory/Parties deep-link straight to the right tab (/import?type=parties)
+  // instead of always landing on Products regardless of where the user came from.
+  const [activeTab, setActiveTab] = useState(searchParams.get("type") === "parties" ? "parties" : "products");
   const isPremium = currentBusiness?.plan === "PREMIUM";
 
   const tabs = [
