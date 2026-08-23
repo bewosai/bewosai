@@ -9,6 +9,7 @@ import {
   Upload, Save, Bell, Shield, Palette, User, Check, FileText, BarChart3, ChevronRight,
   FileSpreadsheet,
 } from "lucide-react";
+import PhoneInput from "../components/common/PhoneInput";
 
 function SettingCard({ title, icon: Icon, children }) {
   return (
@@ -308,7 +309,6 @@ export default function SettingsPage() {
             {[
               { key: "name", label: t("businessName"), placeholder: "My Business" },
               { key: "business_type", label: t("businessType"), placeholder: "Retail, Wholesale..." },
-              { key: "phone", label: t("phone"), placeholder: "+977-..." },
               { key: "address", label: t("address"), placeholder: "Kathmandu, Nepal" },
             ].map(({ key, label, placeholder }) => (
               <div key={key}>
@@ -321,6 +321,10 @@ export default function SettingsPage() {
                 />
               </div>
             ))}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-navy-400">{t("phone")}</label>
+              <PhoneInput value={businessForm.phone} onChange={(phone) => setBusinessForm((f) => ({ ...f, phone }))} />
+            </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-navy-400">
                 {language === "ne" ? "पूर्वनिर्धारित कर दर (%)" : "Default Tax Rate (%)"}
@@ -449,12 +453,7 @@ export default function SettingsPage() {
               <label className="mb-1 block text-xs font-medium text-navy-400">
                 {language === "ne" ? "फोन नम्बर" : "Phone Number"}
               </label>
-              <input
-                value={profileForm.phone}
-                onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))}
-                placeholder="+977-..."
-                className="w-full rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
-              />
+              <PhoneInput value={profileForm.phone} onChange={(phone) => setProfileForm(f => ({ ...f, phone }))} />
             </div>
           </div>
         </SettingCard>

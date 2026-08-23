@@ -229,6 +229,8 @@ export default function ExpensesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [viewReceiptImage, setViewReceiptImage] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -455,12 +457,21 @@ export default function ExpensesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-navy-900 border border-navy-800 shadow-2xl p-6 space-y-4">
             <p className="text-white text-sm">Delete this expense? This cannot be undone.</p>
+            {deleteError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{deleteError}</p>}
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setDeleteItem(null)} className="px-4 py-2 rounded-lg border border-navy-700 text-navy-400 hover:bg-navy-800 text-sm">Cancel</button>
-              <button onClick={async () => {
-                try { await expensesApi.delete(deleteItem.id); load(); } catch {}
-                setDeleteItem(null);
-              }} className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 text-sm">Delete</button>
+              <button disabled={deleting} onClick={() => { setDeleteItem(null); setDeleteError(""); }} className="px-4 py-2 rounded-lg border border-navy-700 text-navy-400 hover:bg-navy-800 text-sm disabled:opacity-50">Cancel</button>
+              <button disabled={deleting} onClick={async () => {
+                setDeleting(true);
+                setDeleteError("");
+                try {
+                  await expensesApi.delete(deleteItem.id);
+                  load();
+                  setDeleteItem(null);
+                } catch (e) {
+                  setDeleteError(e.response?.data?.error || e.response?.data?.detail || "Couldn't delete this expense. Please try again.");
+                }
+                setDeleting(false);
+              }} className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 text-sm disabled:opacity-50">{deleting ? "Deleting…" : "Delete"}</button>
             </div>
           </div>
         </div>

@@ -19,7 +19,7 @@ const COLOR_CLASSES = {
   red: "bg-red-500/10 text-red-400",
 };
 
-function ConfirmDialog({ title, body, onConfirm, onCancel, dangerous }) {
+function ConfirmDialog({ title, body, error, busy, onConfirm, onCancel, dangerous }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-navy-800 bg-navy-900 p-6 shadow-2xl">
@@ -28,10 +28,11 @@ function ConfirmDialog({ title, body, onConfirm, onCancel, dangerous }) {
         </div>
         <h3 className="text-center text-base font-bold text-white">{title}</h3>
         <p className="mt-2 text-center text-sm text-navy-400">{body}</p>
+        {error && <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-center text-xs text-red-400">{error}</p>}
         <div className="mt-5 flex gap-3">
-          <button onClick={onCancel} className="flex-1 rounded-xl border border-navy-700 py-2.5 text-sm font-medium text-navy-400 hover:bg-navy-800">Cancel</button>
-          <button onClick={onConfirm} className={`flex-1 rounded-xl py-2.5 text-sm font-semibold text-white ${dangerous ? "bg-red-500 hover:bg-red-600" : "bg-orange-500 hover:bg-orange-600"}`}>
-            {dangerous ? "Delete Forever" : "Confirm"}
+          <button disabled={busy} onClick={onCancel} className="flex-1 rounded-xl border border-navy-700 py-2.5 text-sm font-medium text-navy-400 hover:bg-navy-800 disabled:opacity-50">Cancel</button>
+          <button disabled={busy} onClick={onConfirm} className={`flex-1 rounded-xl py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${dangerous ? "bg-red-500 hover:bg-red-600" : "bg-orange-500 hover:bg-orange-600"}`}>
+            {busy ? "Working…" : dangerous ? "Delete Forever" : "Confirm"}
           </button>
         </div>
       </div>
@@ -45,18 +46,36 @@ export default function RecycleBinPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirm, setConfirm] = useState(null);
+  const [actionError, setActionError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     recycleBin.list().then((r) => setItems(r.data || [])).catch(() => setItems([])).finally(() => setLoading(false));
   }, []);
 
   const doRestore = async (item) => {
-    try { await recycleBin.restore(item.type, item.id); setItems((p) => p.filter((i) => !(i.type === item.type && i.id === item.id))); } catch {}
-    setConfirm(null);
+    setBusy(true);
+    setActionError("");
+    try {
+      await recycleBin.restore(item.type, item.id);
+      setItems((p) => p.filter((i) => !(i.type === item.type && i.id === item.id)));
+      setConfirm(null);
+    } catch (e) {
+      setActionError(e.response?.data?.error || e.response?.data?.detail || `Couldn't restore "${item.label}". Please try again.`);
+    }
+    setBusy(false);
   };
   const doDelete = async (item) => {
-    try { await recycleBin.permanentDelete(item.type, item.id); setItems((p) => p.filter((i) => !(i.type === item.type && i.id === item.id))); } catch {}
-    setConfirm(null);
+    setBusy(true);
+    setActionError("");
+    try {
+      await recycleBin.permanentDelete(item.type, item.id);
+      setItems((p) => p.filter((i) => !(i.type === item.type && i.id === item.id)));
+      setConfirm(null);
+    } catch (e) {
+      setActionError(e.response?.data?.error || e.response?.data?.detail || `Couldn't permanently delete "${item.label}". Please try again.`);
+    }
+    setBusy(false);
   };
 
   return (
@@ -114,14 +133,16 @@ export default function RecycleBinPage() {
         <ConfirmDialog
           title={language === "ne" ? "पुनर्स्थापना गर्नुहुन्छ?" : "Restore this record?"}
           body={`"${confirm.item.label}" ${language === "ne" ? "पुनर्स्थापना गरिनेछ।" : "will be restored."}`}
-          onConfirm={() => doRestore(confirm.item)} onCancel={() => setConfirm(null)} dangerous={false}
+          error={actionError} busy={busy}
+          onConfirm={() => doRestore(confirm.item)} onCancel={() => { setConfirm(null); setActionError(""); }} dangerous={false}
         />
       )}
       {confirm?.type === "delete" && (
         <ConfirmDialog
           title={t("permanentDeleteConfirmBody")}
           body={`"${confirm.item.label}" ${language === "ne" ? "सधैंका लागि मेटिनेछ।" : "will be permanently deleted."}`}
-          onConfirm={() => doDelete(confirm.item)} onCancel={() => setConfirm(null)} dangerous={true}
+          error={actionError} busy={busy}
+          onConfirm={() => doDelete(confirm.item)} onCancel={() => { setConfirm(null); setActionError(""); }} dangerous={true}
         />
       )}
     </div>

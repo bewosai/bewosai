@@ -4,6 +4,12 @@ import { useAuth } from "../context/AuthContext";
 import { auth as authApi } from "../api";
 import bewosaiLogo from "../assessts/images/bewosai.png";
 import { Building2, ArrowRight, ChevronLeft } from "lucide-react";
+import PhoneInput from "../components/common/PhoneInput";
+
+const BUSINESS_TYPE_PRESETS = [
+  "Retail Shop", "Restaurant", "Pharmacy", "Wholesale", "Grocery",
+  "Electronics", "Hardware", "Service", "Manufacturing", "Other",
+];
 
 export default function CreateBusinessPage() {
   const { addBusiness, businesses } = useAuth();
@@ -11,6 +17,7 @@ export default function CreateBusinessPage() {
   const [form, setForm] = useState({ name: "", business_type: "", phone: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [customType, setCustomType] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -62,13 +69,43 @@ export default function CreateBusinessPage() {
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-navy-200">Business Type <span className="text-navy-500">(optional)</span></label>
-              <input value={form.business_type} onChange={(e) => setForm({ ...form, business_type: e.target.value })}
-                placeholder="Retail, Restaurant, Service..." className={field} />
+              <div className="flex flex-wrap gap-1.5">
+                {BUSINESS_TYPE_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      if (preset === "Other") {
+                        setCustomType(true);
+                        setForm({ ...form, business_type: "" });
+                      } else {
+                        setCustomType(false);
+                        setForm({ ...form, business_type: preset });
+                      }
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                      (preset === "Other" ? customType : !customType && form.business_type === preset)
+                        ? "border-orange-500 bg-orange-500/10 text-orange-400"
+                        : "border-navy-700 text-navy-400 hover:border-navy-600"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              {customType && (
+                <input
+                  value={form.business_type}
+                  onChange={(e) => setForm({ ...form, business_type: e.target.value })}
+                  placeholder="Describe your business type"
+                  className={`${field} mt-2`}
+                  autoFocus
+                />
+              )}
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-navy-200">Phone <span className="text-navy-500">(optional)</span></label>
-              <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="98XXXXXXXX" className={field} />
+              <PhoneInput value={form.phone} onChange={(phone) => setForm({ ...form, phone })} />
             </div>
             <button type="submit" disabled={saving}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 py-3.5 font-bold text-white transition hover:bg-orange-400 disabled:opacity-60">
