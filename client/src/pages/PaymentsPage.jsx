@@ -465,7 +465,7 @@ export default function PaymentsPage() {
       )}
       {deleting && (
         <ConfirmDialog
-          message={`Delete this payment of ${CURRENCY} ${parseFloat(deleting.amount).toLocaleString()} from ${deleting.party_name}? This cannot be undone.`}
+          message={`Delete this payment of ${CURRENCY} ${parseFloat(deleting.amount).toLocaleString()} from ${deleting.party_name}? It will move to Recycle Bin and the related invoice/bill balance will be restored — you can undo this from there.`}
           onConfirm={handleDelete}
           onCancel={() => setDeleting(null)}
         />

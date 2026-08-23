@@ -87,6 +87,7 @@ class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
             party__business_id=bid,
             party__business__staff__user=self.request.user,
             party__business__staff__is_active=True,
+            is_deleted=False,
         ).select_related("party")
         party_id = self.request.query_params.get("party")
         if party_id:
@@ -153,6 +154,7 @@ class PartyPaymentDetailView(_RequirePayments, generics.RetrieveUpdateDestroyAPI
             party__business_id=bid,
             party__business__staff__user=self.request.user,
             party__business__staff__is_active=True,
+            is_deleted=False,
         )
 
     def perform_update(self, serializer):
@@ -166,10 +168,17 @@ class PartyPaymentDetailView(_RequirePayments, generics.RetrieveUpdateDestroyAPI
         PartyPaymentSerializer._sync_bank(payment)
 
     def perform_destroy(self, instance):
+        from django.utils import timezone
         from banking.models import BankTransaction
+        # Reverse the same side effects _reconcile_payment applied at creation
+        # (sale/purchase paid_amount + the mirrored BankTransaction) so a
+        # deleted payment doesn't leave the party's balance permanently wrong
+        # while it sits in the Recycle Bin — restoring re-applies both.
         self._unreconcile_payment(instance)
         BankTransaction.objects.filter(reference=f"PARTYPAYMENT-{instance.id}").delete()
-        instance.delete()
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=["is_deleted", "deleted_at"])
 
     @staticmethod
     def _unreconcile_payment(payment):
@@ -273,7 +282,7 @@ class PartyLedgerView(_RequireParties, APIView):
             })
 
         # ── Direct payments ──────────────────────────────────────────────────
-        for pay in PartyPayment.objects.filter(party=party).order_by("date"):
+        for pay in PartyPayment.objects.filter(party=party, is_deleted=False).order_by("date"):
             is_in = pay.payment_type == "IN"
             entries.append({
                 "date": str(pay.date),

@@ -108,7 +108,7 @@ class RecycleBinView(APIView):
 
     def get(self, request):
         from sales.models import Sale
-        from parties.models import Party
+        from parties.models import Party, PartyPayment
         from expenses.models import Expense
         from inventory.models import Product
 
@@ -152,6 +152,14 @@ class RecycleBinView(APIView):
                 "label": f"Product: {product.name}",
                 "deleted_at": product.deleted_at,
             })
+        for payment in PartyPayment.objects.filter(party__business=biz, is_deleted=True).select_related("party"):
+            direction = "Received from" if payment.payment_type == "IN" else "Paid to"
+            result.append({
+                "type": "payment",
+                "id": payment.id,
+                "label": f"{direction} {payment.party.name}: Rs.{payment.amount}",
+                "deleted_at": payment.deleted_at,
+            })
 
         result.sort(key=lambda x: x["deleted_at"] or timezone.now(), reverse=True)
         return Response(result)
@@ -160,7 +168,8 @@ class RecycleBinView(APIView):
 class RecycleBinRestoreView(APIView):
     def post(self, request, record_type, pk):
         from sales.models import Sale
-        from parties.models import Party
+        from parties.models import Party, PartyPayment
+        from parties.serializers import PartyPaymentSerializer
         from expenses.models import Expense
         from inventory.models import Product
 
@@ -179,6 +188,8 @@ class RecycleBinRestoreView(APIView):
                 obj = Expense.objects.get(id=pk, business=biz, is_deleted=True)
             elif record_type == "product":
                 obj = Product.objects.get(id=pk, business=biz, is_deleted=True)
+            elif record_type == "payment":
+                obj = PartyPayment.objects.get(id=pk, party__business=biz, is_deleted=True)
             else:
                 return Response({"error": "Unknown record type."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
@@ -187,13 +198,33 @@ class RecycleBinRestoreView(APIView):
         obj.is_deleted = False
         obj.deleted_at = None
         obj.save(update_fields=["is_deleted", "deleted_at"])
+
+        if record_type == "payment":
+            # Mirror image of _unreconcile_payment (parties.views) — re-apply
+            # the same allocation amounts to whatever sale/purchase they were
+            # against, and recreate the mirrored BankTransaction, so the
+            # party's balance and bank balance go back to exactly what they
+            # were before this payment was deleted.
+            for allocation in obj.allocations.select_related("sale", "purchase"):
+                if allocation.sale is not None:
+                    sale = allocation.sale
+                    sale.paid_amount += allocation.amount
+                    sale.reconciled_amount += allocation.amount
+                    sale.save()
+                elif allocation.purchase is not None:
+                    purchase = allocation.purchase
+                    purchase.paid_amount += allocation.amount
+                    purchase.reconciled_amount += allocation.amount
+                    purchase.save()
+            PartyPaymentSerializer._sync_bank(obj)
+
         return Response({"message": "Restored successfully."})
 
 
 class RecycleBinPermanentDeleteView(APIView):
     def delete(self, request, record_type, pk):
         from sales.models import Sale
-        from parties.models import Party
+        from parties.models import Party, PartyPayment
         from expenses.models import Expense
         from inventory.models import Product
 
@@ -212,6 +243,11 @@ class RecycleBinPermanentDeleteView(APIView):
                 Expense.objects.get(id=pk, business=biz, is_deleted=True).delete()
             elif record_type == "product":
                 Product.objects.get(id=pk, business=biz, is_deleted=True).delete()
+            elif record_type == "payment":
+                # Cascades to the payment's PaymentAllocation rows; the sale/
+                # purchase amounts and mirrored BankTransaction were already
+                # reversed when this payment was first soft-deleted.
+                PartyPayment.objects.get(id=pk, party__business=biz, is_deleted=True).delete()
             else:
                 return Response({"error": "Unknown record type."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:

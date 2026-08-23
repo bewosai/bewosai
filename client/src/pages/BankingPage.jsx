@@ -10,7 +10,7 @@ import {
 const today = () => new Date().toISOString().slice(0, 10);
 
 /* ── Confirm Dialog ─────────────────────────────────────────────────────── */
-function ConfirmDialog({ title, body, onConfirm, onCancel }) {
+function ConfirmDialog({ title, body, error, busy, onConfirm, onCancel }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-navy-800 bg-navy-900 p-6 space-y-4">
@@ -19,9 +19,16 @@ function ConfirmDialog({ title, body, onConfirm, onCancel }) {
         </div>
         <h3 className="text-center text-sm font-bold text-white">{title}</h3>
         {body && <p className="text-center text-xs text-navy-400">{body}</p>}
+        {error && (
+          <p className="flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {error}
+          </p>
+        )}
         <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 rounded-xl border border-navy-700 py-2.5 text-sm font-medium text-navy-400 hover:bg-navy-800">Cancel</button>
-          <button onClick={onConfirm} className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white bg-red-500 hover:bg-red-600">Delete</button>
+          <button onClick={onCancel} disabled={busy} className="flex-1 rounded-xl border border-navy-700 py-2.5 text-sm font-medium text-navy-400 hover:bg-navy-800 disabled:opacity-50">Cancel</button>
+          <button onClick={onConfirm} disabled={busy} className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50">
+            {busy ? "Deleting…" : "Delete"}
+          </button>
         </div>
       </div>
     </div>
@@ -248,6 +255,9 @@ export default function BankingPage() {
   const [showTxModal, setShowTxModal] = useState(false);
   const [showQr, setShowQr] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [confirmTx, setConfirmTx] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [txSearch, setTxSearch] = useState("");
 
   const loadAccounts = () => {
@@ -279,16 +289,33 @@ export default function BankingPage() {
   }, [selected]);
 
   const handleDeleteAccount = async () => {
-    try { await bankingApi.deleteAccount(confirm.id); } catch {}
-    setConfirm(null);
-    if (selected?.id === confirm.id) setSelected(null);
-    loadAccounts();
+    setDeleteError("");
+    setDeleting(true);
+    try {
+      await bankingApi.deleteAccount(confirm.id);
+      if (selected?.id === confirm.id) setSelected(null);
+      setConfirm(null);
+      loadAccounts();
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || err.response?.data?.detail || "Could not delete this account.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const handleDeleteTx = async (txId) => {
-    try { await bankingApi.deleteTransaction(txId); } catch {}
-    if (selected) loadTransactions(selected.id);
-    loadAccounts();
+  const handleDeleteTx = async () => {
+    setDeleteError("");
+    setDeleting(true);
+    try {
+      await bankingApi.deleteTransaction(confirmTx.id);
+      setConfirmTx(null);
+      if (selected) loadTransactions(selected.id);
+      loadAccounts();
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || err.response?.data?.detail || "Could not delete this transaction.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const filteredTransactions = transactions.filter((t) => {
@@ -420,7 +447,7 @@ export default function BankingPage() {
                       <p className={`shrink-0 text-sm font-semibold ${tx.transaction_type === "CREDIT" ? "text-green-400" : "text-red-400"}`}>
                         {tx.transaction_type === "CREDIT" ? "+" : "-"}Rs. {Number(tx.amount).toLocaleString()}
                       </p>
-                      <button onClick={() => handleDeleteTx(tx.id)}
+                      <button onClick={() => { setDeleteError(""); setConfirmTx(tx); }}
                         className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:text-red-400 hover:bg-red-500/10">
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -454,8 +481,20 @@ export default function BankingPage() {
         <ConfirmDialog
           title={`Delete "${confirm.account_name}"?`}
           body="All transactions for this account will also be deleted."
+          error={deleteError}
+          busy={deleting}
           onConfirm={handleDeleteAccount}
-          onCancel={() => setConfirm(null)}
+          onCancel={() => { setConfirm(null); setDeleteError(""); }}
+        />
+      )}
+      {confirmTx && (
+        <ConfirmDialog
+          title={`Delete this ${confirmTx.transaction_type === "CREDIT" ? "credit" : "debit"} of Rs. ${Number(confirmTx.amount).toLocaleString()}?`}
+          body="This will adjust the account balance immediately. It cannot be undone."
+          error={deleteError}
+          busy={deleting}
+          onConfirm={handleDeleteTx}
+          onCancel={() => { setConfirmTx(null); setDeleteError(""); }}
         />
       )}
     </div>

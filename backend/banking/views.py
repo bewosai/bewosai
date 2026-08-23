@@ -1,5 +1,6 @@
-from rest_framework import generics, filters, parsers, permissions
+from rest_framework import generics, filters, parsers, permissions, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
@@ -96,3 +97,22 @@ class BankTransactionDetailView(_RequireBanking, generics.RetrieveUpdateDestroyA
         if account is not None and account.business_id != business.id:
             raise ValidationError({"account": "Invalid account for this business."})
         serializer.save()
+
+    # Sales/Purchases/Payments each keep a mirrored BankTransaction in sync
+    # (see bewosai.utils.sync_bank_transaction) via a "SALE-<id>" / "PURCHASE-
+    # <id>" / "PARTYPAYMENT-<id>" reference. Deleting that mirror directly
+    # from here would desync the bank balance from the source record's own
+    # paid_amount (which only the source's own delete/edit flow keeps
+    # correct) — point the user at the source instead.
+    _MIRROR_PREFIXES = ("SALE-", "PURCHASE-", "PARTYPAYMENT-")
+    _MIRROR_SOURCE_LABEL = {"SALE-": "Sales", "PURCHASE-": "Purchases", "PARTYPAYMENT-": "Payments"}
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        prefix = next((p for p in self._MIRROR_PREFIXES if instance.reference.startswith(p)), None)
+        if prefix:
+            return Response(
+                {"error": f"This transaction is linked to a record in {self._MIRROR_SOURCE_LABEL[prefix]} — delete or edit it from there instead."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)

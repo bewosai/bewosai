@@ -69,7 +69,7 @@ class DashboardSummaryView(APIView):
         ).aggregate(total=Sum("paid_amount"))["total"] or 0
 
         collection_today_payments = PartyPayment.objects.filter(
-            party__business=biz, payment_type="IN", date=today
+            party__business=biz, payment_type="IN", date=today, is_deleted=False
         ).aggregate(total=Sum("amount"))["total"] or 0
 
         expenses_today = Expense.objects.filter(
@@ -104,13 +104,13 @@ class DashboardSummaryView(APIView):
             business=biz, payment_method="CASH", status="CONFIRMED", is_deleted=False
         ).aggregate(total=Sum("paid_amount"))["total"] or 0
         cash_in_payments = PartyPayment.objects.filter(
-            party__business=biz, payment_type="IN", payment_method="CASH"
+            party__business=biz, payment_type="IN", payment_method="CASH", is_deleted=False
         ).aggregate(total=Sum("amount"))["total"] or 0
         cash_out_expenses = Expense.objects.filter(
             business=biz, payment_method="CASH", is_deleted=False
         ).aggregate(total=Sum("amount"))["total"] or 0
         cash_out_payments = PartyPayment.objects.filter(
-            party__business=biz, payment_type="OUT", payment_method="CASH"
+            party__business=biz, payment_type="OUT", payment_method="CASH", is_deleted=False
         ).aggregate(total=Sum("amount"))["total"] or 0
         cash_balance = (
             float(cash_in) + float(cash_in_payments)
@@ -512,7 +512,7 @@ class DayBookView(_RequireReports, APIView):
 
         # Direct party payments on this date
         for pay in PartyPayment.objects.filter(
-            party__business=biz, date=target_date
+            party__business=biz, date=target_date, is_deleted=False
         ).select_related("party"):
             is_in = pay.payment_type == "IN"
             entries.append({
@@ -556,7 +556,7 @@ class CashFlowView(_RequireReports, APIView):
 
         cash_in_payments = PartyPayment.objects.filter(
             party__business=biz, date__range=[date_from, date_to],
-            payment_type="IN",
+            payment_type="IN", is_deleted=False,
         ).aggregate(total=Sum("amount"))["total"] or 0
 
         cash_out_expenses = Expense.objects.filter(
@@ -569,7 +569,7 @@ class CashFlowView(_RequireReports, APIView):
 
         cash_out_payments = PartyPayment.objects.filter(
             party__business=biz, date__range=[date_from, date_to],
-            payment_type="OUT",
+            payment_type="OUT", is_deleted=False,
         ).aggregate(total=Sum("amount"))["total"] or 0
 
         total_in  = float(cash_in_sales) + float(cash_in_payments)
@@ -650,7 +650,7 @@ class CashInHandView(_RequireReports, APIView):
             business=biz, is_deleted=False, payment_method="CASH",
         ).select_related("category")
         payments_qs = PartyPayment.objects.filter(
-            party__business=biz, payment_method="CASH",
+            party__business=biz, payment_method="CASH", is_deleted=False,
         ).select_related("party")
 
         if date_range:
@@ -847,7 +847,7 @@ class AllTransactionsView(_RequireReports, APIView):
 
         if not type_filter or type_filter == "PAYMENT":
             for pay in PartyPayment.objects.filter(
-                party__business=biz, date__range=[date_from, date_to],
+                party__business=biz, date__range=[date_from, date_to], is_deleted=False,
             ).select_related("party"):
                 is_in = pay.payment_type == "IN"
                 entries.append({

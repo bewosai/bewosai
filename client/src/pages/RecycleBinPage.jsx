@@ -10,6 +10,7 @@ const TYPE_CONFIG = {
   party: { label: "Party", labelNe: "पार्टी", color: "green" },
   expense: { label: "Expense", labelNe: "खर्च", color: "orange" },
   product: { label: "Product", labelNe: "उत्पाद", color: "red" },
+  payment: { label: "Payment", labelNe: "भुक्तानी", color: "teal" },
 };
 const COLOR_CLASSES = {
   blue: "bg-blue-500/10 text-blue-400",
@@ -17,6 +18,7 @@ const COLOR_CLASSES = {
   green: "bg-green-500/10 text-green-400",
   orange: "bg-orange-500/10 text-orange-400",
   red: "bg-red-500/10 text-red-400",
+  teal: "bg-teal-500/10 text-teal-400",
 };
 
 function ConfirmDialog({ title, body, error, busy, onConfirm, onCancel, dangerous }) {
