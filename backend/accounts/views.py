@@ -10,7 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from bewosai.email import send_otp_email
-from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature
+from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_bid, get_business, mask_email
 from .models import User, Business, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import (
@@ -22,8 +22,11 @@ logger = logging.getLogger(__name__)
 
 
 class _RequireStaffManagement:
-    """Gated by the Super Admin 'Staff Management' feature switch."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("staff_management")]
+    """Gated by the Super Admin 'Staff Management' feature switch, and by
+    whether the current staff member has been granted the 'staff_management'
+    module themselves — a non-owner staff member without it can't invite,
+    edit, or remove other staff even if they're otherwise a Manager."""
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("staff_management"), require_staff_permission("staff")]
 
 
 def api_response(success, message, status_code, **extra):
@@ -553,6 +556,9 @@ class BusinessStaffInviteView(_RequireStaffManagement, APIView):
         email = request.data.get("email", "").strip().lower()
         name = request.data.get("name", "").strip()
         role = request.data.get("role", StaffMember.ROLE_CASHIER)
+        permissions = request.data.get("permissions")
+        if not isinstance(permissions, dict):
+            permissions = {}
 
         if not email:
             return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -589,12 +595,13 @@ class BusinessStaffInviteView(_RequireStaffManagement, APIView):
 
         member, created = StaffMember.objects.get_or_create(
             user=user, business=business,
-            defaults={"role": role},
+            defaults={"role": role, "permissions": permissions},
         )
         if not created:
             member.role = role
             member.is_active = True
-            member.save(update_fields=["role", "is_active"])
+            member.permissions = permissions
+            member.save(update_fields=["role", "is_active", "permissions"])
 
         return Response(StaffMemberSerializer(member).data, status=status.HTTP_201_CREATED)
 

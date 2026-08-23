@@ -6,7 +6,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import F
 
 from bewosai.pagination import LargePageNumberPagination
-from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, IsPremiumBusiness, require_feature
+from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, IsPremiumBusiness, require_feature, require_staff_permission
 from bewosai.utils import get_bid, require_business
 from .models import Category, Unit, Product, StockMovement
 from .serializers import CategorySerializer, UnitSerializer, ProductSerializer, StockMovementSerializer
@@ -23,7 +23,7 @@ def _validate_category_unit(validated_data, business):
 
 class _RequireInventory:
     """Gated by the Super Admin 'Inventory' feature switch."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("inventory")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("inventory"), require_staff_permission("inventory")]
 
 
 class CategoryListCreateView(_RequireInventory, generics.ListCreateAPIView):
@@ -172,7 +172,7 @@ class StockMovementListCreateView(_RequireInventory, generics.ListCreateAPIView)
 class ProductBulkImportView(APIView):
     """Bulk create products from Excel import. Accepts list of product objects. Premium only."""
 
-    permission_classes = [IsPremiumBusiness, HasActiveSubscription, require_feature("excel_import")]
+    permission_classes = [IsPremiumBusiness, HasActiveSubscription, require_feature("excel_import"), require_staff_permission("inventory")]
 
     MAX_ROWS = 500
 

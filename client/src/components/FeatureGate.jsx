@@ -18,8 +18,9 @@ export default function FeatureGate({ feature, children }) {
         </div>
         <h2 className="text-lg font-bold text-white">This feature is currently unavailable</h2>
         <p className="max-w-sm text-sm text-navy-400">
-          It's been switched off for your plan, or is temporarily disabled by the platform admin.
-          Contact your administrator if you believe this is unexpected.
+          It's been switched off for your plan, disabled by the platform admin, or your account
+          hasn't been given access to it. Contact your business owner or administrator if you
+          believe this is unexpected.
         </p>
       </div>
     );

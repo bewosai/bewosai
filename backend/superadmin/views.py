@@ -346,6 +346,7 @@ class EffectiveFeaturesView(APIView):
     """
 
     def get(self, request):
+        from accounts.models import StaffMember
         from bewosai.permissions import get_platform
 
         business = get_business(request)
@@ -356,8 +357,29 @@ class EffectiveFeaturesView(APIView):
                 o.feature_key: o.enabled
                 for o in BusinessFeatureOverride.objects.filter(business=business)
             }
+
+        # Modules an individual (non-owner) staff member has been explicitly
+        # denied view access to — folded into the same effective map the
+        # frontend already reads via FeatureGate/isFeatureEnabled, so a
+        # staff-level denial hides that nav item and blocks the page exactly
+        # like a platform-level toggle would, with no separate gating logic
+        # needed anywhere. Staff permissions are keyed by the Staff UI's own
+        # module names (client/src/pages/StaffPage.jsx's MODULES), which
+        # don't all match these Super Admin feature keys one-to-one.
+        FEATURE_TO_STAFF_MODULE = {"pos": "sales", "staff_management": "staff"}
+        staff_view_denied = set()
+        if business and business.owner_id != request.user.id:
+            staff = business.staff.filter(user=request.user, is_active=True).first()
+            if staff and staff.role != StaffMember.ROLE_OWNER:
+                for feature in Feature.objects.all():
+                    module_key = FEATURE_TO_STAFF_MODULE.get(feature.key, feature.key)
+                    module_perms = staff.permissions.get(module_key)
+                    if isinstance(module_perms, dict) and module_perms.get("view") is False:
+                        staff_view_denied.add(feature.key)
+
         features = {
-            f.key: overrides[f.key] if f.key in overrides else f.is_available_on(platform, business)
+            f.key: (overrides[f.key] if f.key in overrides else f.is_available_on(platform, business))
+            and f.key not in staff_view_denied
             for f in Feature.objects.all()
         }
         return Response({"platform": platform, "features": features})

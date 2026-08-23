@@ -67,6 +67,70 @@ def require_feature(key):
     return _RequireFeature
 
 
+_ACTION_BY_METHOD = {
+    "GET": "view", "HEAD": "view", "OPTIONS": "view",
+    "POST": "create",
+    "PUT": "edit", "PATCH": "edit",
+    "DELETE": "delete",
+}
+
+
+def require_staff_permission(module_key):
+    """
+    Per-staff-member, per-action module access — the layer require_feature's
+    docstring calls out as "existing per-view/staff-role checks", which
+    didn't actually exist anywhere outside the Staff screens themselves
+    until now: every active staff member had full read/write access to
+    every module regardless of role.
+
+    `StaffMember.permissions` already stores exactly this shape — it's the
+    same {module: {view, create, edit, delete}} matrix the Staff invite/edit
+    UI already builds and saves (client/src/pages/StaffPage.jsx's
+    PermissionMatrix) — it just wasn't enforced anywhere. `module_key` must
+    match that UI's module keys (sales, purchases, expenses, inventory,
+    parties, payments, banking, staff, reports), not the unrelated Super
+    Admin feature keys (e.g. "pos"/"staff_management") checked by
+    require_feature above.
+
+    A staff member with no entry for `module_key` at all — every existing
+    staff member before this shipped, since it was never enforced — defaults
+    to fully allowed, so nobody loses access they already had. Once the
+    owner has actually configured a module for someone, an explicit `False`
+    on the specific action (view/create/edit/delete, chosen by the request's
+    HTTP method) denies just that. The business owner (by `Business.owner`
+    or by holding the OWNER role) always bypasses this — they can't lock
+    themselves out of their own business.
+    """
+
+    class _RequireStaffPermission(BasePermission):
+        message = "Your account doesn't have access to this. Ask the business owner to enable it for you."
+
+        def has_permission(self, request, view):
+            from accounts.models import StaffMember
+
+            business = get_business(request)
+            if not business:
+                # No resolvable business — some other permission class
+                # (membership, subscription) is the right one to reject
+                # this request; don't produce a second, misleading error.
+                return True
+            if business.owner_id == request.user.id:
+                return True
+
+            staff = business.staff.filter(user=request.user, is_active=True).first()
+            if not staff or staff.role == StaffMember.ROLE_OWNER:
+                return True
+
+            module_perms = staff.permissions.get(module_key)
+            if not isinstance(module_perms, dict):
+                return True
+
+            action = _ACTION_BY_METHOD.get(request.method, "view")
+            return module_perms.get(action, True) is not False
+
+    return _RequireStaffPermission
+
+
 class IsPremiumBusiness(BasePermission):
     """
     Gates Premium-only features (e.g. bulk import/export). The business must
