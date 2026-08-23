@@ -53,7 +53,7 @@ class SelectBusinessScreen extends StatelessWidget {
             ),
           ],
         ),
-        body: SafeArea(
+        body: ResponsiveBody(child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -162,7 +162,7 @@ class SelectBusinessScreen extends StatelessWidget {
             ],
           ),
         ),
-      ),
+      )),
       ),
     );
   }

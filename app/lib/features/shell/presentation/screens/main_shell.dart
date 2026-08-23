@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_mode.dart';
 import '../../../../shared/widgets/feature_gate.dart';
 import '../../../../shared/widgets/offline_banner.dart';
+import '../../../../shared/widgets/responsive_body.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../dashboard/presentation/screens/dashboard_screen.dart';
 import '../../../inventory/presentation/screens/inventory_screen.dart';
@@ -92,17 +93,19 @@ class _MainShellState extends State<MainShell> {
               ],
             )
           : null,
-      body: Column(
-        children: [
-          const OfflineBanner(),
-          Expanded(
-            child: IndexedStack(
-              key: ValueKey('$useNepaliCalendar-$themeMode-$hideAmounts-$language'),
-              index: _index,
-              children: screens,
+      body: ResponsiveBody(
+        child: Column(
+          children: [
+            const OfflineBanner(),
+            Expanded(
+              child: IndexedStack(
+                key: ValueKey('$useNepaliCalendar-$themeMode-$hideAmounts-$language'),
+                index: _index,
+                children: screens,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
