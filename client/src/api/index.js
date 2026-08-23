@@ -213,13 +213,13 @@ export const superadmin = {
   userAction: (id, action) => api.patch(`/superadmin/users/${id}/action/`, { action }),
   createUser: (d) => api.post("/superadmin/users/create/", d),
   deleteUser: (id) => api.delete(`/superadmin/users/${id}/delete/`),
-  loginActivity: () => api.get("/superadmin/login-activity/"),
-  userLoginActivity: (userId) => api.get("/superadmin/login-activity/", { params: { user_id: userId } }),
+  loginActivity: (p) => api.get("/superadmin/login-activity/", { params: p }),
+  userLoginActivity: (userId, p) => api.get("/superadmin/login-activity/", { params: { user_id: userId, ...p } }),
 
   tickets: (p) => api.get("/superadmin/tickets/", { params: p }),
   updateTicket: (id, d) => api.patch(`/superadmin/tickets/${id}/`, d),
 
-  announcements: () => api.get("/superadmin/announcements/"),
+  announcements: (p) => api.get("/superadmin/announcements/", { params: p }),
   createAnnouncement: (d) => api.post("/superadmin/announcements/", d),
   updateAnnouncement: (id, d) => api.patch(`/superadmin/announcements/${id}/`, d),
   deleteAnnouncement: (id) => api.delete(`/superadmin/announcements/${id}/`),

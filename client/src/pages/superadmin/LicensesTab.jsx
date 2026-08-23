@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { superadmin as adminApi } from "../../api";
-import { Badge, ConfirmDialog } from "../SuperAdminPage";
+import { Badge, ConfirmDialog, PaginationFooter } from "../SuperAdminPage";
 import {
   Plus, Copy, Check, X, RefreshCw, Search, Loader,
   Ban, Clock, KeyRound,
 } from "lucide-react";
+
+const PAGE_SIZE = 50;
 
 const DURATION_LABELS = { "7D": "7 Days", "30D": "30 Days", "1Y": "1 Year", "5Y": "5 Years", CUSTOM: "Custom" };
 const DURATION_OPTIONS = ["7D", "30D", "1Y", "5Y", "CUSTOM"];
@@ -265,42 +267,55 @@ function ExtendModal({ license, onClose, onExtended }) {
 /* ── Main tab ────────────────────────────────────────────────────────────── */
 export default function LicensesTab({ businesses }) {
   const [rows, setRows] = useState([]);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
   const [years, setYears] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ duration_type: "", status: "", year: "", search: "" });
   const [showGenerate, setShowGenerate] = useState(false);
   const [extendTarget, setExtendTarget] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null);
+  const [revokeError, setRevokeError] = useState("");
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {};
+      const params = { page, page_size: PAGE_SIZE };
       Object.entries(filters).forEach(([k, v]) => { if (v) params[k] = v; });
       const [list, yrs] = await Promise.all([
         adminApi.licenseList(params),
         adminApi.licenseYears(),
       ]);
       setRows(list.data?.results ?? list.data ?? []);
+      setCount(list.data?.count ?? (Array.isArray(list.data) ? list.data.length : 0));
       setYears(yrs.data ?? []);
     } catch {
       setRows([]);
+      setCount(0);
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, page]);
 
   useEffect(() => { load(); }, [load]);
+  // Any filter change re-queries from page 1 — a stale page number past the
+  // new, smaller result set would otherwise show an empty table with no
+  // indication why.
+  useEffect(() => { setPage(1); }, [filters]);
 
   const handleRevoke = async () => {
     setBusyId(revokeTarget.id);
+    setRevokeError("");
     try {
       await adminApi.revokeLicense(revokeTarget.id);
       await load();
-    } catch {}
-    setBusyId(null);
-    setRevokeTarget(null);
+      setRevokeTarget(null);
+    } catch (err) {
+      setRevokeError(err.response?.data?.error || err.response?.data?.detail || "Could not revoke this license. Please try again.");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
@@ -414,6 +429,9 @@ export default function LicensesTab({ businesses }) {
             </tbody>
           </table>
         )}
+        {!loading && rows.length > 0 && (
+          <PaginationFooter page={page} pageSize={PAGE_SIZE} count={count} onPageChange={setPage} />
+        )}
       </div>
 
       {showGenerate && (
@@ -430,8 +448,10 @@ export default function LicensesTab({ businesses }) {
         <ConfirmDialog
           title="Revoke this license?"
           body="This will immediately disable premium access for the business using it."
+          error={revokeError}
+          busy={busyId === revokeTarget.id}
           dangerous
-          onCancel={() => setRevokeTarget(null)}
+          onCancel={() => { setRevokeTarget(null); setRevokeError(""); }}
           onConfirm={handleRevoke}
         />
       )}

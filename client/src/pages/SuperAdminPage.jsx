@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { superadmin as adminApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "../utils/translations";
@@ -12,7 +12,7 @@ import {
   CalendarDays, ChevronLeft, ChevronRight, Plus, Edit2,
   Trash2, MessageSquare, Bell, Search, RefreshCw, Loader,
   TrendingUp, AlertTriangle, ToggleLeft, ToggleRight, Crown,
-  SlidersHorizontal, Monitor, Smartphone, KeyRound,
+  SlidersHorizontal, Monitor, Smartphone, KeyRound, LayoutDashboard,
 } from "lucide-react";
 import LicensesTab from "./superadmin/LicensesTab";
 
@@ -34,7 +34,84 @@ export function Badge({ label, color = "gray" }) {
   );
 }
 
-export function ConfirmDialog({ title, body, onConfirm, onCancel, dangerous = false }) {
+/** Debounces a fast-changing value (e.g. a search input) so callers can key
+ * a network fetch off it without firing a request on every keystroke. */
+function useDebounced(value, delayMs = 350) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
+
+/** "Showing X to Y of Z results" footer with Previous/page-number/Next controls,
+ * for any endpoint using LargePageNumberPagination's {count, results} shape. */
+export function PaginationFooter({ page, pageSize, count, onPageChange }) {
+  const totalPages = Math.max(1, Math.ceil(count / pageSize));
+  if (totalPages <= 1 && count <= pageSize) {
+    return (
+      <div className="border-t border-navy-800 px-4 py-3">
+        <p className="text-xs text-navy-500">{count} result{count === 1 ? "" : "s"}</p>
+      </div>
+    );
+  }
+  const from = count === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, count);
+
+  // A compact window of page numbers around the current one, plus the
+  // first/last page and "…" gaps — avoids rendering hundreds of page
+  // buttons when count is large (matches the reference's "1 2 3 4 5 … 961").
+  const pages = [];
+  const windowStart = Math.max(2, page - 1);
+  const windowEnd = Math.min(totalPages - 1, page + 1);
+  pages.push(1);
+  if (windowStart > 2) pages.push("…");
+  for (let p = windowStart; p <= windowEnd; p++) pages.push(p);
+  if (windowEnd < totalPages - 1) pages.push("…");
+  if (totalPages > 1) pages.push(totalPages);
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-navy-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs text-navy-500">
+        Showing {from} to {to} of {count} results
+      </p>
+      <div className="flex items-center gap-1">
+        <button
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className="flex items-center gap-1 rounded-lg border border-navy-700 px-2.5 py-1.5 text-xs text-navy-300 hover:bg-navy-800 disabled:opacity-40"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" /> Previous
+        </button>
+        {pages.map((p, i) =>
+          p === "…" ? (
+            <span key={`gap-${i}`} className="px-1.5 text-xs text-navy-600">…</span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPageChange(p)}
+              className={`min-w-[2rem] rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+                p === page ? "bg-orange-500 text-white" : "text-navy-400 hover:bg-navy-800"
+              }`}
+            >
+              {p}
+            </button>
+          )
+        )}
+        <button
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="flex items-center gap-1 rounded-lg border border-navy-700 px-2.5 py-1.5 text-xs text-navy-300 hover:bg-navy-800 disabled:opacity-40"
+        >
+          Next <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function ConfirmDialog({ title, body, error, busy = false, onConfirm, onCancel, dangerous = false }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-navy-700 bg-navy-900 p-6 space-y-4">
@@ -43,10 +120,11 @@ export function ConfirmDialog({ title, body, onConfirm, onCancel, dangerous = fa
         </div>
         <h3 className="text-center text-sm font-bold text-white">{title}</h3>
         {body && <p className="text-center text-xs text-navy-400">{body}</p>}
+        {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-center text-xs text-red-400">{error}</p>}
         <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 rounded-xl border border-navy-700 py-2.5 text-sm font-medium text-navy-400 hover:bg-navy-800">Cancel</button>
-          <button onClick={onConfirm} className={`flex-1 rounded-xl py-2.5 text-sm font-semibold text-white ${dangerous ? "bg-red-500 hover:bg-red-600" : "bg-orange-500 hover:bg-orange-600"}`}>
-            Confirm
+          <button disabled={busy} onClick={onCancel} className="flex-1 rounded-xl border border-navy-700 py-2.5 text-sm font-medium text-navy-400 hover:bg-navy-800 disabled:opacity-50">Cancel</button>
+          <button disabled={busy} onClick={onConfirm} className={`flex-1 rounded-xl py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${dangerous ? "bg-red-500 hover:bg-red-600" : "bg-orange-500 hover:bg-orange-600"}`}>
+            {busy ? "Working…" : "Confirm"}
           </button>
         </div>
       </div>
@@ -180,22 +258,26 @@ function UserDetailModal({ user: u, onClose, onAction }) {
   const [acting, setActing] = useState(false);
 
   useEffect(() => {
-    adminApi.userLoginActivity(u.id)
-      .then(r => setActivity(r.data))
+    adminApi.userLoginActivity(u.id, { page_size: 500 })
+      .then(r => setActivity(r.data?.results ?? r.data ?? []))
       .catch(() => setActivity([]))
       .finally(() => setLoading(false));
   }, [u.id]);
 
   const loginDates = activity.map(a => a.timestamp);
   const joinedBS = adToBS(new Date(u.created_at));
+  const [actionError, setActionError] = useState("");
 
   const doAction = async (action) => {
     setActing(true);
+    setActionError("");
     try {
       await adminApi.userAction(u.id, action);
       onAction();
       onClose();
-    } catch {}
+    } catch (e) {
+      setActionError(e.response?.data?.error || e.response?.data?.detail || "Couldn't complete that action. Please try again.");
+    }
     setActing(false);
   };
 
@@ -234,6 +316,12 @@ function UserDetailModal({ user: u, onClose, onAction }) {
             <p className="mt-1 text-[11px] font-medium text-white">{formatBS(joinedBS, language)}</p>
           </div>
         </div>
+
+        {actionError && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {actionError}
+          </div>
+        )}
 
         {/* Action buttons */}
         <div className="mb-5 flex flex-wrap gap-2">
@@ -317,7 +405,12 @@ function AnnouncementModal({ data, onClose, onSaved }) {
       }
       onSaved();
     } catch (e) {
-      setError(e.response?.data?.detail || "Failed to save.");
+      const data = e.response?.data;
+      setError(
+        data?.error || data?.detail ||
+        (data && typeof data === "object" ? Object.values(data).flat().join(" ") : null) ||
+        "Failed to save."
+      );
     } finally {
       setSaving(false);
     }
@@ -426,7 +519,12 @@ function EditBusinessModal({ biz, onClose, onSaved }) {
       await adminApi.editBusiness(biz.id, form);
       onSaved();
     } catch (e) {
-      setError(e.response?.data?.error || "Failed to update.");
+      const data = e.response?.data;
+      setError(
+        data?.error || data?.detail ||
+        (data && typeof data === "object" ? Object.values(data).flat().join(" ") : null) ||
+        "Failed to update."
+      );
     } finally { setSaving(false); }
   };
 
@@ -513,13 +611,17 @@ function TicketModal({ ticket, onClose, onSaved }) {
   const [reply, setReply] = useState(ticket.admin_reply || "");
   const [ticketStatus, setTicketStatus] = useState(ticket.status || "OPEN");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSave = async () => {
     setSaving(true);
+    setError("");
     try {
       await adminApi.updateTicket(ticket.id, { admin_reply: reply, status: ticketStatus });
       onSaved();
-    } catch {}
+    } catch (e) {
+      setError(e.response?.data?.error || e.response?.data?.detail || "Couldn't save the reply. Please try again.");
+    }
     setSaving(false);
   };
 
@@ -532,6 +634,7 @@ function TicketModal({ ticket, onClose, onSaved }) {
           <h2 className="font-bold text-white">Support Ticket #{ticket.id}</h2>
           <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
         </div>
+        {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
         <div className="rounded-xl border border-navy-800 bg-navy-950 p-4 space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-xs text-navy-400">From: <span className="text-white">{ticket.user_email}</span></p>
@@ -597,41 +700,78 @@ function OverviewTab({ stats }) {
 }
 
 /* ── Businesses Tab ────────────────────────────────────────────────────────── */
-function BusinessesTab({ businesses, onRefresh }) {
+const BIZ_PAGE_SIZE = 50;
+
+function BusinessesTab({ onCountChange }) {
+  const [rows, setRows] = useState([]);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search);
   const [planFilter, setPlanFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [confirm, setConfirm] = useState(null);
+  const [confirmError, setConfirmError] = useState("");
   const [deletingBiz, setDeletingBiz] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
   const [editingBiz, setEditingBiz] = useState(null);
   const [viewDataBiz, setViewDataBiz] = useState(null);
   const [acting, setActing] = useState(false);
+  const [inlineError, setInlineError] = useState("");
 
-  const filtered = businesses.filter(b => {
-    const matchSearch = !search || b.name?.toLowerCase().includes(search.toLowerCase()) || b.owner_name?.toLowerCase().includes(search.toLowerCase());
-    const matchPlan = planFilter === "ALL" || b.plan === planFilter;
-    const matchStatus = statusFilter === "ALL" || b.status === statusFilter;
-    return matchSearch && matchPlan && matchStatus;
-  });
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = { page, page_size: BIZ_PAGE_SIZE };
+      if (debouncedSearch) params.search = debouncedSearch;
+      if (planFilter !== "ALL") params.plan = planFilter;
+      if (statusFilter !== "ALL") params.status = statusFilter;
+      const { data } = await adminApi.businesses(params);
+      const results = data?.results ?? data ?? [];
+      const total = data?.count ?? results.length;
+      setRows(results);
+      setCount(total);
+      onCountChange?.(total);
+    } catch {
+      setRows([]);
+      setCount(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedSearch, planFilter, statusFilter]);
 
-  const doAction = async (bizId, action) => {
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, planFilter, statusFilter]);
+
+  const doAction = async (bizId, action, label) => {
     setActing(true);
+    setConfirmError("");
     try {
       await adminApi.businessAction(bizId, action);
-      onRefresh();
-    } catch {}
+      await load();
+      setConfirm(null);
+    } catch (e) {
+      const data = e.response?.data;
+      const msg = data?.error || data?.detail || `Couldn't update "${label}". Please try again.`;
+      // Instant actions (activate/upgrade/downgrade) have no confirm dialog
+      // open to show this in, so fall back to a dedicated banner for them.
+      if (confirm) setConfirmError(msg); else setInlineError(msg);
+    }
     setActing(false);
-    setConfirm(null);
   };
 
   const doDeleteBiz = async () => {
     setActing(true);
+    setDeleteError("");
     try {
       await adminApi.deleteBusiness(deletingBiz.id);
-      onRefresh();
-    } catch {}
+      await load();
+      setDeletingBiz(null);
+    } catch (e) {
+      setDeleteError(e.response?.data?.error || e.response?.data?.detail || `Couldn't delete "${deletingBiz.name}". Please try again.`);
+    }
     setActing(false);
-    setDeletingBiz(null);
   };
 
   return (
@@ -641,7 +781,7 @@ function BusinessesTab({ businesses, onRefresh }) {
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-navy-500" />
           <input className="w-full rounded-lg bg-navy-800 border border-navy-700 pl-9 pr-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
-            placeholder="Search businesses..." value={search} onChange={e => setSearch(e.target.value)} />
+            placeholder="Search by name or owner..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="flex gap-2">
           <select className="rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-xs text-white focus:border-orange-500 focus:outline-none"
@@ -659,73 +799,103 @@ function BusinessesTab({ businesses, onRefresh }) {
         </div>
       </div>
 
+      {inlineError && (
+        <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {inlineError}
+        </div>
+      )}
+
       <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
-        <div className="border-b border-navy-800 px-4 py-3">
-          <p className="text-xs text-navy-400">{filtered.length} businesses</p>
-        </div>
-        <div className="divide-y divide-navy-800/50">
-          {filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-navy-400">No businesses found</p>
-          ) : filtered.map(biz => (
-            <div key={biz.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between hover:bg-navy-800/30 transition">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-navy-800">
-                  <Building2 className="h-5 w-5 text-orange-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-white">{biz.name}</p>
-                  <p className="text-xs text-navy-400">{biz.owner_name} · Joined {new Date(biz.created_at).toLocaleDateString()}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge label={biz.status} color={biz.status === "ACTIVE" ? "green" : "red"} />
-                <Badge label={biz.plan} color={biz.plan === "PREMIUM" ? "yellow" : "gray"} />
-                {biz.status === "ACTIVE" ? (
-                  <button disabled={acting} onClick={() => setConfirm({ bizId: biz.id, action: "suspend", label: biz.name })}
-                    className="flex items-center gap-1 rounded-lg border border-red-500/30 px-2.5 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50">
-                    <ToggleRight className="h-3.5 w-3.5" /> Suspend
-                  </button>
-                ) : (
-                  <button disabled={acting} onClick={() => doAction(biz.id, "activate")}
-                    className="flex items-center gap-1 rounded-lg border border-green-500/30 px-2.5 py-1.5 text-xs text-green-400 hover:bg-green-500/10 disabled:opacity-50">
-                    <ToggleLeft className="h-3.5 w-3.5" /> Activate
-                  </button>
-                )}
-                {biz.plan === "FREE" ? (
-                  <button disabled={acting} onClick={() => doAction(biz.id, "upgrade")}
-                    className="flex items-center gap-1 rounded-lg border border-yellow-500/30 px-2.5 py-1.5 text-xs text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50">
-                    <Crown className="h-3.5 w-3.5" /> Upgrade
-                  </button>
-                ) : (
-                  <button disabled={acting} onClick={() => doAction(biz.id, "downgrade")}
-                    className="flex items-center gap-1 rounded-lg border border-navy-600 px-2.5 py-1.5 text-xs text-navy-400 hover:bg-navy-800 disabled:opacity-50">
-                    Downgrade
-                  </button>
-                )}
-                <button onClick={() => setViewDataBiz(biz.id)}
-                  className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-blue-500/40 hover:text-blue-400 transition" title="View Data">
-                  <TrendingUp className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => setEditingBiz(biz)}
-                  className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-orange-500/40 hover:text-orange-400 transition" title="Edit">
-                  <Edit2 className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => setDeletingBiz(biz)}
-                  className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-red-500/40 hover:text-red-400 transition" title="Delete">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="flex justify-center py-16"><Loader className="h-5 w-5 animate-spin text-orange-500" /></div>
+        ) : rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-navy-400">No businesses found</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-navy-800 text-left text-xs text-navy-500">
+                  <th className="px-4 py-3 font-medium">Business</th>
+                  <th className="px-4 py-3 font-medium">Joined</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Plan</th>
+                  <th className="px-4 py-3 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-800/50">
+                {rows.map(biz => (
+                  <tr key={biz.id} className="hover:bg-navy-800/30 transition">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-navy-800">
+                          <Building2 className="h-4 w-4 text-orange-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-white">{biz.name}</p>
+                          <p className="text-xs text-navy-400">{biz.owner_name}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-navy-400">{new Date(biz.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-3"><Badge label={biz.status} color={biz.status === "ACTIVE" ? "green" : "red"} /></td>
+                    <td className="px-4 py-3"><Badge label={biz.plan} color={biz.plan === "PREMIUM" ? "yellow" : "gray"} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        {biz.status === "ACTIVE" ? (
+                          <button disabled={acting} onClick={() => setConfirm({ bizId: biz.id, action: "suspend", label: biz.name })}
+                            className="flex items-center gap-1 rounded-lg border border-red-500/30 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50">
+                            <ToggleRight className="h-3.5 w-3.5" /> Suspend
+                          </button>
+                        ) : (
+                          <button disabled={acting} onClick={() => doAction(biz.id, "activate", biz.name)}
+                            className="flex items-center gap-1 rounded-lg border border-green-500/30 px-2 py-1 text-xs text-green-400 hover:bg-green-500/10 disabled:opacity-50">
+                            <ToggleLeft className="h-3.5 w-3.5" /> Activate
+                          </button>
+                        )}
+                        {biz.plan === "FREE" ? (
+                          <button disabled={acting} onClick={() => doAction(biz.id, "upgrade", biz.name)}
+                            className="flex items-center gap-1 rounded-lg border border-yellow-500/30 px-2 py-1 text-xs text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50">
+                            <Crown className="h-3.5 w-3.5" /> Upgrade
+                          </button>
+                        ) : (
+                          <button disabled={acting} onClick={() => doAction(biz.id, "downgrade", biz.name)}
+                            className="flex items-center gap-1 rounded-lg border border-navy-600 px-2 py-1 text-xs text-navy-400 hover:bg-navy-800 disabled:opacity-50">
+                            Downgrade
+                          </button>
+                        )}
+                        <button onClick={() => setViewDataBiz(biz.id)}
+                          className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-blue-500/40 hover:text-blue-400 transition" title="View Data">
+                          <TrendingUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => setEditingBiz(biz)}
+                          className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-orange-500/40 hover:text-orange-400 transition" title="Edit">
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => setDeletingBiz(biz)}
+                          className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-red-500/40 hover:text-red-400 transition" title="Delete">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!loading && rows.length > 0 && (
+          <PaginationFooter page={page} pageSize={BIZ_PAGE_SIZE} count={count} onPageChange={setPage} />
+        )}
       </div>
 
       {confirm && (
         <ConfirmDialog
           title={`Suspend "${confirm.label}"?`}
           body="The business and its users will lose access until re-activated."
-          onConfirm={() => doAction(confirm.bizId, confirm.action)}
-          onCancel={() => setConfirm(null)}
+          error={confirmError}
+          busy={acting}
+          onConfirm={() => doAction(confirm.bizId, confirm.action, confirm.label)}
+          onCancel={() => { setConfirm(null); setConfirmError(""); }}
           dangerous
         />
       )}
@@ -733,8 +903,10 @@ function BusinessesTab({ businesses, onRefresh }) {
         <ConfirmDialog
           title={`Permanently delete "${deletingBiz.name}"?`}
           body="All business data (sales, inventory, expenses, etc.) will be deleted forever."
+          error={deleteError}
+          busy={acting}
           onConfirm={doDeleteBiz}
-          onCancel={() => setDeletingBiz(null)}
+          onCancel={() => { setDeletingBiz(null); setDeleteError(""); }}
           dangerous
         />
       )}
@@ -742,7 +914,7 @@ function BusinessesTab({ businesses, onRefresh }) {
         <EditBusinessModal
           biz={editingBiz}
           onClose={() => setEditingBiz(null)}
-          onSaved={() => { setEditingBiz(null); onRefresh(); }}
+          onSaved={() => { setEditingBiz(null); load(); }}
         />
       )}
       {viewDataBiz && (
@@ -753,25 +925,54 @@ function BusinessesTab({ businesses, onRefresh }) {
 }
 
 /* ── Users Tab ────────────────────────────────────────────────────────────── */
-function UsersTab({ users, onRefresh }) {
+const USER_PAGE_SIZE = 50;
+
+function UsersTab({ onCountChange }) {
+  const [rows, setRows] = useState([]);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [deletingUser, setDeletingUser] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
   const [acting, setActing] = useState(false);
 
-  const filtered = users.filter(u =>
-    !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = { page, page_size: USER_PAGE_SIZE };
+      if (debouncedSearch) params.search = debouncedSearch;
+      const { data } = await adminApi.users(params);
+      const results = data?.results ?? data ?? [];
+      const total = data?.count ?? results.length;
+      setRows(results);
+      setCount(total);
+      onCountChange?.(total);
+    } catch {
+      setRows([]);
+      setCount(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedSearch]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(1); }, [debouncedSearch]);
 
   const doDelete = async () => {
     setActing(true);
+    setDeleteError("");
     try {
       await adminApi.deleteUser(deletingUser.id);
-      onRefresh();
-    } catch {}
+      await load();
+      setDeletingUser(null);
+    } catch (e) {
+      setDeleteError(e.response?.data?.error || e.response?.data?.detail || "Couldn't delete this user. Please try again.");
+    }
     setActing(false);
-    setDeletingUser(null);
   };
 
   return (
@@ -780,7 +981,7 @@ function UsersTab({ users, onRefresh }) {
         <div className="relative max-w-xs flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-navy-500" />
           <input className="w-full rounded-lg bg-navy-800 border border-navy-700 pl-9 pr-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
-            placeholder="Search users..." value={search} onChange={e => setSearch(e.target.value)} />
+            placeholder="Search by name or email..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <button onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
@@ -789,61 +990,84 @@ function UsersTab({ users, onRefresh }) {
       </div>
 
       <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
-        <div className="border-b border-navy-800 px-4 py-3">
-          <p className="text-xs text-navy-400">{filtered.length} users</p>
-        </div>
-        <div className="divide-y divide-navy-800/50">
-          {filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-navy-400">No users found</p>
-          ) : filtered.map(u => (
-            <div key={u.id} className="flex items-center justify-between px-4 py-3 hover:bg-navy-800/30 transition">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-navy-800 text-sm font-bold text-white">
-                  {u.name?.[0]?.toUpperCase() || "U"}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-white">{u.name || "—"}</p>
-                    {u.is_platform_admin && <Badge label="Admin" color="orange" />}
-                  </div>
-                  <p className="text-xs text-navy-400">{u.email} · {u.account_type}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge label={u.is_active ? "Active" : "Inactive"} color={u.is_active ? "green" : "red"} />
-                <button onClick={() => setSelectedUser(u)}
-                  className="flex items-center gap-1.5 rounded-lg border border-navy-700 px-2.5 py-1.5 text-xs text-navy-300 hover:border-orange-500/40 hover:text-orange-400 transition">
-                  <CalendarDays className="h-3 w-3" /> Details
-                </button>
-                <button onClick={() => setDeletingUser(u)}
-                  className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-red-500/40 hover:text-red-400 transition">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="flex justify-center py-16"><Loader className="h-5 w-5 animate-spin text-orange-500" /></div>
+        ) : rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-navy-400">No users found</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-navy-800 text-left text-xs text-navy-500">
+                  <th className="px-4 py-3 font-medium">User</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-800/50">
+                {rows.map(u => (
+                  <tr key={u.id} className="hover:bg-navy-800/30 transition">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-navy-800 text-sm font-bold text-white">
+                          {u.name?.[0]?.toUpperCase() || "U"}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-white">{u.name || "—"}</p>
+                            {u.is_platform_admin && <Badge label="Admin" color="orange" />}
+                          </div>
+                          <p className="text-xs text-navy-400">{u.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-navy-300 capitalize">{u.account_type}</td>
+                    <td className="px-4 py-3"><Badge label={u.is_active ? "Active" : "Inactive"} color={u.is_active ? "green" : "red"} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => setSelectedUser(u)}
+                          className="flex items-center gap-1.5 rounded-lg border border-navy-700 px-2.5 py-1.5 text-xs text-navy-300 hover:border-orange-500/40 hover:text-orange-400 transition">
+                          <CalendarDays className="h-3 w-3" /> Details
+                        </button>
+                        <button onClick={() => setDeletingUser(u)}
+                          className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-red-500/40 hover:text-red-400 transition">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!loading && rows.length > 0 && (
+          <PaginationFooter page={page} pageSize={USER_PAGE_SIZE} count={count} onPageChange={setPage} />
+        )}
       </div>
 
       {selectedUser && (
         <UserDetailModal
           user={selectedUser}
           onClose={() => setSelectedUser(null)}
-          onAction={() => { setSelectedUser(null); onRefresh(); }}
+          onAction={() => { setSelectedUser(null); load(); }}
         />
       )}
       {showCreate && (
         <CreateUserModal
           onClose={() => setShowCreate(false)}
-          onSaved={() => { setShowCreate(false); onRefresh(); }}
+          onSaved={() => { setShowCreate(false); load(); }}
         />
       )}
       {deletingUser && (
         <ConfirmDialog
           title={`Delete "${deletingUser.name || deletingUser.email}"?`}
           body="This will permanently delete the user and all their data. This cannot be undone."
+          error={deleteError}
+          busy={acting}
           onConfirm={doDelete}
-          onCancel={() => setDeletingUser(null)}
+          onCancel={() => { setDeletingUser(null); setDeleteError(""); }}
           dangerous
         />
       )}
@@ -856,28 +1080,39 @@ function AnnouncementsTab({ announcements, onRefresh }) {
   const [showModal, setShowModal] = useState(false);
   const [editAnn, setEditAnn] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [confirmError, setConfirmError] = useState("");
   const [acting, setActing] = useState(false);
+  const [toggleError, setToggleError] = useState("");
 
   const doDelete = async (id) => {
     setActing(true);
+    setConfirmError("");
     try {
       await adminApi.deleteAnnouncement(id);
       onRefresh();
-    } catch {}
+      setConfirm(null);
+    } catch (e) {
+      setConfirmError(e.response?.data?.error || e.response?.data?.detail || "Couldn't delete this announcement. Please try again.");
+    }
     setActing(false);
-    setConfirm(null);
   };
 
   const doToggle = async (ann) => {
+    setToggleError("");
     try {
       await adminApi.updateAnnouncement(ann.id, { ...ann, is_active: !ann.is_active });
       onRefresh();
-    } catch {}
+    } catch (e) {
+      setToggleError(e.response?.data?.error || e.response?.data?.detail || `Couldn't ${ann.is_active ? "deactivate" : "activate"} "${ann.title}".`);
+    }
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        {toggleError ? (
+          <p className="text-xs text-red-400">{toggleError}</p>
+        ) : <span />}
         <button onClick={() => { setEditAnn(null); setShowModal(true); }}
           className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
           <Plus className="h-4 w-4" /> New Announcement
@@ -935,8 +1170,10 @@ function AnnouncementsTab({ announcements, onRefresh }) {
         <ConfirmDialog
           title="Delete announcement?"
           body="This will permanently delete the announcement."
+          error={confirmError}
+          busy={acting}
           onConfirm={() => doDelete(confirm)}
-          onCancel={() => setConfirm(null)}
+          onCancel={() => { setConfirm(null); setConfirmError(""); }}
           dangerous
         />
       )}
@@ -950,13 +1187,22 @@ function AnnouncementsTab({ announcements, onRefresh }) {
    backend bewosai/permissions.py::require_feature. */
 function FeaturesTab({ features, onRefresh }) {
   const [busyKey, setBusyKey] = useState(null);
+  const [error, setError] = useState("");
 
   const toggle = async (feature, field) => {
     setBusyKey(feature.key + field);
+    setError("");
     try {
       await adminApi.toggleFeature(feature.key, { [field]: !feature[field] });
       onRefresh();
-    } catch {}
+    } catch (e) {
+      const data = e.response?.data;
+      setError(
+        data?.error || data?.detail ||
+        (data && typeof data === "object" ? Object.values(data).flat().join(" ") : null) ||
+        `Couldn't update "${feature.name}". Please try again.`
+      );
+    }
     setBusyKey(null);
   };
 
@@ -971,6 +1217,11 @@ function FeaturesTab({ features, onRefresh }) {
         Disabling a feature here overrides every staff permission underneath it — nobody in any
         business can use it, on Desktop or Mobile, until it's switched back on.
       </p>
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {error}
+        </div>
+      )}
       <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -1105,8 +1356,13 @@ export default function SuperAdminPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
-  const [businesses, setBusinesses] = useState([]);
-  const [users, setUsers] = useState([]);
+  // Full, unpaginated business list — only ever used to power the business
+  // search picker in "Generate License" (LicensesTab), which needs to find
+  // any business by name/owner, not just whatever's on the Businesses tab's
+  // current page. The Businesses tab itself fetches its own paginated data.
+  const [businessesFull, setBusinessesFull] = useState([]);
+  const [businessCount, setBusinessCount] = useState(null);
+  const [userCount, setUserCount] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [featureList, setFeatureList] = useState([]);
@@ -1117,17 +1373,19 @@ export default function SuperAdminPage() {
   const load = async (showSpinner = true) => {
     if (showSpinner) setLoading(true); else setRefreshing(true);
     try {
-      const [s, b, u, a, tk, f] = await Promise.allSettled([
+      const [s, b, a, tk, f] = await Promise.allSettled([
         adminApi.stats(),
-        adminApi.businesses(),
-        adminApi.users(),
-        adminApi.announcements(),
-        adminApi.tickets(),
+        adminApi.businesses({ page_size: 1000 }),
+        adminApi.announcements({ page_size: 1000 }),
+        adminApi.tickets({ page_size: 1000 }),
         adminApi.features(),
       ]);
       if (s.status === "fulfilled") setStats(s.value.data);
-      if (b.status === "fulfilled") setBusinesses(b.value.data?.results ?? b.value.data ?? []);
-      if (u.status === "fulfilled") setUsers(u.value.data?.results ?? u.value.data ?? []);
+      if (b.status === "fulfilled") {
+        const results = b.value.data?.results ?? b.value.data ?? [];
+        setBusinessesFull(results);
+        setBusinessCount((c) => c ?? (b.value.data?.count ?? results.length));
+      }
       if (a.status === "fulfilled") setAnnouncements(a.value.data?.results ?? a.value.data ?? []);
       if (tk.status === "fulfilled") setTickets(tk.value.data?.results ?? tk.value.data ?? []);
       if (f.status === "fulfilled") setFeatureList(f.value.data?.results ?? f.value.data ?? []);
@@ -1142,14 +1400,34 @@ export default function SuperAdminPage() {
     load();
   }, [user]);
 
-  const tabs = [
-    { id: "overview", label: "Overview", icon: TrendingUp },
-    { id: "businesses", label: `Businesses (${businesses.length})`, icon: Building2 },
-    { id: "users", label: `Users (${users.length})`, icon: Users },
-    { id: "features", label: "Feature Management", icon: SlidersHorizontal },
-    { id: "licenses", label: "Licenses", icon: KeyRound },
-    { id: "announcements", label: "Announcements", icon: Bell },
-    { id: "tickets", label: `Tickets (${tickets.filter(t => t.status === "OPEN").length} open)`, icon: MessageSquare },
+  const openTicketCount = tickets.filter(t => t.status === "OPEN").length;
+
+  const navSections = [
+    {
+      heading: null,
+      items: [{ id: "overview", label: "Dashboard", icon: LayoutDashboard }],
+    },
+    {
+      heading: "Account Management",
+      items: [
+        { id: "businesses", label: "Businesses", count: businessCount, icon: Building2 },
+        { id: "users", label: "Users", count: userCount, icon: Users },
+      ],
+    },
+    {
+      heading: "Access Control",
+      items: [
+        { id: "features", label: "Feature Management", icon: SlidersHorizontal },
+        { id: "licenses", label: "Licenses", icon: KeyRound },
+      ],
+    },
+    {
+      heading: "Communication",
+      items: [
+        { id: "announcements", label: "Announcements", icon: Bell },
+        { id: "tickets", label: "Support Tickets", count: openTicketCount || null, icon: MessageSquare },
+      ],
+    },
   ];
 
   return (
@@ -1169,28 +1447,50 @@ export default function SuperAdminPage() {
         </button>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex gap-1 rounded-xl border border-navy-800 bg-navy-900 p-1 flex-wrap">
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTab(id)}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${tab === id ? "bg-orange-500 text-white" : "text-navy-400 hover:text-white"}`}>
-            <Icon className="h-3.5 w-3.5" /> {label}
-          </button>
-        ))}
-      </div>
-
       {loading ? (
         <div className="flex justify-center py-20"><Loader className="h-6 w-6 animate-spin text-orange-500" /></div>
       ) : (
-        <>
-          {tab === "overview" && <OverviewTab stats={stats} />}
-          {tab === "businesses" && <BusinessesTab businesses={businesses} onRefresh={() => load(false)} />}
-          {tab === "users" && <UsersTab users={users} onRefresh={() => load(false)} />}
-          {tab === "features" && <FeaturesTab features={featureList} onRefresh={() => load(false)} />}
-          {tab === "licenses" && <LicensesTab businesses={businesses} />}
-          {tab === "announcements" && <AnnouncementsTab announcements={announcements} onRefresh={() => load(false)} />}
-          {tab === "tickets" && <TicketsTab tickets={tickets} onRefresh={() => load(false)} />}
-        </>
+        <div className="flex flex-col gap-6 lg:flex-row">
+          {/* Sidebar nav */}
+          <nav className="flex gap-1 overflow-x-auto rounded-xl border border-navy-800 bg-navy-900 p-2 lg:w-56 lg:shrink-0 lg:flex-col lg:overflow-visible">
+            {navSections.map((section, si) => (
+              <div key={si} className="lg:w-full">
+                {section.heading && (
+                  <p className="hidden px-3 pb-1.5 pt-3 text-[10px] font-bold uppercase tracking-wider text-navy-600 lg:block first:pt-1">
+                    {section.heading}
+                  </p>
+                )}
+                <div className="flex gap-1 lg:flex-col">
+                  {section.items.map(({ id, label, count, icon: Icon }) => (
+                    <button key={id} onClick={() => setTab(id)}
+                      className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold transition lg:w-full ${
+                        tab === id ? "bg-orange-500 text-white" : "text-navy-400 hover:bg-navy-800 hover:text-white"
+                      }`}>
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="flex-1 whitespace-nowrap">{label}</span>
+                      {count != null && (
+                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${tab === id ? "bg-white/20" : "bg-navy-800 text-navy-400"}`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
+
+          {/* Content */}
+          <div className="min-w-0 flex-1">
+            {tab === "overview" && <OverviewTab stats={stats} />}
+            {tab === "businesses" && <BusinessesTab onCountChange={setBusinessCount} />}
+            {tab === "users" && <UsersTab onCountChange={setUserCount} />}
+            {tab === "features" && <FeaturesTab features={featureList} onRefresh={() => load(false)} />}
+            {tab === "licenses" && <LicensesTab businesses={businessesFull} />}
+            {tab === "announcements" && <AnnouncementsTab announcements={announcements} onRefresh={() => load(false)} />}
+            {tab === "tickets" && <TicketsTab tickets={tickets} onRefresh={() => load(false)} />}
+          </div>
+        </div>
       )}
     </div>
   );

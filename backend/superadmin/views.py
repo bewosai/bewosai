@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from accounts.models import User, Business, LoginActivity
 from accounts.serializers import UserSerializer, BusinessSerializer
+from bewosai.pagination import LargePageNumberPagination
 from bewosai.utils import get_business
 from .models import (
     SupportTicket, Announcement, Feature,
@@ -73,7 +74,7 @@ class BusinessManagementView(APIView):
         status_filter = request.query_params.get("status")
         search = request.query_params.get("search", "")
 
-        qs = Business.objects.all().order_by("-created_at")
+        qs = Business.objects.select_related("owner").order_by("-created_at")
         if plan:
             qs = qs.filter(plan=plan)
         if status_filter:
@@ -81,7 +82,9 @@ class BusinessManagementView(APIView):
         if search:
             qs = qs.filter(name__icontains=search)
 
-        return Response(BusinessSerializer(qs, many=True).data)
+        paginator = LargePageNumberPagination()
+        page = paginator.paginate_queryset(qs, request)
+        return paginator.get_paginated_response(BusinessSerializer(page, many=True).data)
 
 
 class BusinessActionView(APIView):
@@ -122,7 +125,10 @@ class UserManagementView(APIView):
         qs = User.objects.all().order_by("-created_at")
         if search:
             qs = qs.filter(email__icontains=search) | qs.filter(name__icontains=search)
-        return Response(UserSerializer(qs, many=True).data)
+
+        paginator = LargePageNumberPagination()
+        page = paginator.paginate_queryset(qs, request)
+        return paginator.get_paginated_response(UserSerializer(page, many=True).data)
 
 
 class UserActionView(APIView):
@@ -163,6 +169,8 @@ class LoginActivityView(APIView):
         if user_id:
             qs = qs.filter(user_id=user_id)
 
+        paginator = LargePageNumberPagination()
+        page = paginator.paginate_queryset(qs, request)
         data = [
             {
                 "id": la.id,
@@ -174,9 +182,9 @@ class LoginActivityView(APIView):
                 "logout_time": la.logout_time,
                 "session_duration": str(la.session_duration) if la.session_duration else None,
             }
-            for la in qs[:500]
+            for la in page
         ]
-        return Response(data)
+        return paginator.get_paginated_response(data)
 
 
 # ── Announcements ──────────────────────────────────────────────────────────────
@@ -184,6 +192,7 @@ class LoginActivityView(APIView):
 class AnnouncementListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsPlatformAdmin]
     serializer_class = AnnouncementSerializer
+    pagination_class = LargePageNumberPagination
     queryset = Announcement.objects.all()
 
 
@@ -205,6 +214,7 @@ class ActiveAnnouncementsView(APIView):
 class TicketListView(generics.ListAPIView):
     permission_classes = [IsPlatformAdmin]
     serializer_class = SupportTicketSerializer
+    pagination_class = LargePageNumberPagination
 
     def get_queryset(self):
         qs = SupportTicket.objects.all()
@@ -416,6 +426,7 @@ class LicenseListView(generics.ListAPIView):
     """
     permission_classes = [IsPlatformAdmin]
     serializer_class = LicenseSerializer
+    pagination_class = LargePageNumberPagination
 
     def get_queryset(self):
         qs = License.objects.select_related("business", "business__owner", "created_by").all()
@@ -627,13 +638,14 @@ class LicenseReassignView(APIView):
 class LicenseAuditLogListView(generics.ListAPIView):
     permission_classes = [IsPlatformAdmin]
     serializer_class = LicenseAuditLogSerializer
+    pagination_class = LargePageNumberPagination
 
     def get_queryset(self):
         qs = LicenseAuditLog.objects.select_related("actor", "business", "license").all()
         business_id = self.request.query_params.get("business")
         if business_id:
             qs = qs.filter(business_id=business_id)
-        return qs[:200]
+        return qs
 
 
 class BusinessFeaturePermissionsView(APIView):
