@@ -13,6 +13,7 @@ import { amountInWords } from "../utils/amountInWords";
 import { useEscToClose } from "../hooks/useEscToClose";
 import SearchableSelect from "../components/common/SearchableSelect";
 import { getRecentIds, pushRecentId } from "../utils/recentItems";
+import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -843,6 +844,7 @@ export default function SalesPage() {
   const [saleList, setSaleList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("ALL");
+  const [paymentFilter, setPaymentFilter] = useState("ALL");
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editSale, setEditSale] = useState(null);
@@ -879,13 +881,15 @@ export default function SalesPage() {
   const overdueCount = saleList.filter(isOverdue).length;
 
   const TABS = ["ALL", "DRAFT", "CONFIRMED", "OVERDUE"];
+  const PAYMENT_FILTERS = ["ALL", "PAID", "PARTIAL", "UNPAID"];
 
   const filtered = saleList.filter(s => {
     const matchTab = tab === "ALL" || (tab === "OVERDUE" ? isOverdue(s) : s.status === tab);
+    const matchPayment = paymentFilter === "ALL" || paymentStatus(s) === paymentFilter;
     const q = search.toLowerCase();
     const matchSearch = !q || (s.invoice_number || "").toLowerCase().includes(q) ||
       (s.customer_name || s.party_name || "").toLowerCase().includes(q);
-    return matchTab && matchSearch;
+    return matchTab && matchPayment && matchSearch;
   });
 
   const handleDelete = async () => {
@@ -966,7 +970,7 @@ export default function SalesPage() {
       </div>
 
       {/* Search + Tabs */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-1 rounded-xl bg-navy-900 border border-navy-800 p-1 flex-wrap">
           {TABS.map(t2 => (
             <button key={t2}
@@ -985,6 +989,17 @@ export default function SalesPage() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+      </div>
+
+      {/* Payment status filter */}
+      <div className="mb-4 flex gap-1 rounded-xl bg-navy-900 border border-navy-800 p-1 w-fit flex-wrap">
+        {PAYMENT_FILTERS.map(pf => (
+          <button key={pf}
+            onClick={() => setPaymentFilter(pf)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${paymentFilter === pf ? "bg-orange-500 text-white" : "text-navy-400 hover:text-white"}`}>
+            {pf === "ALL" ? "All Payments" : PAYMENT_STATUS_META[pf].label}
+          </button>
+        ))}
       </div>
 
       {/* Invoice List */}
@@ -1034,9 +1049,12 @@ export default function SalesPage() {
                 <div className="col-span-4 sm:col-span-1 text-right text-orange-400 text-xs">
                   {maskAmount(parseFloat(sale.due_amount || 0), v => `Rs. ${v.toLocaleString()}`)}
                 </div>
-                <div className="col-span-6 sm:col-span-1">
+                <div className="col-span-6 sm:col-span-1 flex flex-col items-start gap-1">
                   <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_COLORS[sale.status] || "bg-navy-700 text-navy-400"}`}>
                     {sale.status || "DRAFT"}
+                  </span>
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${PAYMENT_STATUS_META[paymentStatus(sale)].color}`}>
+                    {PAYMENT_STATUS_META[paymentStatus(sale)].label}
                   </span>
                 </div>
                 <div className="col-span-6 sm:col-span-1 flex justify-end gap-1">

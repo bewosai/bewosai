@@ -11,6 +11,7 @@ import { adToBS, formatBS } from "../utils/nepaliDate";
 import { amountInWords } from "../utils/amountInWords";
 import SearchableSelect from "../components/common/SearchableSelect";
 import { getRecentIds, pushRecentId } from "../utils/recentItems";
+import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -820,6 +821,7 @@ export default function PurchasesPage() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("ALL");
+  const [paymentFilter, setPaymentFilter] = useState("ALL");
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -845,14 +847,16 @@ export default function PurchasesPage() {
   const totalPayable = list.reduce((s, x) => s + parseFloat(x.due_amount || 0), 0);
 
   const TABS = ["ALL", "DRAFT", "CONFIRMED"];
+  const PAYMENT_FILTERS = ["ALL", "PAID", "PARTIAL", "UNPAID"];
 
   const filtered = list.filter(p => {
     const matchTab = tab === "ALL" || p.status === tab;
+    const matchPayment = paymentFilter === "ALL" || paymentStatus(p) === paymentFilter;
     const q = search.toLowerCase();
     const matchSearch = !q ||
       (p.bill_number || p.invoice_number || "").toLowerCase().includes(q) ||
       (p.supplier_name || p.party_name || "").toLowerCase().includes(q);
-    return matchTab && matchSearch;
+    return matchTab && matchPayment && matchSearch;
   });
 
   return (
@@ -885,7 +889,7 @@ export default function PurchasesPage() {
       </div>
 
       {/* Tabs + Search */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-1 rounded-xl bg-navy-900 border border-navy-800 p-1">
           {TABS.map(t2 => (
             <button key={t2} onClick={() => setTab(t2)}
@@ -903,6 +907,17 @@ export default function PurchasesPage() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+      </div>
+
+      {/* Payment status filter */}
+      <div className="mb-4 flex gap-1 rounded-xl bg-navy-900 border border-navy-800 p-1 w-fit flex-wrap">
+        {PAYMENT_FILTERS.map(pf => (
+          <button key={pf}
+            onClick={() => setPaymentFilter(pf)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${paymentFilter === pf ? "bg-orange-500 text-white" : "text-navy-400 hover:text-white"}`}>
+            {pf === "ALL" ? "All Payments" : PAYMENT_STATUS_META[pf].label}
+          </button>
+        ))}
       </div>
 
       {/* List */}
@@ -951,9 +966,12 @@ export default function PurchasesPage() {
                 <div className="col-span-4 sm:col-span-1 text-right text-orange-400 text-xs">
                   {maskAmount(parseFloat(item.due_amount || 0), v => `Rs. ${v.toLocaleString()}`)}
                 </div>
-                <div className="col-span-6 sm:col-span-1">
+                <div className="col-span-6 sm:col-span-1 flex flex-col items-start gap-1">
                   <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_COLORS[item.status] || "bg-navy-700 text-navy-400"}`}>
                     {item.status || "DRAFT"}
+                  </span>
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${PAYMENT_STATUS_META[paymentStatus(item)].color}`}>
+                    {PAYMENT_STATUS_META[paymentStatus(item)].label}
                   </span>
                 </div>
                 <div className="col-span-6 sm:col-span-1 flex justify-end gap-1">
