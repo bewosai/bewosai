@@ -25,21 +25,23 @@ export default function LoginPage() {
   }, [isLoggedIn]);
 
   const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-  const isValidPhone = (v) => /^\+?\d{7,15}$/.test(v);
+  // Phone sign-in is built end-to-end (backend resolves either kind of
+  // `identifier` — see accounts/views.py) but disabled here for now until
+  // it's ready to ship. To re-enable: uncomment isValidPhone below plus the
+  // matching bits in handleSendOtp and the input field/labels beneath it.
+  // const isValidPhone = (v) => /^\+?\d{7,15}$/.test(v);
 
   const handleSendOtp = async (e) => {
     e?.preventDefault();
     setError(""); setInfo("");
     const trimmed = identifier.trim();
-    const normalized = trimmed.includes("@") ? trimmed.toLowerCase() : trimmed;
+    const normalized = trimmed.toLowerCase();
 
-    // Signing up still needs an email — phone sign-up isn't available until
-    // an SMS provider is wired up (see SendOTPView). Signing in accepts
-    // either, since an existing account's phone can be resolved to whatever
-    // email it already has on file.
-    const valid = isSignup ? isValidEmail(normalized) : (isValidEmail(normalized) || isValidPhone(normalized));
+    // const valid = isSignup ? isValidEmail(normalized) : (isValidEmail(normalized) || isValidPhone(normalized));
+    const valid = isValidEmail(normalized);
     if (!normalized || !valid) {
-      setError(isSignup ? "Please enter a valid email address." : "Please enter a valid email address or phone number.");
+      // setError(isSignup ? "Please enter a valid email address." : "Please enter a valid email address or phone number.");
+      setError("Please enter a valid email address.");
       return;
     }
     const res = await sendOtp(normalized, isSignup);
@@ -106,7 +108,7 @@ export default function LoginPage() {
                 <p className="mt-1.5 text-sm text-navy-400">
                   {isSignup
                     ? "Enter your Gmail or email to get started"
-                    : "Enter your email or phone to receive a sign-in code"}
+                    : "Enter your email to receive a sign-in code"}
                 </p>
               </div>
 
@@ -114,13 +116,13 @@ export default function LoginPage() {
                 <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
                 <input
                   id="identifier"
-                  name="identifier"
-                  type="text"
+                  name="email"
+                  type="email"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder={isSignup ? "your@email.com" : "Email or phone number"}
+                  placeholder="your@email.com"
                   autoFocus
-                  autoComplete="username"
+                  autoComplete="email"
                   inputMode="email"
                   className="w-full rounded-2xl border border-navy-700 bg-navy-950 py-4 pl-11 pr-4 text-base text-white outline-none transition placeholder:text-navy-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
                 />

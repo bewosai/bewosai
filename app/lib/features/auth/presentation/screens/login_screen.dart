@@ -286,16 +286,19 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Phone sign-in is disabled for now (see validators.dart) — to
+          // re-enable, restore labelText/autofillHints below and swap the
+          // validator back to Validators.emailOrPhone.
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.email, AutofillHints.telephoneNumber],
+            autofillHints: const [AutofillHints.email],
             decoration: const InputDecoration(
-              labelText: 'Email or phone number',
+              labelText: 'Email address',
               prefixIcon: Icon(Icons.mail_outline),
             ),
-            validator: Validators.emailOrPhone,
+            validator: Validators.email,
             onFieldSubmitted: (_) {
               if (!auth.isLoading) _sendOtp();
             },

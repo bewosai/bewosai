@@ -163,11 +163,11 @@ export default function VerifyOtpPage() {
                 <div className="mb-5 text-center">
                   <h2 className="text-xl font-bold text-white">Check your email</h2>
                   <p className="mt-1.5 text-sm text-navy-400">
-                    {identifier.includes("@") ? (
-                      <>We sent a 6-digit code to<br /><span className="font-semibold text-white">{identifier}</span></>
-                    ) : (
-                      "Enter the 6-digit code we sent — see above for where it went."
-                    )}
+                    {/* Phone sign-in is disabled for now (see Login.jsx) — when
+                        re-enabled, restore the identifier.includes("@") branch
+                        that falls back to the backend's own delivery message
+                        instead of showing a raw phone number here. */}
+                    We sent a 6-digit code to<br /><span className="font-semibold text-white">{identifier}</span>
                   </p>
                 </div>
 
