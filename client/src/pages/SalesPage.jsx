@@ -79,7 +79,12 @@ function PrintModal({ sale, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-white text-gray-800 shadow-2xl print:shadow-none print:rounded-none">
+      {/* A printed bill must always be pure white paper regardless of the
+          app's own theme — plain bg-white would resolve through this app's
+          --color-white token, which the light theme remaps to deep navy
+          (so normal in-app "white" text stays readable on a white surface).
+          The bracket value bypasses that token entirely. */}
+      <div className="w-full max-w-2xl rounded-2xl bg-[#ffffff] text-gray-800 shadow-2xl print:shadow-none print:rounded-none">
         <div className="flex items-center justify-between border-b p-4 print:hidden">
           <span className="font-bold text-gray-900">Print Invoice</span>
           <div className="flex items-center gap-3">
