@@ -6,6 +6,7 @@ import '../../../../core/calendar/nepali_calendar_service.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/utils/payment_status.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/pdf/bill_pdf.dart';
 import '../../../../shared/widgets/app_widgets.dart';
@@ -28,6 +29,7 @@ class PurchasesScreen extends StatefulWidget {
 
 class _PurchasesScreenState extends State<PurchasesScreen> {
   String _filter = 'ALL';
+  String _paymentFilter = 'ALL';
   String _search = '';
 
   @override
@@ -89,6 +91,11 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
     var list = purchases;
     if (_filter != 'ALL') {
       list = list.where((p) => p.status == _filter).toList();
+    }
+    if (_paymentFilter != 'ALL') {
+      list = list
+          .where((p) => paymentStatus(total: p.total, paid: p.paidAmount) == _paymentFilter)
+          .toList();
     }
     if (_search.isNotEmpty) {
       final q = _search.toLowerCase();
@@ -173,6 +180,24 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                             .toList(),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: ['ALL', 'PAID', 'PARTIAL', 'UNPAID'].map((
+                          f,
+                        ) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: AppFilterChip(
+                              label: f == 'ALL' ? 'All Payments' : f[0] + f.substring(1).toLowerCase(),
+                              selected: _paymentFilter == f,
+                              onTap: () => setState(() => _paymentFilter = f),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     if (filtered.isEmpty)
                       const EmptyState(
@@ -236,6 +261,10 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     StatusBadge(label: p.status),
+                                    const SizedBox(height: 4),
+                                    StatusBadge(
+                                      label: paymentStatus(total: p.total, paid: p.paidAmount),
+                                    ),
                                   ],
                                 ),
                                 IconButton(

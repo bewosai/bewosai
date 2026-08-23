@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/i18n/translations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/utils/payment_status.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../data/models/sale_model.dart';
 import '../providers/sale_provider.dart';
@@ -17,6 +18,7 @@ class SalesScreen extends StatefulWidget {
 
 class _SalesScreenState extends State<SalesScreen> {
   String _filter = 'ALL';
+  String _paymentFilter = 'ALL';
   String _search = '';
 
   @override
@@ -33,6 +35,11 @@ class _SalesScreenState extends State<SalesScreen> {
       list = list.where((s) => s.isOverdue).toList();
     } else if (_filter != 'ALL') {
       list = list.where((s) => s.status == _filter).toList();
+    }
+    if (_paymentFilter != 'ALL') {
+      list = list
+          .where((s) => paymentStatus(total: s.total, paid: s.paidAmount) == _paymentFilter)
+          .toList();
     }
     if (_search.isNotEmpty) {
       final q = _search.toLowerCase();
@@ -121,6 +128,24 @@ class _SalesScreenState extends State<SalesScreen> {
                         }).toList(),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: ['ALL', 'PAID', 'PARTIAL', 'UNPAID'].map((
+                          f,
+                        ) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: AppFilterChip(
+                              label: f == 'ALL' ? 'All Payments' : f[0] + f.substring(1).toLowerCase(),
+                              selected: _paymentFilter == f,
+                              onTap: () => setState(() => _paymentFilter = f),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     if (filtered.isEmpty)
                       const EmptyState(
@@ -184,6 +209,10 @@ class _SalesScreenState extends State<SalesScreen> {
                                       label: s.pendingSync
                                           ? t('pendingSync')
                                           : (s.isOverdue ? 'OVERDUE' : s.status),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    StatusBadge(
+                                      label: paymentStatus(total: s.total, paid: s.paidAmount),
                                     ),
                                   ],
                                 ),

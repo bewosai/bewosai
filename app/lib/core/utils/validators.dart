@@ -26,7 +26,7 @@ class Validators {
     return null;
   }
 
-  static final _phoneRegex = RegExp(r'^\d{7,15}$');
+  static final _phoneRegex = RegExp(r'^\+?\d{7,15}$');
 
   static String? phone(String? value) {
     final v = value?.trim() ?? '';

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/phone_country_field.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 
 class SettingsAccountScreen extends StatefulWidget {
@@ -92,11 +93,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
               decoration: const InputDecoration(labelText: 'Full Name'),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Phone'),
-            ),
+            PhoneCountryField(controller: _phoneController),
             const SizedBox(height: 20),
             PrimaryButton(
               label: _saving ? 'Saving...' : 'Save',

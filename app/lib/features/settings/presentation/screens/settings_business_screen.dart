@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/business_type_field.dart';
+import '../../../../shared/widgets/phone_country_field.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../banking/presentation/providers/banking_provider.dart';
 import '../../../banking/presentation/screens/banking_screen.dart' show BankAccountFormSheet;
@@ -167,11 +169,7 @@ class _SettingsBusinessScreenState extends State<SettingsBusinessScreen> {
               decoration: const InputDecoration(labelText: 'Business Name'),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _typeController,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(labelText: 'Business Type'),
-            ),
+            BusinessTypeField(controller: _typeController),
             const SizedBox(height: 12),
             TextField(
               controller: _emailController,
@@ -180,12 +178,7 @@ class _SettingsBusinessScreenState extends State<SettingsBusinessScreen> {
               decoration: const InputDecoration(labelText: 'Business Email'),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(labelText: 'Phone'),
-            ),
+            PhoneCountryField(controller: _phoneController),
             const SizedBox(height: 12),
             TextField(
               controller: _addressController,

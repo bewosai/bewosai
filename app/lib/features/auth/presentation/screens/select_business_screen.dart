@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/business_type_field.dart';
+import '../../../../shared/widgets/phone_country_field.dart';
 import '../../data/models/business_model.dart';
 import '../providers/auth_provider.dart';
 
@@ -257,25 +259,9 @@ class _CreateBusinessSheetState extends State<_CreateBusinessSheet> {
               validator: (v) => Validators.required(v, 'Business name'),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _typeController,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Business Type (optional)',
-              ),
-            ),
+            BusinessTypeField(controller: _typeController),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(
-                labelText: 'Phone (optional)',
-              ),
-              onFieldSubmitted: (_) {
-                if (!auth.isLoading) _submit();
-              },
-            ),
+            PhoneCountryField(controller: _phoneController, labelText: 'Phone (optional)'),
             const SizedBox(height: 20),
             PrimaryButton(
               label: 'Create Business',

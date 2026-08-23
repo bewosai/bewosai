@@ -96,11 +96,13 @@ class AppColors {
       case 'SUSPENDED':
       case 'OVERDUE':
       case 'ARCHIVED':
+      case 'UNPAID':
         return error;
       case 'SENT':
         return info;
       case 'DRAFT':
       case 'PENDING':
+      case 'PARTIAL':
         return warning;
       default:
         return textSecondary;
