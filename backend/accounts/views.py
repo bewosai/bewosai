@@ -348,7 +348,10 @@ class BusinessListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         owned = Business.objects.filter(owner=request.user)
         is_premium = owned.filter(plan=Business.PLAN_PREMIUM).exists()
-        limit = self.PREMIUM_LIMIT if is_premium else self.FREE_LIMIT
+        plan_limit = self.PREMIUM_LIMIT if is_premium else self.FREE_LIMIT
+        # A platform admin can raise (or lower) this per-user via
+        # superadmin.UserActionView's "set_business_limit" action.
+        limit = request.user.business_limit_override if request.user.business_limit_override is not None else plan_limit
         if owned.count() >= limit:
             plan_name = "Premium" if is_premium else "Free"
             hint = "You've reached the maximum number of business profiles." if is_premium else "Upgrade to Premium to create more."
@@ -444,8 +447,11 @@ class CloseFiscalYearView(APIView):
 class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
     serializer_class = StaffMemberSerializer
 
-    # Free plan: 1 staff member beyond the owner. Premium is unlimited.
+    # Free plan: 1 staff member beyond the owner. Premium: 8 — a platform
+    # admin can raise (or lower) this per-business via
+    # superadmin.BusinessActionView's "set_staff_limit" action.
     FREE_STAFF_LIMIT = 1
+    PREMIUM_STAFF_LIMIT = 8
 
     def get_queryset(self):
         bid = self.kwargs["business_id"]
@@ -460,17 +466,15 @@ class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
 
             non_owner_count = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER).count()
             already_member = business.staff.filter(user__email=data["email"], is_active=True).exists()
-            if (
-                business.plan != Business.PLAN_PREMIUM
-                and not already_member
-                and non_owner_count >= self.FREE_STAFF_LIMIT
-            ):
+            plan_limit = self.PREMIUM_STAFF_LIMIT if business.plan == Business.PLAN_PREMIUM else self.FREE_STAFF_LIMIT
+            staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_limit
+            if not already_member and non_owner_count >= staff_limit:
+                plan_name = "Premium" if business.plan == Business.PLAN_PREMIUM else "Free"
                 return Response(
                     {
                         "error": (
-                            f"Your Free plan allows up to {self.FREE_STAFF_LIMIT} staff member"
-                            f"{'s' if self.FREE_STAFF_LIMIT != 1 else ''} besides the owner. "
-                            "Upgrade to Premium to invite more."
+                            f"Your {plan_name} plan allows up to {staff_limit} staff member"
+                            f"{'s' if staff_limit != 1 else ''} besides the owner."
                         )
                     },
                     status=status.HTTP_403_FORBIDDEN,
@@ -545,8 +549,11 @@ class BusinessStaffListView(_RequireStaffManagement, generics.ListAPIView):
 class BusinessStaffInviteView(_RequireStaffManagement, APIView):
     """Invite (or add) a staff member to the current business."""
 
-    # Free plan: 1 staff member beyond the owner. Premium is unlimited.
+    # Free plan: 1 staff member beyond the owner. Premium: 8 — a platform
+    # admin can raise (or lower) this per-business via
+    # superadmin.BusinessActionView's "set_staff_limit" action.
     FREE_STAFF_LIMIT = 1
+    PREMIUM_STAFF_LIMIT = 8
 
     def post(self, request):
         business = get_business(request)
@@ -569,17 +576,15 @@ class BusinessStaffInviteView(_RequireStaffManagement, APIView):
 
         non_owner_count = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER).count()
         already_member = business.staff.filter(user__email=email, is_active=True).exists()
-        if (
-            business.plan != Business.PLAN_PREMIUM
-            and not already_member
-            and non_owner_count >= self.FREE_STAFF_LIMIT
-        ):
+        plan_limit = self.PREMIUM_STAFF_LIMIT if business.plan == Business.PLAN_PREMIUM else self.FREE_STAFF_LIMIT
+        staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_limit
+        if not already_member and non_owner_count >= staff_limit:
+            plan_name = "Premium" if business.plan == Business.PLAN_PREMIUM else "Free"
             return Response(
                 {
                     "error": (
-                        f"Your Free plan allows up to {self.FREE_STAFF_LIMIT} staff member"
-                        f"{'s' if self.FREE_STAFF_LIMIT != 1 else ''} besides the owner. "
-                        "Upgrade to Premium to invite more."
+                        f"Your {plan_name} plan allows up to {staff_limit} staff member"
+                        f"{'s' if staff_limit != 1 else ''} besides the owner."
                     )
                 },
                 status=status.HTTP_403_FORBIDDEN,

@@ -46,6 +46,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
+    # Platform-admin-only override of BusinessListCreateView's plan-based
+    # business-count cap (FREE=2/PREMIUM=5) for this user specifically — set
+    # via superadmin.UserActionView's "set_business_limit" action. Null means
+    # "use the plan default", never editable by the user themselves.
+    business_limit_override = models.PositiveIntegerField(null=True, blank=True)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
@@ -170,6 +175,12 @@ class Business(models.Model):
     subscription_expires = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Platform-admin-only override of the plan-based staff-count cap
+    # (FREE=1/PREMIUM=8) for this business specifically — set via
+    # superadmin.BusinessActionView's "set_staff_limit" action. Null means
+    # "use the plan default"; never editable by the business owner themselves
+    # (see BusinessSerializer.Meta.read_only_fields).
+    staff_limit_override = models.PositiveIntegerField(null=True, blank=True)
 
     # 120 days for now while the app is new, so people have real room to try
     # it out before needing a license — tighten this once there's an

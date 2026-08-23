@@ -204,13 +204,12 @@ export const superadmin = {
   stats: () => api.get("/superadmin/stats/"),
 
   businesses: (p) => api.get("/superadmin/businesses/", { params: p }),
-  businessAction: (id, action) => api.patch(`/superadmin/businesses/${id}/action/`, { action }),
-  editBusiness: (id, d) => api.patch(`/superadmin/businesses/${id}/`, d),
+  businessAction: (id, action, extra = {}) => api.patch(`/superadmin/businesses/${id}/action/`, { action, ...extra }),
   deleteBusiness: (id) => api.delete(`/superadmin/businesses/${id}/`),
   businessData: (id) => api.get(`/superadmin/businesses/${id}/data/`),
 
   users: (p) => api.get("/superadmin/users/", { params: p }),
-  userAction: (id, action) => api.patch(`/superadmin/users/${id}/action/`, { action }),
+  userAction: (id, action, extra = {}) => api.patch(`/superadmin/users/${id}/action/`, { action, ...extra }),
   createUser: (d) => api.post("/superadmin/users/create/", d),
   deleteUser: (id) => api.delete(`/superadmin/users/${id}/delete/`),
   loginActivity: (p) => api.get("/superadmin/login-activity/", { params: p }),

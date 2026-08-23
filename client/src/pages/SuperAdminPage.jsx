@@ -507,24 +507,29 @@ function CreateUserModal({ onClose, onSaved }) {
   );
 }
 
-/* ── Edit Business Modal ─────────────────────────────────────────────────── */
-function EditBusinessModal({ biz, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: biz.name || "", address: biz.address || "", phone: biz.phone || "", email: biz.email || "" });
+/* ── Manage Limits Modal ─────────────────────────────────────────────────── */
+// Deliberately the only "edit" a platform admin has on a tenant's business —
+// its own profile/records (name, contact info, financial data) are
+// admin-view-only. This just overrides the plan-based caps: how many staff
+// this business can add (default Free=1/Premium=8), and how many business
+// profiles this owner can create (default Free=2/Premium=5).
+function ManageLimitsModal({ biz, onClose, onSaved }) {
+  const planStaffDefault = biz.plan === "PREMIUM" ? 8 : 1;
+  const planBizDefault = biz.plan === "PREMIUM" ? 5 : 2;
+  const [staffLimit, setStaffLimit] = useState(biz.staff_limit_override ?? "");
+  const [bizLimit, setBizLimit] = useState(biz.owner_business_limit_override ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const handleSave = async () => {
     setSaving(true);
+    setError("");
     try {
-      await adminApi.editBusiness(biz.id, form);
+      await adminApi.businessAction(biz.id, "set_staff_limit", { limit: staffLimit === "" ? null : staffLimit });
+      await adminApi.userAction(biz.owner, "set_business_limit", { limit: bizLimit === "" ? null : bizLimit });
       onSaved();
     } catch (e) {
-      const data = e.response?.data;
-      setError(
-        data?.error || data?.detail ||
-        (data && typeof data === "object" ? Object.values(data).flat().join(" ") : null) ||
-        "Failed to update."
-      );
+      setError(e.response?.data?.error || e.response?.data?.detail || "Failed to update.");
     } finally { setSaving(false); }
   };
 
@@ -532,22 +537,27 @@ function EditBusinessModal({ biz, onClose, onSaved }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-2xl border border-navy-700 bg-navy-900 p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-white">Edit Business</h2>
+          <div>
+            <h2 className="font-bold text-white">Manage Limits</h2>
+            <p className="text-xs text-navy-400 mt-0.5">{biz.name} · owned by {biz.owner_name}</p>
+          </div>
           <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
         </div>
         {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
-        {[
-          { key: "name", label: "Business Name" },
-          { key: "address", label: "Address" },
-          { key: "phone", label: "Phone" },
-          { key: "email", label: "Email" },
-        ].map(({ key, label }) => (
-          <div key={key}>
-            <label className="mb-1 block text-xs font-semibold text-navy-400">{label}</label>
-            <input className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-sm text-white focus:border-orange-500 focus:outline-none"
-              value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
-          </div>
-        ))}
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-navy-400">Staff limit for this business</label>
+          <input type="number" min="0" placeholder={`Plan default (${planStaffDefault})`}
+            className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
+            value={staffLimit} onChange={e => setStaffLimit(e.target.value)} />
+          <p className="mt-1 text-[11px] text-navy-500">Leave blank to use the {biz.plan === "PREMIUM" ? "Premium" : "Free"} plan default of {planStaffDefault}.</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-navy-400">Business profiles this owner can create</label>
+          <input type="number" min="0" placeholder={`Plan default (${planBizDefault})`}
+            className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
+            value={bizLimit} onChange={e => setBizLimit(e.target.value)} />
+          <p className="mt-1 text-[11px] text-navy-500">Applies across all businesses this owner has — leave blank to use their plan default.</p>
+        </div>
         <div className="flex gap-3 justify-end">
           <button onClick={onClose} className="px-4 py-2 rounded-lg border border-navy-700 text-navy-400 hover:bg-navy-800 text-sm">Cancel</button>
           <button disabled={saving} onClick={handleSave} className="px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 text-sm disabled:opacity-50">
@@ -868,8 +878,8 @@ function BusinessesTab({ onCountChange }) {
                           <TrendingUp className="h-3.5 w-3.5" />
                         </button>
                         <button onClick={() => setEditingBiz(biz)}
-                          className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-orange-500/40 hover:text-orange-400 transition" title="Edit">
-                          <Edit2 className="h-3.5 w-3.5" />
+                          className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-orange-500/40 hover:text-orange-400 transition" title="Manage Limits">
+                          <SlidersHorizontal className="h-3.5 w-3.5" />
                         </button>
                         <button onClick={() => setDeletingBiz(biz)}
                           className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-red-500/40 hover:text-red-400 transition" title="Delete">
@@ -911,7 +921,7 @@ function BusinessesTab({ onCountChange }) {
         />
       )}
       {editingBiz && (
-        <EditBusinessModal
+        <ManageLimitsModal
           biz={editingBiz}
           onClose={() => setEditingBiz(null)}
           onSaved={() => { setEditingBiz(null); load(); }}

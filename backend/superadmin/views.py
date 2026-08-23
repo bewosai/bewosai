@@ -105,9 +105,25 @@ class BusinessActionView(APIView):
             biz.plan = Business.PLAN_PREMIUM
         elif action == "downgrade":
             biz.plan = Business.PLAN_FREE
+        elif action == "set_staff_limit":
+            # Overrides the plan-based staff cap (Free=1/Premium=8) for this
+            # business only — the one piece of a tenant's setup a platform
+            # admin can change; everything else about their business (name,
+            # contact info, financial records) is admin-view-only.
+            limit = request.data.get("limit")
+            if limit in (None, ""):
+                biz.staff_limit_override = None
+            else:
+                try:
+                    limit = int(limit)
+                except (TypeError, ValueError):
+                    return Response({"error": "limit must be a whole number, or blank to clear the override."}, status=status.HTTP_400_BAD_REQUEST)
+                if limit < 0:
+                    return Response({"error": "limit cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
+                biz.staff_limit_override = limit
         else:
             return Response(
-                {"error": f"Unknown action '{action}'. Use: suspend, activate, upgrade, downgrade."},
+                {"error": f"Unknown action '{action}'. Use: suspend, activate, upgrade, downgrade, set_staff_limit."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -151,6 +167,20 @@ class UserActionView(APIView):
             if user.pk == request.user.pk:
                 return Response({"error": "Cannot remove your own admin status."}, status=400)
             user.is_platform_admin = False
+        elif action == "set_business_limit":
+            # Overrides the plan-based business-count cap (Free=2/Premium=5)
+            # for this user only — see BusinessListCreateView.create.
+            limit = request.data.get("limit")
+            if limit in (None, ""):
+                user.business_limit_override = None
+            else:
+                try:
+                    limit = int(limit)
+                except (TypeError, ValueError):
+                    return Response({"error": "limit must be a whole number, or blank to clear the override."}, status=status.HTTP_400_BAD_REQUEST)
+                if limit < 0:
+                    return Response({"error": "limit cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
+                user.business_limit_override = limit
         else:
             return Response({"error": "Unknown action."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -283,22 +313,15 @@ class UserDeleteAdminView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-# ── Business full edit / delete ────────────────────────────────────────────────
+# ── Business delete ──────────────────────────────────────────────────────────
 
 class BusinessEditDeleteView(APIView):
-    """Platform admin: edit or permanently delete a business."""
+    """Platform admin: permanently delete a business (e.g. abuse/spam
+    cleanup). Deliberately no edit capability here — a platform admin can
+    view a tenant's data, change its plan, and set a staff-count override
+    (BusinessActionView), but must never modify the business's own profile
+    or records; that stays owner-only."""
     permission_classes = [IsPlatformAdmin]
-
-    def patch(self, request, pk):
-        try:
-            biz = Business.objects.get(pk=pk)
-        except Business.DoesNotExist:
-            return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = BusinessSerializer(biz, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
         try:

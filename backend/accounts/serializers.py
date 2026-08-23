@@ -8,8 +8,11 @@ from .models import User, Business, StaffMember
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "email", "name", "phone", "account_type", "is_platform_admin", "is_active", "is_verified", "created_at")
-        read_only_fields = ("id", "is_platform_admin", "is_active", "is_verified", "created_at")
+        fields = ("id", "email", "name", "phone", "account_type", "is_platform_admin", "is_active", "is_verified", "created_at", "business_limit_override")
+        # business_limit_override is platform-admin-only (set directly on the
+        # model by superadmin.UserActionView, bypassing this serializer) —
+        # read-only here so a user's own profile PATCH can never self-grant it.
+        read_only_fields = ("id", "is_platform_admin", "is_active", "is_verified", "created_at", "business_limit_override")
 
     def validate_phone(self, value):
         value = (value or "").strip()
@@ -28,19 +31,21 @@ class UserSerializer(serializers.ModelSerializer):
 class BusinessSerializer(serializers.ModelSerializer):
     owner_name = serializers.CharField(source="owner.name", read_only=True)
     staff_count = serializers.SerializerMethodField()
+    owner_business_limit_override = serializers.IntegerField(source="owner.business_limit_override", read_only=True)
 
     class Meta:
         model = Business
         fields = (
             "id", "name", "business_type", "address", "phone", "email",
             "logo", "pan_number", "vat_number", "currency", "fiscal_year_start", "default_tax_rate",
-            "plan", "status", "subscription_expires",
-            "owner", "owner_name", "staff_count", "created_at",
+            "plan", "status", "subscription_expires", "staff_limit_override",
+            "owner", "owner_name", "owner_business_limit_override", "staff_count", "created_at",
         )
-        # plan / subscription_expires are superadmin-only (see
-        # superadmin.BusinessActionView) — a business owner must not be able
-        # to self-upgrade by PATCHing their own business.
-        read_only_fields = ("id", "owner", "created_at", "plan", "subscription_expires")
+        # plan / subscription_expires / staff_limit_override are
+        # superadmin-only (see superadmin.BusinessActionView) — a business
+        # owner must not be able to self-upgrade or self-grant more staff by
+        # PATCHing their own business.
+        read_only_fields = ("id", "owner", "created_at", "plan", "subscription_expires", "staff_limit_override")
 
     def get_staff_count(self, obj):
         return obj.staff.filter(is_active=True).count()
