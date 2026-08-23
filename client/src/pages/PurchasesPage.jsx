@@ -9,6 +9,8 @@ import { useAuth } from "../context/AuthContext";
 import { purchases as purchasesApi, parties, inventory, banking as bankingApi } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
 import { amountInWords } from "../utils/amountInWords";
+import SearchableSelect from "../components/common/SearchableSelect";
+import { getRecentIds, pushRecentId } from "../utils/recentItems";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -297,6 +299,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
   // to leave the bill to add one that isn't in stock yet.
   const [quickAddForRow, setQuickAddForRow] = useState(null);
   const [showQuickAddSupplier, setShowQuickAddSupplier] = useState(false);
+  const [recentProductIds, setRecentProductIds] = useState(() => getRecentIds(currentBusiness?.id, "products"));
 
   useEffect(() => {
     parties.list({ party_type: "SUPPLIER", page_size: 1000 }).then(r => setSuppliers(r.data.results ?? r.data)).catch(() => {});
@@ -316,6 +319,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
         items[i].product_name = prod.name;
         items[i].unit_price = parseFloat(prod.purchase_price || 0);
       }
+      setRecentProductIds(pushRecentId(currentBusiness?.id, "products", val));
     }
     setForm(f => ({ ...f, items }));
   };
@@ -510,21 +514,20 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                 return (
                   <div key={i} className="grid grid-cols-12 gap-1 px-2 py-2 border-t border-navy-700/50 items-center">
                     <div className="col-span-4">
-                      <select
-                        className="w-full rounded-md bg-navy-800 border border-navy-700 px-2 py-1.5 text-xs text-white focus:border-orange-500 focus:outline-none"
+                      <SearchableSelect
+                        options={products.map(p => ({
+                          id: p.id,
+                          label: p.name,
+                          sublabel: `Rs. ${parseFloat(p.purchase_price || 0).toFixed(2)}`,
+                          code: p.barcode || "",
+                        }))}
                         value={item.product}
-                        onChange={e => {
-                          if (e.target.value === "__new__") {
-                            setQuickAddForRow(i);
-                            return;
-                          }
-                          setItem(i, "product", e.target.value);
-                        }}
-                      >
-                        <option value="">Select...</option>
-                        <option value="__new__">+ Add New Product</option>
-                        {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
+                        onChange={(id) => setItem(i, "product", id)}
+                        onAddNew={() => setQuickAddForRow(i)}
+                        addNewLabel="Add New Product"
+                        placeholder="Search product..."
+                        recentIds={recentProductIds}
+                      />
                     </div>
                     <div className="col-span-2">
                       <input type="number" min="1"
