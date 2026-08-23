@@ -5,7 +5,13 @@ import '../storage/token_storage.dart';
 
 class ApiException implements Exception {
   final String message;
-  ApiException(this.message);
+  /// True for a connectivity failure (timeout, unreachable server) that's
+  /// worth retrying as-is. False for a real server rejection (e.g. a
+  /// validation error) that will keep failing until the request itself is
+  /// fixed — used by [SyncService] to tell "retry later" apart from "needs
+  /// the user to fix this record" when replaying the offline outbox.
+  final bool isNetworkError;
+  ApiException(this.message, {this.isNetworkError = false});
 
   @override
   String toString() => message;
@@ -126,13 +132,13 @@ class ApiClient {
     if (error is DioException) {
       switch (error.type) {
         case DioExceptionType.connectionTimeout:
-          return ApiException('Connection timed out. Make sure the server is running and reachable.');
+          return ApiException('Connection timed out. Make sure the server is running and reachable.', isNetworkError: true);
         case DioExceptionType.sendTimeout:
-          return ApiException('Request timed out while sending data.');
+          return ApiException('Request timed out while sending data.', isNetworkError: true);
         case DioExceptionType.receiveTimeout:
-          return ApiException('Server took too long to respond.');
+          return ApiException('Server took too long to respond.', isNetworkError: true);
         case DioExceptionType.connectionError:
-          return ApiException('Cannot reach the server. Check your network connection.');
+          return ApiException('Cannot reach the server. Check your network connection.', isNetworkError: true);
         case DioExceptionType.badResponse:
           final data = error.response?.data;
           // Most apps return {"error": "..."}; accounts/auth endpoints
@@ -152,9 +158,9 @@ class ApiClient {
           }
           return ApiException((msg ?? 'Server error (${error.response?.statusCode})').toString());
         default:
-          return ApiException(error.message ?? 'An unexpected error occurred.');
+          return ApiException(error.message ?? 'An unexpected error occurred.', isNetworkError: true);
       }
     }
-    return ApiException(error.toString());
+    return ApiException(error.toString(), isNetworkError: true);
   }
 }

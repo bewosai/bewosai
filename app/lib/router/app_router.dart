@@ -8,6 +8,7 @@ import '../features/expenses/presentation/screens/expenses_screen.dart';
 import '../features/parties/presentation/screens/party_ledger_screen.dart';
 import '../features/recycle_bin/presentation/screens/recycle_bin_screen.dart';
 import '../features/reports/presentation/screens/reports_screen.dart';
+import '../features/sales/data/models/sale_model.dart';
 import '../features/sales/presentation/screens/invoice_detail_screen.dart';
 import '../features/sales/presentation/screens/pos/quick_pos_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
@@ -56,7 +57,10 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
           final editId = state.uri.queryParameters['edit'];
           return FeatureGate(
             feature: 'pos',
-            child: QuickPosScreen(saleId: editId != null ? int.tryParse(editId) : null),
+            child: QuickPosScreen(
+              saleId: editId != null ? int.tryParse(editId) : null,
+              pendingEdit: state.extra is Sale ? state.extra as Sale : null,
+            ),
           );
         },
       ),

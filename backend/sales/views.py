@@ -76,16 +76,15 @@ class SaleListCreateView(_RequirePos, generics.ListCreateAPIView):
         # business — a collision is a real possibility now that Sales can be
         # queued offline: two queued sales grabbing the same predicted
         # number before either syncs, or another device/staff member's sale
-        # landing first. Detect it via the unique_together constraint and
-        # renumber instead of letting it 500 or silently duplicate.
-        for _ in range(5):
-            try:
-                with transaction.atomic():
-                    serializer.save(business_id=bid, invoice_number=inv, created_by=self.request.user)
-                return
-            except IntegrityError:
-                inv = _next_invoice_number(bid)
-        raise ValidationError("Could not assign a unique invoice number — please try again.")
+        # landing first. Surface it as a field error instead of silently
+        # renumbering — auto-renumbering would let an offline sale sync
+        # under a different invoice number than the one the user saw and
+        # printed, so a collision must be resolved by hand instead.
+        try:
+            with transaction.atomic():
+                serializer.save(business_id=bid, invoice_number=inv, created_by=self.request.user)
+        except IntegrityError:
+            raise ValidationError({"invoice_number": [f'Invoice number "{inv}" already exists — please update it and try again.']})
 
 
 class SaleDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):

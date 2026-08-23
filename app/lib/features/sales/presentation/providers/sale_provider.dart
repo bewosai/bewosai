@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/offline/app_database.dart';
@@ -65,6 +67,7 @@ class SaleProvider extends ChangeNotifier {
               .toList(),
           createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
           pendingSync: true,
+          syncError: json['sync_error'] as String?,
         ))
         .toList()
         .reversed
@@ -144,6 +147,53 @@ class SaleProvider extends ChangeNotifier {
       createdAt: DateTime.now(),
       pendingSync: true,
     );
+  }
+
+  /// Rewrites a queued offline sale that the server rejected (see
+  /// [Sale.syncError]) with corrected data — e.g. a new invoice number —
+  /// and clears the flag so the next sync pass retries it.
+  Future<Sale?> updatePendingSale(int tempId, Sale sale) async {
+    isLoading = true;
+    error = null;
+    notifyListeners();
+    try {
+      await AppDatabase.instance.updatePendingSale(tempId, sale.toJson());
+      final updated = Sale(
+        id: tempId,
+        invoiceNumber: sale.invoiceNumber,
+        customer: sale.customer,
+        customerName: sale.customerName,
+        partyPhone: sale.partyPhone,
+        saleDate: sale.saleDate,
+        dueDate: sale.dueDate,
+        subtotal: sale.subtotal,
+        discount: sale.discount,
+        taxRate: sale.taxRate,
+        taxAmount: sale.taxAmount,
+        total: sale.total,
+        paidAmount: sale.paidAmount,
+        dueAmount: sale.dueAmount,
+        paymentMethod: sale.paymentMethod,
+        status: sale.status,
+        saleType: sale.saleType,
+        notes: sale.notes,
+        items: sale.items,
+        createdAt: sale.createdAt ?? DateTime.now(),
+        pendingSync: true,
+      );
+      sales = sales.map((s) => s.id == tempId ? updated : s).toList();
+      isLoading = false;
+      notifyListeners();
+      // Fire-and-forget: don't make the user wait on connectivity just to
+      // save their fix locally — the outbox banner reflects the outcome.
+      unawaited(SyncService.instance.drain());
+      return updated;
+    } catch (e) {
+      isLoading = false;
+      error = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return null;
+    }
   }
 
   Future<bool> cancel(int id) => _guard(() async {

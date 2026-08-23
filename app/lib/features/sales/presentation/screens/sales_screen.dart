@@ -158,9 +158,11 @@ class _SalesScreenState extends State<SalesScreen> {
                         (s) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: AppCard(
-                            onTap: s.pendingSync
-                                ? () => showAppSnackBar(context, t('syncingPending'))
-                                : () => context.push('/invoice/${s.id}'),
+                            onTap: !s.pendingSync
+                                ? () => context.push('/invoice/${s.id}')
+                                : s.syncError != null
+                                    ? () => context.push('/pos', extra: s)
+                                    : () => showAppSnackBar(context, t('syncingPending')),
                             child: Row(
                               children: [
                                 Expanded(
@@ -191,6 +193,18 @@ class _SalesScreenState extends State<SalesScreen> {
                                             fontSize: 10.5,
                                           ),
                                         ),
+                                      if (s.syncError != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 3),
+                                          child: Text(
+                                            '${s.syncError} · ${t('syncErrorTapToFix')}',
+                                            style: TextStyle(
+                                              color: AppColors.error,
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -206,9 +220,12 @@ class _SalesScreenState extends State<SalesScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     StatusBadge(
-                                      label: s.pendingSync
-                                          ? t('pendingSync')
-                                          : (s.isOverdue ? 'OVERDUE' : s.status),
+                                      label: s.syncError != null
+                                          ? t('syncError')
+                                          : (s.pendingSync
+                                              ? t('pendingSync')
+                                              : (s.isOverdue ? 'OVERDUE' : s.status)),
+                                      color: s.syncError != null ? AppColors.error : null,
                                     ),
                                     const SizedBox(height: 4),
                                     StatusBadge(

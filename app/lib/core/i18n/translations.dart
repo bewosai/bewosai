@@ -163,6 +163,8 @@ const Map<String, Map<String, String>> kTranslations = {
     'offlineBanner': "You're offline — new sales are saved on your phone and will sync automatically",
     'syncingPending': 'Syncing pending sales…',
     'pendingSync': 'Pending Sync',
+    'syncError': 'Sync Error',
+    'syncErrorTapToFix': 'tap to fix and resend',
   },
   'ne': {
     // Navigation
@@ -323,6 +325,8 @@ const Map<String, Map<String, String>> kTranslations = {
     'offlineBanner': 'तपाईं अफलाइन हुनुहुन्छ — नयाँ बिक्री तपाईंको फोनमा सुरक्षित हुन्छ र स्वतः सिंक हुनेछ',
     'syncingPending': 'बाँकी बिक्री सिंक गर्दै…',
     'pendingSync': 'सिंक बाँकी',
+    'syncError': 'सिंक त्रुटि',
+    'syncErrorTapToFix': 'ठीक गर्न ट्याप गर्नुहोस्',
   },
 };
 

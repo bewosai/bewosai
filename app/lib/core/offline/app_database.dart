@@ -42,7 +42,7 @@ class AppDatabase {
     final path = p.join(dir, 'bewosai_cache.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE cached_products (id INTEGER PRIMARY KEY, business_id TEXT, json TEXT NOT NULL)',
@@ -51,7 +51,7 @@ class AppDatabase {
           'CREATE TABLE cached_parties (id INTEGER PRIMARY KEY, business_id TEXT, json TEXT NOT NULL)',
         );
         await db.execute(
-          'CREATE TABLE outbox_sales (temp_id INTEGER PRIMARY KEY AUTOINCREMENT, business_id TEXT, json TEXT NOT NULL, created_at TEXT NOT NULL)',
+          'CREATE TABLE outbox_sales (temp_id INTEGER PRIMARY KEY AUTOINCREMENT, business_id TEXT, json TEXT NOT NULL, created_at TEXT NOT NULL, sync_error TEXT)',
         );
         await db.execute(_genericOutboxSql);
       },
@@ -59,9 +59,16 @@ class AppDatabase {
       // Bank transactions/Stock movements) alongside the original
       // Sales-only outbox_sales table, which is left untouched so an
       // existing install's already-queued sales are never at risk.
+      // v2 -> v3 adds sync_error to outbox_sales: a queued sale that the
+      // server actually rejects (e.g. its invoice number now collides with
+      // one created elsewhere while it sat offline) needs a reason the user
+      // can act on, not another silent retry.
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute(_genericOutboxSql);
+        }
+        if (oldVersion < 3) {
+          await db.execute('ALTER TABLE outbox_sales ADD COLUMN sync_error TEXT');
         }
       },
     );
@@ -123,6 +130,7 @@ class AppDatabase {
         .map((r) => {
               'temp_id': -(r['temp_id'] as int),
               'created_at': r['created_at'],
+              'sync_error': r['sync_error'],
               ...jsonDecode(r['json'] as String) as Map<String, dynamic>,
             })
         .toList();
@@ -142,6 +150,31 @@ class AppDatabase {
     final db = await _database;
     if (db == null) return;
     await db.delete('outbox_sales', where: 'temp_id = ?', whereArgs: [-tempId]);
+  }
+
+  /// Flags a queued sale as rejected by the server for a reason the user
+  /// needs to fix by hand (e.g. a duplicate invoice number) — [SyncService]
+  /// leaves it queued but stops silently retrying it every reconnect.
+  Future<void> setPendingSaleError(int tempId, String message) async {
+    final db = await _database;
+    if (db == null) return;
+    await db.update('outbox_sales', {'sync_error': message}, where: 'temp_id = ?', whereArgs: [-tempId]);
+  }
+
+  /// Overwrites a queued sale's payload in place (e.g. after the user edits
+  /// its invoice number to resolve a [setPendingSaleError]) and clears the
+  /// error so the next sync pass picks it up again.
+  Future<void> updatePendingSale(int tempId, Map<String, dynamic> payload) async {
+    final db = await _database;
+    if (db == null) {
+      throw StateError('Offline saving is not available on this device.');
+    }
+    await db.update(
+      'outbox_sales',
+      {'json': jsonEncode(payload), 'sync_error': null},
+      where: 'temp_id = ?',
+      whereArgs: [-tempId],
+    );
   }
 
   // ── Generic outbox (Expenses / Purchases / Party payments / Bank

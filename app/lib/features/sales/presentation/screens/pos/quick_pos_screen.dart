@@ -19,7 +19,11 @@ import '../../providers/sale_provider.dart';
 
 class QuickPosScreen extends StatefulWidget {
   final int? saleId;
-  const QuickPosScreen({super.key, this.saleId});
+  /// A still-queued offline sale (see [Sale.syncError]) to edit and resend,
+  /// passed directly instead of by ID since it has no server record yet to
+  /// fetch it from.
+  final Sale? pendingEdit;
+  const QuickPosScreen({super.key, this.saleId, this.pendingEdit});
 
   @override
   State<QuickPosScreen> createState() => _QuickPosScreenState();
@@ -61,6 +65,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   bool _saving = false;
   bool _loaded = false;
   int? _editId;
+  bool _isPendingEdit = false;
   bool _reminderEnabled = false;
   DateTime? _reminderAt;
 
@@ -69,7 +74,8 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   @override
   void initState() {
     super.initState();
-    _editId = widget.saleId;
+    _editId = widget.saleId ?? widget.pendingEdit?.id;
+    _isPendingEdit = widget.pendingEdit != null;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final partyProvider = context.read<PartyProvider>();
       final invProvider = context.read<InventoryProvider>();
@@ -84,7 +90,9 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       if (partyProvider.parties.isEmpty) await partyProvider.load();
       if (invProvider.products.isEmpty) await invProvider.load();
 
-      if (_editId != null) {
+      if (_isPendingEdit) {
+        _prefill(widget.pendingEdit!, partyProvider);
+      } else if (_editId != null) {
         Sale? sale;
         try {
           sale = await SaleService().get(_editId!);
@@ -453,7 +461,9 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
           .toList(),
     );
 
-    final result = await context.read<SaleProvider>().save(sale, id: _editId);
+    final result = _isPendingEdit
+        ? await context.read<SaleProvider>().updatePendingSale(_editId!, sale)
+        : await context.read<SaleProvider>().save(sale, id: _editId);
     if (!mounted) return;
     setState(() => _saving = false);
     if (result != null) {

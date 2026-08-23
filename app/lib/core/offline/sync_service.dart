@@ -6,6 +6,7 @@ import '../../features/inventory/data/services/inventory_service.dart';
 import '../../features/parties/data/services/party_service.dart';
 import '../../features/purchases/data/services/purchase_service.dart';
 import '../../features/sales/data/services/sale_service.dart';
+import '../network/api_client.dart';
 import '../storage/token_storage.dart';
 import 'app_database.dart';
 import 'connectivity_service.dart';
@@ -107,17 +108,30 @@ class SyncService {
     var syncedAny = false;
     for (final item in pending) {
       final tempId = item['temp_id'] as int;
+      // Already flagged by a previous pass (e.g. a duplicate invoice
+      // number) — it won't succeed until the user edits and resends it, so
+      // don't retry it or let it block sales queued behind it.
+      if (item['sync_error'] != null) continue;
       final payload = Map<String, dynamic>.from(item)
         ..remove('temp_id')
-        ..remove('created_at');
+        ..remove('created_at')
+        ..remove('sync_error');
       try {
         await _saleService.createRaw(payload);
         await AppDatabase.instance.removePendingSale(tempId);
         syncedAny = true;
+      } on ApiException catch (e) {
+        if (e.isNetworkError) {
+          // Still offline/flaky — stop here so nothing behind it is
+          // replayed out of order, and retry the whole queue next reconnect.
+          break;
+        }
+        // A real rejection from the server (e.g. this invoice number now
+        // collides with one created elsewhere while it sat offline) won't
+        // fix itself on retry — flag it and keep draining the rest of the
+        // queue instead of blocking every sale behind it forever.
+        await AppDatabase.instance.setPendingSaleError(tempId, e.message);
       } catch (_) {
-        // Leave it queued — could be a still-flaky connection or a real
-        // validation error; either way, retry on the next reconnect rather
-        // than silently discarding it.
         break;
       }
     }

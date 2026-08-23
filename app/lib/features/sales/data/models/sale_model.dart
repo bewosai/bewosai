@@ -73,6 +73,12 @@ class Sale {
   /// replaces this row with the server's version.
   final bool pendingSync;
 
+  /// Set only for a queued offline sale the server has already rejected
+  /// (e.g. a duplicate invoice number) — never comes from/goes to the API.
+  /// Non-null means [pendingSync] is stuck until the user edits and resends
+  /// this sale; see [SyncService].
+  final String? syncError;
+
   Sale({
     required this.id,
     required this.invoiceNumber,
@@ -100,6 +106,7 @@ class Sale {
     required this.items,
     this.createdAt,
     this.pendingSync = false,
+    this.syncError,
   });
 
   factory Sale.fromJson(Map<String, dynamic> json) => Sale(
