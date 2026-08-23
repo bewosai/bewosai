@@ -1,7 +1,10 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
+import LoadingSpinner from "./components/common/LoadingSpinner";
 
-// Auth pages
+// Auth pages — kept eager since these are what a fresh, logged-out visitor
+// sees first; no code-splitting win for the one screen everyone loads.
 import LoginPage from "./pages/Login";
 import VerifyOtpPage from "./pages/VerifyOtp";
 import ChooseProfilePage from "./pages/ChooseProfile";
@@ -10,30 +13,32 @@ import CreateBusinessPage from "./pages/CreateBusiness";
 import SelectBusinessPage from "./pages/SelectBusiness";
 import LicenseRequiredPage from "./pages/LicenseRequired";
 
-// Business layout + pages
+// Business layout + pages — lazy-loaded so a session only downloads the
+// module(s) it actually opens instead of every page's code up front. This
+// was previously one ~1.5MB bundle for the whole app.
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import FeatureGate from "./components/FeatureGate";
-import DashboardPage from "./pages/Dashboard";
-import PartiesPage from "./pages/PartiesPage";
-import InventoryPage from "./pages/InventoryPage";
-import SalesPage from "./pages/SalesPage";
-import PurchasesPage from "./pages/PurchasesPage";
-import PaymentsPage from "./pages/PaymentsPage";
-import ExpensesPage from "./pages/ExpensesPage";
-import ReportsPage from "./pages/ReportsPage";
-import BankingPage from "./pages/BankingPage";
-import StaffPage from "./pages/StaffPage";
-import SuperAdminPage from "./pages/SuperAdminPage";
-import SettingsPage from "./pages/SettingsPage";
-import RecycleBinPage from "./pages/RecycleBinPage";
-import QuotationPage from "./pages/QuotationPage";
-import SalesReturnPage from "./pages/SalesReturnPage";
-import ImportPage from "./pages/ImportPage";
+const DashboardPage = lazy(() => import("./pages/Dashboard"));
+const PartiesPage = lazy(() => import("./pages/PartiesPage"));
+const InventoryPage = lazy(() => import("./pages/InventoryPage"));
+const SalesPage = lazy(() => import("./pages/SalesPage"));
+const PurchasesPage = lazy(() => import("./pages/PurchasesPage"));
+const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
+const ExpensesPage = lazy(() => import("./pages/ExpensesPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const BankingPage = lazy(() => import("./pages/BankingPage"));
+const StaffPage = lazy(() => import("./pages/StaffPage"));
+const SuperAdminPage = lazy(() => import("./pages/SuperAdminPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const RecycleBinPage = lazy(() => import("./pages/RecycleBinPage"));
+const QuotationPage = lazy(() => import("./pages/QuotationPage"));
+const SalesReturnPage = lazy(() => import("./pages/SalesReturnPage"));
+const ImportPage = lazy(() => import("./pages/ImportPage"));
 
 // Personal layout + pages
 import PersonalLayout from "./components/layout/PersonalLayout";
-import PersonalDashboard from "./pages/PersonalDashboard";
+const PersonalDashboard = lazy(() => import("./pages/PersonalDashboard"));
 
 function GuestOnly({ children }) {
   const { isLoggedIn, user } = useAuth();
@@ -51,6 +56,7 @@ function RequireAuth({ children }) {
 
 export default function App() {
   return (
+    <Suspense fallback={<LoadingSpinner />}>
     <Routes>
       {/* Public */}
       <Route path="/" element={<LandingPage />} />
@@ -117,5 +123,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }
