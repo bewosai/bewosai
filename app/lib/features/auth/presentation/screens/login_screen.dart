@@ -8,16 +8,16 @@ import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../providers/auth_provider.dart';
 
-/// Login / email-OTP screen.
+/// Login / OTP screen.
 ///
 /// Flow (no Navigator.push from this screen):
-/// 1. Step 0 — email → AuthProvider.sendOtp
+/// 1. Step 0 — email or phone → AuthProvider.sendOtp (phone only works for
+///    an existing account, and the code still goes out by email — see
+///    SendOTPView; there's no SMS provider wired up yet)
 /// 2. Step 1 — 6-digit OTP (+ name if new user) → AuthProvider.verifyOtp
 /// 3. On success AuthProvider sets:
 ///      • AuthStatus.ready         → root shows Dashboard
 ///      • AuthStatus.needsBusiness → root shows SelectBusinessScreen
-///
-/// FUTURE_PHONE: search this file for FUTURE_PHONE when adding phone OTP.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -56,9 +56,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _showWakingHint = false;
   Timer? _wakingHintTimer;
 
-  // FUTURE_PHONE: bool _usePhone = false;
-  // FUTURE_PHONE: final _phoneController = TextEditingController();
-
   @override
   void dispose() {
     _timer?.cancel();
@@ -67,7 +64,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _otpController.dispose();
     _nameController.dispose();
     _otpFocus.dispose();
-    // FUTURE_PHONE: _phoneController.dispose();
     super.dispose();
   }
 
@@ -91,11 +87,10 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final auth = context.read<AuthProvider>();
-    // FUTURE_PHONE: final identity = _usePhone ? _phoneController.text.trim() : _emailController.text.trim();
-    final email = _emailController.text.trim();
+    final identifier = _emailController.text.trim();
 
     _startWakingHint();
-    final ok = await auth.sendOtp(email, isSignup: isSignup);
+    final ok = await auth.sendOtp(identifier, isSignup: isSignup);
     _stopWakingHint();
     if (!mounted) return;
 
@@ -232,8 +227,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text(
                         _step == 0
                             ? 'Welcome to ${AppConstants.appName}'
-                            : 'Verify your email',
-                        // FUTURE_PHONE: _usePhone ? 'Verify your phone' : 'Verify your email'
+                            : 'Verify your code',
                         style: TextStyle(
                           fontSize: 25,
                           fontWeight: FontWeight.w800,
@@ -245,7 +239,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text(
                         _step == 0
                             ? 'Sign in or create an account with your email'
-                            : 'We sent a 6-digit code to ${_emailController.text.trim()}',
+                            : (auth.pendingOtpMessage ??
+                                'We sent a 6-digit code to ${_emailController.text.trim()}'),
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 14,
@@ -291,18 +286,16 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // FUTURE_PHONE: Email | Phone toggle above this field
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.email],
-            // FUTURE_PHONE: phone → TextInputType.phone, digitsOnly, Validators.phone
+            autofillHints: const [AutofillHints.email, AutofillHints.telephoneNumber],
             decoration: const InputDecoration(
-              labelText: 'Email address',
+              labelText: 'Email or phone number',
               prefixIcon: Icon(Icons.mail_outline),
             ),
-            validator: Validators.email,
+            validator: Validators.emailOrPhone,
             onFieldSubmitted: (_) {
               if (!auth.isLoading) _sendOtp();
             },

@@ -34,10 +34,14 @@ class VerifyOtpResult {
 class AuthService {
   final _dio = ApiClient.instance.dio;
 
-  Future<OtpResult> sendOtp(String email, {bool isSignup = false}) async {
+  /// [identifier] is an email or (for an existing account with a phone on
+  /// file) a phone number — the backend resolves either to wherever the
+  /// account's OTP actually gets sent (email only, until an SMS provider is
+  /// wired up server-side).
+  Future<OtpResult> sendOtp(String identifier, {bool isSignup = false}) async {
     try {
       final res = await _dio.post('/auth/send-otp/', data: {
-        'email': email,
+        'identifier': identifier,
         'is_signup': isSignup,
       });
       return OtpResult(
@@ -50,10 +54,10 @@ class AuthService {
     }
   }
 
-  Future<VerifyOtpResult> verifyOtp(String email, String code, {bool remember = false, String name = ''}) async {
+  Future<VerifyOtpResult> verifyOtp(String identifier, String code, {bool remember = false, String name = ''}) async {
     try {
       final res = await _dio.post('/auth/verify-otp/', data: {
-        'email': email,
+        'identifier': identifier,
         'code': code,
         'remember': remember,
         if (name.isNotEmpty) 'name': name,

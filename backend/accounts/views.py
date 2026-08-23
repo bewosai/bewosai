@@ -11,7 +11,7 @@ from django.utils import timezone
 from datetime import timedelta
 from bewosai.email import send_otp_email
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature
-from bewosai.utils import get_bid, get_business
+from bewosai.utils import get_bid, get_business, mask_email
 from .models import User, Business, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import (
     UserSerializer, BusinessSerializer, StaffMemberSerializer, InviteStaffSerializer,
@@ -47,17 +47,36 @@ class SendOTPView(APIView):
         if not serializer.is_valid():
             return api_response(False, _first_error(serializer.errors), status.HTTP_400_BAD_REQUEST)
 
-        email = serializer.validated_data["email"]
+        identifier = serializer.validated_data["identifier"]
         is_signup = serializer.validated_data["is_signup"]
+        is_phone = "@" not in identifier
+        via_phone_display = None
 
-        existing = User.objects.filter(email=email).first()
+        if is_phone:
+            # No SMS provider is wired up yet, so a phone number only ever
+            # works as a lookup key for an *existing* account — the code
+            # still has to go out over email, to whichever address that
+            # account already has on file.
+            if is_signup:
+                return api_response(
+                    False, "Signing up with a phone number isn't available yet — please use your email.",
+                    status.HTTP_400_BAD_REQUEST,
+                )
+            existing = User.objects.filter(phone=identifier).first()
+            if not existing:
+                return api_response(False, "No account found with that phone number.", status.HTTP_404_NOT_FOUND)
+            email = existing.email
+            via_phone_display = mask_email(email)
+        else:
+            email = identifier
+            existing = User.objects.filter(email=email).first()
 
-        # Reject explicit sign-up attempts for already-registered emails
-        if is_signup and existing:
-            return api_response(
-                False, "This email is already registered. Please sign in instead.",
-                status.HTTP_400_BAD_REQUEST, user_exists=True,
-            )
+            # Reject explicit sign-up attempts for already-registered emails
+            if is_signup and existing:
+                return api_response(
+                    False, "This email is already registered. Please sign in instead.",
+                    status.HTTP_400_BAD_REQUEST, user_exists=True,
+                )
 
         wait = OTPCode.seconds_until_resend(email)
         if wait > 0:
@@ -84,10 +103,15 @@ class SendOTPView(APIView):
                 status.HTTP_502_BAD_GATEWAY,
             )
 
-        logger.info("OTP sent for %s (new_account=%s)", email, existing is None)
+        logger.info("OTP sent for %s (new_account=%s, via_phone=%s)", email, existing is None, is_phone)
 
+        message = (
+            f"We don't have SMS set up yet, so we've sent your code to {via_phone_display} instead."
+            if via_phone_display else
+            f"OTP sent to {email}. Valid for 10 minutes."
+        )
         return api_response(
-            True, f"OTP sent to {email}. Valid for 10 minutes.", status.HTTP_200_OK,
+            True, message, status.HTTP_200_OK,
             user_exists=existing is not None,
         )
 
@@ -101,10 +125,21 @@ class VerifyOTPView(APIView):
         if not serializer.is_valid():
             return api_response(False, _first_error(serializer.errors), status.HTTP_400_BAD_REQUEST)
 
-        email = serializer.validated_data["email"]
+        identifier = serializer.validated_data["identifier"]
         code = serializer.validated_data["code"]
         remember = serializer.validated_data["remember"]
         name = serializer.validated_data["name"]
+
+        if "@" in identifier:
+            email = identifier
+        else:
+            # Phone logins never create a new account (SendOTPView already
+            # requires an existing one to resolve a phone to) — a phone
+            # number with no matching user here just falls through to the
+            # normal "incorrect code" response below, since no OTP could
+            # ever have been generated for it.
+            match = User.objects.filter(phone=identifier).first()
+            email = match.email if match else identifier
 
         otp, error_code = OTPCode.verify_and_consume(email, code)
 

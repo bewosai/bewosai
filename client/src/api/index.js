@@ -60,9 +60,9 @@ api.interceptors.response.use(
 );
 
 export const auth = {
-  sendOtp: (email, isSignup = false) => api.post("/auth/send-otp/", { email, is_signup: isSignup }),
-  verifyOtp: (email, code, remember) =>
-    api.post("/auth/verify-otp/", { email, code, remember }),
+  sendOtp: (identifier, isSignup = false) => api.post("/auth/send-otp/", { identifier, is_signup: isSignup }),
+  verifyOtp: (identifier, code, remember) =>
+    api.post("/auth/verify-otp/", { identifier, code, remember }),
   setAccountType: (accountType) => api.post("/auth/set-account-type/", { account_type: accountType }),
   logout: (refresh) => api.post("/auth/logout/", { refresh }),
   me: () => api.get("/auth/me/"),

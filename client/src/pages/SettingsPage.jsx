@@ -73,6 +73,7 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [profileForm, setProfileForm] = useState({ name: user?.name || "", phone: user?.phone || "" });
   const [invoiceForm, setInvoiceForm] = useState({
     header_color: localStorage.getItem("invoice_header_color") || "#f97316",
@@ -100,9 +101,18 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError("");
+    const errors = [];
     try {
       await authApi.updateMe(profileForm);
-    } catch {}
+    } catch (e) {
+      const data = e.response?.data;
+      errors.push(
+        data?.phone?.[0] || data?.error || data?.detail ||
+        (data && typeof data === "object" ? Object.values(data).flat().join(" ") : null) ||
+        "Couldn't save your profile."
+      );
+    }
     if (currentBusiness?.id) {
       try {
         let payload = businessForm;
@@ -116,7 +126,14 @@ export default function SettingsPage() {
         updateBusinessInList?.(data);
         setLogoFile(null);
         setLogoPreview(data.logo || null);
-      } catch {}
+      } catch (e) {
+        const data = e.response?.data;
+        errors.push(
+          data?.error || data?.detail ||
+          (data && typeof data === "object" ? Object.values(data).flat().join(" ") : null) ||
+          "Couldn't save business details."
+        );
+      }
     }
     localStorage.setItem("invoice_header_color", invoiceForm.header_color);
     localStorage.setItem("invoice_footer_text", invoiceForm.footer_text);
@@ -125,8 +142,12 @@ export default function SettingsPage() {
     if (businessForm.address) localStorage.setItem("business_address", businessForm.address);
     if (businessForm.phone) localStorage.setItem("business_phone", businessForm.phone);
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (errors.length) {
+      setSaveError(errors.join(" "));
+    } else {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
   };
 
   return (
@@ -149,6 +170,12 @@ export default function SettingsPage() {
           {saving ? (language === "ne" ? "सुरक्षित…" : "Saving…") : saved ? (language === "ne" ? "सुरक्षित!" : "Saved!") : t("saveSettings")}
         </button>
       </div>
+
+      {saveError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {saveError}
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* View Report */}

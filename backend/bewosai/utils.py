@@ -33,6 +33,15 @@ def suggest_email_typo_fix(email):
     return f"{local}@{fix}" if fix else None
 
 
+def mask_email(email):
+    """'jane.doe@example.com' -> 'ja***@example.com' — enough for a user to
+    recognize their own address in a message without fully exposing it to
+    whoever happened to type in a phone number that resolves to it."""
+    local, _, domain = email.partition("@")
+    visible = local[:2] if len(local) > 2 else local[:1]
+    return f"{visible}***@{domain}" if domain else f"{visible}***"
+
+
 def get_bid(request):
     """
     Return the business ID from whichever source is present.

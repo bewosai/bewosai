@@ -35,6 +35,19 @@ class Validators {
     return null;
   }
 
+  static final _phoneDigitsRegex = RegExp(r'^\+?\d{7,15}$');
+
+  /// Sign-in only accepts either — sign-up still requires [email], since
+  /// phone-based accounts can't receive a code until an SMS provider is
+  /// wired up server-side (see SendOTPView).
+  static String? emailOrPhone(String? value) {
+    final v = value?.trim() ?? '';
+    if (v.isEmpty) return 'Enter your email or phone number';
+    if (v.contains('@')) return email(v);
+    if (!_phoneDigitsRegex.hasMatch(v)) return 'Enter a valid email or phone number';
+    return null;
+  }
+
   static String? otp(String? value) {
     final v = value?.trim() ?? '';
     if (v.isEmpty) return 'Enter the code';

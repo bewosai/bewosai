@@ -15,14 +15,16 @@ export function AuthProvider({ children }) {
 
   const isLoggedIn = !!user && !!localStorage.getItem("access");
 
-  /** Step 1: send OTP — no account type needed */
-  const sendOtp = useCallback(async (email, isSignup = false) => {
+  /** Step 1: send OTP — identifier can be an email or (for existing accounts
+   * with a phone on file) a phone number; no account type needed yet */
+  const sendOtp = useCallback(async (identifier, isSignup = false) => {
     setLoading(true);
     try {
-      const { data } = await authApi.sendOtp(email, isSignup);
+      const { data } = await authApi.sendOtp(identifier, isSignup);
       return {
         ok: true,
         userExists: data.user_exists,
+        message: data.message,
       };
     } catch (err) {
       return {
@@ -36,10 +38,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   /** Step 2: verify OTP — returns is_new_user + needs_profile_setup */
-  const verifyOtp = useCallback(async (email, code, remember) => {
+  const verifyOtp = useCallback(async (identifier, code, remember) => {
     setLoading(true);
     try {
-      const { data } = await authApi.verifyOtp(email, code, remember);
+      const { data } = await authApi.verifyOtp(identifier, code, remember);
 
       localStorage.setItem("access", data.access);
       localStorage.setItem("refresh", data.refresh);

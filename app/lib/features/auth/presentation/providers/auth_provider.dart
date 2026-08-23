@@ -60,11 +60,14 @@ class AuthProvider extends ChangeNotifier {
   bool isLoading = false;
   String? error;
 
-  /// Held between send-otp and verify-otp.
-  String pendingEmail = '';
+  /// Held between send-otp and verify-otp — an email or (for an existing
+  /// account with a phone on file) a phone number.
+  String pendingIdentifier = '';
   bool pendingUserExists = false;
-  // FUTURE_PHONE: String pendingPhone = '';
-  // FUTURE_PHONE: bool pendingIsPhone = false;
+  /// The backend's own message for how the code was actually delivered —
+  /// e.g. "sent to j***@example.com instead" when [pendingIdentifier] was a
+  /// phone number resolved to that account's email (no SMS provider yet).
+  String? pendingOtpMessage;
 
   // ── Bootstrap (once from SplashScreen) ────────────────────────────────────
 
@@ -121,10 +124,11 @@ class AuthProvider extends ChangeNotifier {
 
   // ── OTP auth ──────────────────────────────────────────────────────────────
 
-  Future<bool> sendOtp(String email, {bool isSignup = false}) => _guard(() async {
-        final result = await _authUseCases.sendOtp(email, isSignup: isSignup);
-        pendingEmail = email;
+  Future<bool> sendOtp(String identifier, {bool isSignup = false}) => _guard(() async {
+        final result = await _authUseCases.sendOtp(identifier, isSignup: isSignup);
+        pendingIdentifier = identifier;
         pendingUserExists = result.userExists;
+        pendingOtpMessage = result.message;
         return true;
       });
 
@@ -136,7 +140,7 @@ class AuthProvider extends ChangeNotifier {
   }) =>
       _guard(() async {
         final result = await _authUseCases.verifyOtp(
-          pendingEmail,
+          pendingIdentifier,
           code,
           remember: remember,
           name: name,
@@ -333,8 +337,9 @@ class AuthProvider extends ChangeNotifier {
     user = null;
     businesses = [];
     currentBusiness = null;
-    pendingEmail = '';
+    pendingIdentifier = '';
     pendingUserExists = false;
+    pendingOtpMessage = null;
     status = AuthStatus.loggedOut;
     notifyListeners();
   }

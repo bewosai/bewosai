@@ -11,9 +11,13 @@ export default function VerifyOtpPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const email = location.state?.email;
+  const identifier = location.state?.identifier;
   const initialUserExists = location.state?.userExists ?? false;
   const initialAccountType = location.state?.accountType;
+  // The backend's own message — e.g. "sent to j***@example.com instead"
+  // when the user typed a phone number and it got resolved to whatever
+  // email that account has on file, since there's no SMS provider yet.
+  const initialMessage = location.state?.message;
 
   const [step, setStep] = useState(2); // 2=otp, 3=profile (new users only)
   const [otp, setOtp] = useState("");
@@ -21,15 +25,15 @@ export default function VerifyOtpPage() {
   const [resendTimer, setResendTimer] = useState(60);
   const [error, setError] = useState("");
   const [info, setInfo] = useState(
-    initialUserExists ? `Welcome back! OTP sent to ${email}` : `OTP sent to ${email}`
+    initialMessage || (initialUserExists ? `Welcome back! OTP sent to ${identifier}` : `OTP sent to ${identifier}`)
   );
   const [isNewUser, setIsNewUser] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState(initialAccountType || "");
 
-  // Reached directly (e.g. page refresh) with no email in state — nothing to verify
+  // Reached directly (e.g. page refresh) with no identifier in state — nothing to verify
   useEffect(() => {
-    if (!email) navigate("/login", { replace: true });
-  }, [email]);
+    if (!identifier) navigate("/login", { replace: true });
+  }, [identifier]);
 
   useEffect(() => {
     if (resendTimer <= 0) return;
@@ -45,7 +49,7 @@ export default function VerifyOtpPage() {
     clear();
     const digits = otp.replace(/\s/g, "");
     if (digits.length < 6) { setError("Enter the complete 6-digit OTP."); return; }
-    const res = await verifyOtp(email, digits, remember);
+    const res = await verifyOtp(identifier, digits, remember);
     if (res.ok) {
       if (res.needsProfileSetup) {
         // New user — must pick profile
@@ -85,16 +89,16 @@ export default function VerifyOtpPage() {
   const handleResend = async () => {
     if (resendTimer > 0) return;
     clear();
-    const res = await sendOtp(email);
+    const res = await sendOtp(identifier);
     if (res.ok) {
       setResendTimer(60);
-      setInfo("New OTP sent.");
+      setInfo(res.message || "New OTP sent.");
     } else {
       setError(res.error);
     }
   };
 
-  if (!email) return null;
+  if (!identifier) return null;
 
   return (
     <div className="flex min-h-screen flex-col bg-navy-950">
@@ -159,8 +163,11 @@ export default function VerifyOtpPage() {
                 <div className="mb-5 text-center">
                   <h2 className="text-xl font-bold text-white">Check your email</h2>
                   <p className="mt-1.5 text-sm text-navy-400">
-                    We sent a 6-digit code to<br />
-                    <span className="font-semibold text-white">{email}</span>
+                    {identifier.includes("@") ? (
+                      <>We sent a 6-digit code to<br /><span className="font-semibold text-white">{identifier}</span></>
+                    ) : (
+                      "Enter the 6-digit code we sent — see above for where it went."
+                    )}
                   </p>
                 </div>
 

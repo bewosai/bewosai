@@ -7,10 +7,10 @@ class AuthUseCases {
   final AuthRepository _repository;
   AuthUseCases([AuthRepository? repository]) : _repository = repository ?? AuthRepositoryImpl();
 
-  Future<OtpResult> sendOtp(String email, {bool isSignup = false}) => _repository.sendOtp(email, isSignup: isSignup);
+  Future<OtpResult> sendOtp(String identifier, {bool isSignup = false}) => _repository.sendOtp(identifier, isSignup: isSignup);
 
-  Future<VerifyOtpResult> verifyOtp(String email, String code, {bool remember = false, String name = ''}) =>
-      _repository.verifyOtp(email, code, remember: remember, name: name);
+  Future<VerifyOtpResult> verifyOtp(String identifier, String code, {bool remember = false, String name = ''}) =>
+      _repository.verifyOtp(identifier, code, remember: remember, name: name);
 
   Future<VerifyOtpResult> googleLogin(String idToken, {bool remember = false}) =>
       _repository.googleLogin(idToken, remember: remember);

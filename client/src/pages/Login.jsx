@@ -14,7 +14,7 @@ export default function LoginPage() {
   const isSignup = location.state?.isSignup ?? false;
   const accountType = location.state?.accountType;
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -24,17 +24,27 @@ export default function LoginPage() {
     }
   }, [isLoggedIn]);
 
+  const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  const isValidPhone = (v) => /^\+?\d{7,15}$/.test(v);
+
   const handleSendOtp = async (e) => {
     e?.preventDefault();
     setError(""); setInfo("");
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError("Please enter a valid email address.");
+    const trimmed = identifier.trim();
+    const normalized = trimmed.includes("@") ? trimmed.toLowerCase() : trimmed;
+
+    // Signing up still needs an email — phone sign-up isn't available until
+    // an SMS provider is wired up (see SendOTPView). Signing in accepts
+    // either, since an existing account's phone can be resolved to whatever
+    // email it already has on file.
+    const valid = isSignup ? isValidEmail(normalized) : (isValidEmail(normalized) || isValidPhone(normalized));
+    if (!normalized || !valid) {
+      setError(isSignup ? "Please enter a valid email address." : "Please enter a valid email address or phone number.");
       return;
     }
-    const res = await sendOtp(trimmed, isSignup);
+    const res = await sendOtp(normalized, isSignup);
     if (res.ok) {
-      navigate("/verify-otp", { state: { email: trimmed, userExists: res.userExists, accountType } });
+      navigate("/verify-otp", { state: { identifier: normalized, userExists: res.userExists, accountType, message: res.message } });
     } else {
       setError(res.error);
       // If the email already exists and they tried to sign up, hint to switch mode
@@ -96,21 +106,21 @@ export default function LoginPage() {
                 <p className="mt-1.5 text-sm text-navy-400">
                   {isSignup
                     ? "Enter your Gmail or email to get started"
-                    : "Enter your email to receive a sign-in code"}
+                    : "Enter your email or phone to receive a sign-in code"}
                 </p>
               </div>
 
               <div className="relative mb-4">
                 <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
                 <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
+                  id="identifier"
+                  name="identifier"
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder={isSignup ? "your@email.com" : "Email or phone number"}
                   autoFocus
-                  autoComplete="email"
+                  autoComplete="username"
                   inputMode="email"
                   className="w-full rounded-2xl border border-navy-700 bg-navy-950 py-4 pl-11 pr-4 text-base text-white outline-none transition placeholder:text-navy-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
                 />

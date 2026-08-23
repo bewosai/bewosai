@@ -35,7 +35,10 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=150, blank=True)
-    phone = models.CharField(max_length=20, blank=True)
+    # null (not just blank) so multiple accounts with no phone on file don't
+    # collide against the unique constraint — only an actually-entered phone
+    # number needs to be unique.
+    phone = models.CharField(max_length=20, blank=True, null=True, unique=True)
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default=ACCOUNT_BUSINESS)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
