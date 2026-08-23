@@ -16,6 +16,11 @@ class Business {
   final int owner;
   final String ownerName;
   final int staffCount;
+  // Platform-admin-only override of the plan-based staff cap (Free=1/
+  // Premium=8) — null means "use the plan default". Never settable from
+  // this app; surfaced read-only so the invite-limit check can match
+  // whatever the backend will actually enforce (see accounts/views.py).
+  final int? staffLimitOverride;
 
   Business({
     required this.id,
@@ -35,6 +40,7 @@ class Business {
     required this.owner,
     required this.ownerName,
     required this.staffCount,
+    this.staffLimitOverride,
   });
 
   factory Business.fromJson(Map<String, dynamic> json) => Business(
@@ -55,6 +61,7 @@ class Business {
         owner: json['owner'] is int ? json['owner'] as int : int.tryParse('${json['owner']}') ?? 0,
         ownerName: json['owner_name'] as String? ?? '',
         staffCount: json['staff_count'] as int? ?? 1,
+        staffLimitOverride: json['staff_limit_override'] as int?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -88,5 +95,6 @@ class Business {
         'owner': owner,
         'owner_name': ownerName,
         'staff_count': staffCount,
+        'staff_limit_override': staffLimitOverride,
       };
 }

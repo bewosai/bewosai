@@ -31,13 +31,18 @@ class _StaffScreenState extends State<StaffScreen> {
     final currentBusiness = context.watch<AuthProvider>().currentBusiness;
     final businessId = currentBusiness?.id;
 
-    // Mirrors the backend's own FREE_STAFF_LIMIT check (accounts/views.py) —
-    // shown proactively so a Free-plan owner isn't surprised by the
-    // rejection only after filling out the whole invite form.
+    // Mirrors the backend's own staff-cap check (accounts/views.py
+    // StaffListView/BusinessStaffInviteView) — shown proactively so an
+    // owner isn't surprised by the rejection only after filling out the
+    // whole invite form. Free=1, Premium=8 by default; a platform admin can
+    // raise (or lower) this per-business via staff_limit_override, which
+    // takes precedence over the plan default when set.
     const freeStaffLimit = 1;
+    const premiumStaffLimit = 8;
+    final planLimit = currentBusiness?.plan == 'PREMIUM' ? premiumStaffLimit : freeStaffLimit;
+    final staffLimit = currentBusiness?.staffLimitOverride ?? planLimit;
     final nonOwnerCount = sp.staff.where((s) => s.role != 'OWNER').length;
-    final isFreePlan = currentBusiness?.plan != 'PREMIUM';
-    final atStaffLimit = isFreePlan && nonOwnerCount >= freeStaffLimit;
+    final atStaffLimit = nonOwnerCount >= staffLimit;
 
     final filteredStaff = _search.isEmpty
         ? sp.staff
@@ -94,7 +99,9 @@ class _StaffScreenState extends State<StaffScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                'Your Free plan allows up to $freeStaffLimit staff member besides the owner — upgrade to Premium to invite more.',
+                                currentBusiness?.plan == 'PREMIUM'
+                                    ? 'This business is limited to $staffLimit staff member${staffLimit == 1 ? '' : 's'} besides the owner.'
+                                    : 'Your Free plan allows up to $staffLimit staff member${staffLimit == 1 ? '' : 's'} besides the owner — upgrade to Premium to invite more.',
                                 style: const TextStyle(
                                   color: AppColors.orangeDark,
                                   fontSize: 12,
