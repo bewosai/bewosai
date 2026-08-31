@@ -6,9 +6,15 @@ from .models import User, Business, StaffMember
 
 
 class UserSerializer(serializers.ModelSerializer):
+    # How many business profiles this user owns — Super Admin's user list
+    # shows it, matching the existing staff_count pattern on
+    # BusinessSerializer (one extra query per row, same trade-off already
+    # accepted there).
+    business_count = serializers.IntegerField(source="businesses.count", read_only=True)
+
     class Meta:
         model = User
-        fields = ("id", "email", "name", "phone", "account_type", "is_platform_admin", "is_active", "is_verified", "created_at", "business_limit_override")
+        fields = ("id", "email", "name", "phone", "account_type", "is_platform_admin", "is_active", "is_verified", "created_at", "business_limit_override", "business_count")
         # business_limit_override is platform-admin-only (set directly on the
         # model by superadmin.UserActionView, bypassing this serializer) —
         # read-only here so a user's own profile PATCH can never self-grant it.
@@ -39,13 +45,19 @@ class BusinessSerializer(serializers.ModelSerializer):
             "id", "name", "business_type", "address", "phone", "email",
             "logo", "pan_number", "vat_number", "currency", "fiscal_year_start", "default_tax_rate",
             "plan", "status", "subscription_expires", "staff_limit_override",
+            "web_trial_enabled", "web_trial_start", "web_trial_end",
+            "mobile_trial_enabled", "mobile_trial_start", "mobile_trial_end",
             "owner", "owner_name", "owner_business_limit_override", "staff_count", "created_at",
         )
-        # plan / subscription_expires / staff_limit_override are
-        # superadmin-only (see superadmin.BusinessActionView) — a business
-        # owner must not be able to self-upgrade or self-grant more staff by
-        # PATCHing their own business.
-        read_only_fields = ("id", "owner", "created_at", "plan", "subscription_expires", "staff_limit_override")
+        # plan / subscription_expires / staff_limit_override / the trial
+        # fields are superadmin-only (see superadmin.BusinessActionView) — a
+        # business owner must not be able to self-upgrade, self-grant more
+        # staff, or self-grant a trial by PATCHing their own business.
+        read_only_fields = (
+            "id", "owner", "created_at", "plan", "subscription_expires", "staff_limit_override",
+            "web_trial_enabled", "web_trial_start", "web_trial_end",
+            "mobile_trial_enabled", "mobile_trial_start", "mobile_trial_end",
+        )
 
     def get_staff_count(self, obj):
         return obj.staff.filter(is_active=True).count()

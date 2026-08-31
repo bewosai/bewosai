@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SupportTicket, Announcement, Feature, License, LicenseAuditLog
+from .models import SupportTicket, Announcement, Feature, License, LicenseAuditLog, ActivityLog
 
 
 class FeatureSerializer(serializers.ModelSerializer):
@@ -63,5 +63,18 @@ class LicenseAuditLogSerializer(serializers.ModelSerializer):
         fields = (
             "id", "actor", "actor_name", "action", "business", "business_name",
             "license", "license_code", "old_value", "new_value", "created_at",
+        )
+        read_only_fields = fields
+
+
+class ActivityLogSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source="user.name", read_only=True, default="")
+    business_name = serializers.CharField(source="business.name", read_only=True)
+
+    class Meta:
+        model = ActivityLog
+        fields = (
+            "id", "business", "business_name", "user", "user_name",
+            "action", "model_name", "object_repr", "created_at",
         )
         read_only_fields = fields

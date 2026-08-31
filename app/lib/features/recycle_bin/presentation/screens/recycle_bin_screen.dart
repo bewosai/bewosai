@@ -33,6 +33,12 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
         return Icons.receipt_outlined;
       case 'product':
         return Icons.inventory_2_outlined;
+      case 'quotation':
+        return Icons.description_outlined;
+      case 'bank_account':
+        return Icons.account_balance_outlined;
+      case 'bank_transaction':
+        return Icons.swap_horiz;
       default:
         return Icons.delete_outline;
     }
@@ -50,6 +56,11 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
         return AppColors.error;
       case 'product':
         return AppColors.warning;
+      case 'quotation':
+        return AppColors.navy400;
+      case 'bank_account':
+      case 'bank_transaction':
+        return AppColors.success;
       default:
         return AppColors.navy400;
     }

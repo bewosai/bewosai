@@ -59,8 +59,6 @@ const EMPTY_FORM = {
 /* ─── Print Modal ─── */
 function PrintModal({ purchase, onClose }) {
   const { currentBusiness } = useAuth();
-  const [docType, setDocType] = useState("invoice"); // 'invoice' | 'proforma'
-  const isProforma = docType === "proforma";
   const businessName = localStorage.getItem("business_name") || "Business Name";
   const businessAddress = localStorage.getItem("business_address") || "";
   const businessPhone = localStorage.getItem("business_phone") || "";
@@ -72,6 +70,7 @@ function PrintModal({ purchase, onClose }) {
   const total = parseFloat(purchase.total || 0);
   const paid = parseFloat(purchase.paid_amount || 0);
   const due = total - paid;
+  const isAdvance = due < 0;
   const paymentModeLabel = paid <= 0 && due > 0
     ? "Credit"
     : (PAYMENT_METHODS.find(m => m.value === purchase.payment_method)?.label || purchase.payment_method || "Cash");
@@ -89,10 +88,6 @@ function PrintModal({ purchase, onClose }) {
         <div className="flex items-center justify-between border-b p-4 print:hidden">
           <span className="font-bold text-gray-900">Print Bill</span>
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-xs font-semibold text-gray-600">
-              <input type="checkbox" checked={isProforma} onChange={e => setDocType(e.target.checked ? "proforma" : "invoice")} />
-              Proforma
-            </label>
             <button onClick={() => window.print()} className="rounded-lg bg-orange-500 px-4 py-2 text-sm text-white hover:bg-orange-600">
               <Printer size={14} className="mr-1 inline" /> Print
             </button>
@@ -100,32 +95,32 @@ function PrintModal({ purchase, onClose }) {
           </div>
         </div>
 
-        <div className="p-6 print:p-2 text-gray-800" id="print-area">
+        <div className="p-8 print:p-4 text-gray-800" id="print-area">
           {/* Business header */}
-          <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="mb-5 flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{businessName}</h2>
-              <p className="text-xs text-gray-600">
+              <h2 className="text-2xl font-bold text-gray-900">{businessName}</h2>
+              <p className="text-xs text-gray-600 mt-0.5">
                 {businessPhone}{businessPhone && businessAddress ? "• " : ""}{businessAddress}
               </p>
               {businessPan && <p className="text-xs text-gray-600">PAN No: {businessPan}</p>}
             </div>
-            {businessLogo && <img src={businessLogo} alt="logo" className="h-12 w-12 rounded-lg object-cover border" />}
+            {businessLogo && <img src={businessLogo} alt="logo" className="h-14 w-14 rounded-lg object-cover border" />}
           </div>
 
-          <h3 className="mb-4 text-center text-lg font-bold uppercase tracking-wide text-gray-900">
-            {isProforma ? "Proforma Invoice" : "Purchase Details"}
+          <h3 className="mb-5 text-center text-xl font-bold uppercase tracking-wide text-gray-900">
+            Purchase Details
           </h3>
 
           {/* Supplier + bill meta */}
-          <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
+          <div className="mb-5 grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-gray-500">Supplier:</p>
               <p className="font-semibold text-gray-900">{purchase.supplier_name || purchase.party_name || "Unknown Supplier"}</p>
               {purchase.supplier_address && <p className="text-xs text-gray-500">{purchase.supplier_address}</p>}
               {purchase.supplier_pan && <p className="mt-1 text-xs text-gray-600">PAN No: {purchase.supplier_pan}</p>}
             </div>
-            <div className="text-right text-xs">
+            <div className="text-right text-xs space-y-0.5">
               <p className="text-gray-500">Bill No: <span className="font-semibold text-gray-900">{purchase.bill_number || purchase.invoice_number || purchase.id}</span></p>
               <p className="text-gray-500">Bill Date: <span className="font-semibold text-gray-900">{billDate}</span></p>
               {miti && <p className="text-gray-500">Miti: <span className="font-semibold text-gray-900">{miti}</span></p>}
@@ -133,14 +128,14 @@ function PrintModal({ purchase, onClose }) {
             </div>
           </div>
 
-          <table className="w-full text-sm border-collapse mb-4">
+          <table className="w-full text-sm border-collapse mb-5">
             <thead>
-              <tr className="bg-blue-500 text-white">
-                <th className="py-2 text-left pl-2 rounded-l-md">S.N.</th>
-                <th className="py-2 text-left">Name</th>
-                <th className="py-2 text-right">Quantity</th>
-                <th className="py-2 text-right">Rate</th>
-                <th className="py-2 text-right pr-2 rounded-r-md">Amount</th>
+              <tr className="bg-blue-600 text-white">
+                <th className="py-3 text-left pl-3 rounded-l-md">S.N.</th>
+                <th className="py-3 text-left">Name</th>
+                <th className="py-3 text-right">Quantity</th>
+                <th className="py-3 text-right">Rate</th>
+                <th className="py-3 text-right pr-3 rounded-r-md">Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -148,11 +143,11 @@ function PrintModal({ purchase, onClose }) {
                 const rowTotal = (item.quantity * item.unit_price) - (item.discount_amount || 0);
                 return (
                   <tr key={i} className="border-b border-gray-200">
-                    <td className="py-2 pl-2 text-gray-500">{i + 1}</td>
-                    <td className="py-2">{item.product_name || item.name}</td>
-                    <td className="py-2 text-right">{item.quantity}</td>
-                    <td className="py-2 text-right">Rs. {parseFloat(item.unit_price).toFixed(2)}</td>
-                    <td className="py-2 text-right pr-2">Rs. {rowTotal.toFixed(2)}</td>
+                    <td className="py-3 pl-3 text-gray-500">{i + 1}</td>
+                    <td className="py-3 font-medium text-gray-900">{item.product_name || item.name}</td>
+                    <td className="py-3 text-right">{item.quantity}</td>
+                    <td className="py-3 text-right">Rs. {parseFloat(item.unit_price).toFixed(2)}</td>
+                    <td className="py-3 text-right pr-3 font-medium">Rs. {rowTotal.toFixed(2)}</td>
                   </tr>
                 );
               })}
@@ -164,9 +159,9 @@ function PrintModal({ purchase, onClose }) {
             <div className="text-sm">
               <p className="font-semibold text-gray-700">Amount in Words</p>
               <p className="text-gray-600">{amountInWords(total)}</p>
-              {isProforma && <p className="mt-2 text-xs italic text-gray-500">*Proforma Invoice</p>}
+              <p className="mt-2 text-xs italic text-gray-500">*Proforma Invoice</p>
             </div>
-            <div className="space-y-1 text-sm">
+            <div className="space-y-1.5 text-sm">
               <div className="flex justify-between"><span className="text-gray-500">Subtotal:</span><span>Rs. {parseFloat(purchase.subtotal || 0).toFixed(2)}</span></div>
               {parseFloat(purchase.discount || 0) > 0 && (
                 <div className="flex justify-between text-red-500"><span>Discount:</span><span>- Rs. {parseFloat(purchase.discount).toFixed(2)}</span></div>
@@ -176,7 +171,10 @@ function PrintModal({ purchase, onClose }) {
               )}
               <div className="flex justify-between font-semibold"><span className="text-gray-700">Total Amount:</span><span>Rs. {total.toFixed(2)}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Paid Amount:</span><span className="font-semibold">Rs. {paid.toFixed(2)}</span></div>
-              <div className="flex justify-between border-t pt-1 text-base font-bold"><span>Amount Due</span><span>Rs. {due.toFixed(2)}</span></div>
+              <div className="flex justify-between border-t border-gray-300 pt-2 text-lg font-bold">
+                <span>{isAdvance ? "Advance (Overpaid)" : "Amount Due"}</span>
+                <span>Rs. {Math.abs(due).toFixed(2)}</span>
+              </div>
             </div>
           </div>
 
@@ -519,7 +517,8 @@ function PurchaseModal({ onClose, onSaved, editData }) {
             </div>
             <div className="rounded-xl border border-navy-700 overflow-hidden">
               <div className="grid grid-cols-12 gap-1 bg-navy-800/60 px-2 py-1.5 text-xs font-semibold text-navy-400">
-                <div className="col-span-4">Product</div>
+                <div className="col-span-1 text-center">S.N.</div>
+                <div className="col-span-3">Product</div>
                 <div className="col-span-2 text-right">Qty</div>
                 <div className="col-span-2 text-right">Cost</div>
                 <div className="col-span-2 text-right">Disc.</div>
@@ -530,7 +529,8 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                 const rowTotal = (item.quantity * item.unit_price) - (parseFloat(item.discount_amount) || 0);
                 return (
                   <div key={i} className="grid grid-cols-12 gap-1 px-2 py-2 border-t border-navy-700/50 items-center">
-                    <div className="col-span-4">
+                    <div className="col-span-1 text-center text-xs text-navy-500">{i + 1}</div>
+                    <div className="col-span-3">
                       <SearchableSelect
                         options={products.map(p => ({
                           id: p.id,

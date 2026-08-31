@@ -16,6 +16,8 @@ urlpatterns = [
     path("users/", views.UserManagementView.as_view()),
     path("users/<int:pk>/action/", views.UserActionView.as_view()),
     path("users/<int:pk>/delete/", views.UserDeleteAdminView.as_view()),
+    path("users/<int:pk>/activity/", views.UserActivityView.as_view()),
+    path("users/<int:pk>/summary/", views.UserSummaryView.as_view()),
 
     # Login activity (admin only)
     path("login-activity/", views.LoginActivityView.as_view()),

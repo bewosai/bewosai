@@ -214,6 +214,8 @@ export const superadmin = {
   deleteUser: (id) => api.delete(`/superadmin/users/${id}/delete/`),
   loginActivity: (p) => api.get("/superadmin/login-activity/", { params: p }),
   userLoginActivity: (userId, p) => api.get("/superadmin/login-activity/", { params: { user_id: userId, ...p } }),
+  userActivity: (userId, p) => api.get(`/superadmin/users/${userId}/activity/`, { params: p }),
+  userSummary: (userId) => api.get(`/superadmin/users/${userId}/summary/`),
 
   tickets: (p) => api.get("/superadmin/tickets/", { params: p }),
   updateTicket: (id, d) => api.patch(`/superadmin/tickets/${id}/`, d),

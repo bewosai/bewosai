@@ -148,7 +148,8 @@ class IsPremiumBusiness(BasePermission):
 
 class HasActiveSubscription(BasePermission):
     """
-    Global gate: once a business's 120-day trial ends with no active license,
+    Global gate: once a business's 120-day trial ends with no active license
+    and no Super-Admin-granted platform trial (see Business.has_access),
     every business-scoped endpoint is blocked until one is activated. Applied
     via DEFAULT_PERMISSION_CLASSES so no per-view wiring is needed — but it
     only ever looks at requests that actually resolve to a business (see
@@ -174,7 +175,7 @@ class HasActiveSubscription(BasePermission):
         business = get_business(request)
         if not business:
             return True
-        return business.has_active_subscription
+        return business.has_access(get_platform(request))
 
 
 class BusinessNotArchivedForWrites(BasePermission):

@@ -214,43 +214,113 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   const SizedBox(height: 16),
                   AppSectionCard(
                     title: 'Items',
-                    children: s.items.map((item) {
-                      final isLast = item == s.items.last;
-                      return Padding(
-                        padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
+                    children: [
+                      // Column headers once, like the printed invoice's
+                      // S.N./Name/Qty/Rate/Amount table — so each item row
+                      // below can be a single line instead of stacking the
+                      // name above a separate "qty × price" line.
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
                         child: Row(
                           children: [
+                            const SizedBox(width: 20),
+                            const SizedBox(width: 8),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.productName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${Formatters.amount(item.quantity)} × ${Formatters.currency(item.unitPrice)}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
+                              flex: 4,
+                              child: Text(
+                                'Item',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                               ),
                             ),
-                            Text(
-                              Formatters.currency(item.total),
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                'Qty',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text(
+                                'Rate',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text(
+                                'Amount',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                               ),
                             ),
                           ],
                         ),
-                      );
-                    }).toList(),
+                      ),
+                      const Divider(height: 14),
+                      ...s.items.asMap().entries.map((e) {
+                        final i = e.key;
+                        final item = e.value;
+                        final isLast = i == s.items.length - 1;
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                child: Text(
+                                  '${i + 1}',
+                                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 4,
+                                child: Text(
+                                  item.productName,
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  Formatters.amount(item.quantity),
+                                  textAlign: TextAlign.right,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  Formatters.currency(item.unitPrice),
+                                  textAlign: TextAlign.right,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  Formatters.currency(item.total),
+                                  textAlign: TextAlign.right,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   AppSectionCard(

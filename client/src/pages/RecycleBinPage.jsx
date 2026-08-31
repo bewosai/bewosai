@@ -11,6 +11,9 @@ const TYPE_CONFIG = {
   expense: { label: "Expense", labelNe: "खर्च", color: "orange" },
   product: { label: "Product", labelNe: "उत्पाद", color: "red" },
   payment: { label: "Payment", labelNe: "भुक्तानी", color: "teal" },
+  quotation: { label: "Quotation", labelNe: "उद्धरण", color: "indigo" },
+  bank_account: { label: "Bank Account", labelNe: "बैंक खाता", color: "cyan" },
+  bank_transaction: { label: "Bank Transaction", labelNe: "बैंक कारोबार", color: "cyan" },
 };
 const COLOR_CLASSES = {
   blue: "bg-blue-500/10 text-blue-400",
@@ -19,6 +22,8 @@ const COLOR_CLASSES = {
   orange: "bg-orange-500/10 text-orange-400",
   red: "bg-red-500/10 text-red-400",
   teal: "bg-teal-500/10 text-teal-400",
+  indigo: "bg-indigo-500/10 text-indigo-400",
+  cyan: "bg-cyan-500/10 text-cyan-400",
 };
 
 function ConfirmDialog({ title, body, error, busy, onConfirm, onCancel, dangerous }) {

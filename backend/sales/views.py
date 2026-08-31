@@ -134,6 +134,7 @@ class QuotationListCreateView(generics.ListCreateAPIView):
             business_id=bid,
             business__staff__user=self.request.user,
             business__staff__is_active=True,
+            is_deleted=False,
         ).select_related("customer")
 
     def perform_create(self, serializer):
@@ -151,4 +152,11 @@ class QuotationDetailView(generics.RetrieveUpdateDestroyAPIView):
             business_id=bid,
             business__staff__user=self.request.user,
             business__staff__is_active=True,
+            is_deleted=False,
         )
+
+    def perform_destroy(self, instance):
+        from django.utils import timezone
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=["is_deleted", "deleted_at"])

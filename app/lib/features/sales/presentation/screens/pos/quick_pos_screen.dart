@@ -638,6 +638,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                     children: [
                       ..._items.asMap().entries.map(
                         (e) => _LineItemRow(
+                          index: e.key + 1,
                           item: e.value,
                           onPickProduct: () => _pickProduct(e.value),
                           onRemove: _items.length > 1
@@ -893,13 +894,21 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   }
 }
 
+/// One line item, laid out like a row of the printed invoice's item table
+/// (S.N. / Name / Qty / Rate / Amount) — a numbered badge lines it up with
+/// the product name, and Product/Qty/Price/Disc./Amount all share one row —
+/// every column is [Expanded] with a fixed flex ratio (never a fixed pixel
+/// width) so the row always fits without overflowing, the same way the web
+/// item table's grid-cols-12 columns are proportional rather than fixed.
 class _LineItemRow extends StatelessWidget {
+  final int index;
   final _LineItem item;
   final VoidCallback onPickProduct;
   final VoidCallback? onRemove;
   final VoidCallback onChanged;
 
   const _LineItemRow({
+    required this.index,
     required this.item,
     required this.onPickProduct,
     required this.onRemove,
@@ -910,101 +919,105 @@ class _LineItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.navy50,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: onPickProduct,
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Product',
-                      isDense: true,
-                    ),
-                    child: Text(
-                      item.nameController.text.isEmpty
-                          ? 'Select product'
-                          : item.nameController.text,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
+          Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.orange.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '$index',
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.orangeDark,
               ),
-              if (onRemove != null)
-                IconButton(
-                  icon: const Icon(
-                    Icons.close,
-                    size: 18,
-                    color: AppColors.error,
-                  ),
-                  onPressed: onRemove,
-                ),
-            ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: item.qtyController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Qty',
-                    isDense: true,
-                  ),
-                  onChanged: (_) => onChanged(),
+          const SizedBox(width: 6),
+          Expanded(
+            flex: 3,
+            child: InkWell(
+              onTap: onPickProduct,
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Product',
+                  isDense: true,
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: item.priceController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Price',
-                    isDense: true,
-                  ),
-                  onChanged: (_) => onChanged(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: item.discountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Disc.',
-                    isDense: true,
-                  ),
-                  onChanged: (_) => onChanged(),
-                ),
-              ),
-            ],
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                '= ${Formatters.currency(item.total)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
+                child: Text(
+                  item.nameController.text.isEmpty
+                      ? 'Select product'
+                      : item.nameController.text,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            flex: 2,
+            child: TextField(
+              controller: item.qtyController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 12),
+              decoration: const InputDecoration(labelText: 'Qty', isDense: true),
+              onChanged: (_) => onChanged(),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            flex: 2,
+            child: TextField(
+              controller: item.priceController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 12),
+              decoration: const InputDecoration(labelText: 'Price', isDense: true),
+              onChanged: (_) => onChanged(),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            flex: 2,
+            child: TextField(
+              controller: item.discountController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 12),
+              decoration: const InputDecoration(labelText: 'Disc.', isDense: true),
+              onChanged: (_) => onChanged(),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            flex: 2,
+            child: Text(
+              Formatters.currency(item.total),
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+            ),
+          ),
+          SizedBox(
+            width: 28,
+            child: onRemove != null
+                ? IconButton(
+                    icon: const Icon(Icons.close, size: 16, color: AppColors.error),
+                    onPressed: onRemove,
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  )
+                : null,
           ),
         ],
       ),

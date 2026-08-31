@@ -80,18 +80,15 @@ class BillPdfData {
 
 /// Builds a one-page A4 PDF for [data] on a plain white page — independent
 /// of the app's own light/dark theme, since this is a document the business
-/// hands to a customer, not an in-app screen. When [isProforma] is true the
-/// heading reads "Proforma Invoice" instead of [documentTitle] and a
-/// "*Proforma Invoice" note is added near the totals — everything else
-/// (fields, totals) stays identical, since a proforma is the same bill with
-/// a different label, not a different document.
+/// hands to a customer, not an in-app screen. Always carries a small
+/// "*Proforma Invoice" note near the totals — permanent, not a per-print
+/// choice (see printBillPdf/showBillPrintDialog, which no longer ask).
 Future<pw.Document> buildBillPdf({
   required BillPdfData data,
   required String documentTitle,
-  required bool isProforma,
 }) async {
   final doc = pw.Document();
-  final heading = isProforma ? 'Proforma Invoice' : documentTitle;
+  final heading = documentTitle;
   final black = PdfColors.grey900;
   final grey = PdfColors.grey600;
 
@@ -106,24 +103,27 @@ Future<pw.Document> buildBillPdf({
             // Business header
             pw.Text(
               data.businessName,
-              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: black),
+              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: black),
             ),
             if (data.businessPhone.isNotEmpty || data.businessAddress.isNotEmpty)
-              pw.Text(
-                [data.businessPhone, data.businessAddress].where((s) => s.isNotEmpty).join('• '),
-                style: pw.TextStyle(fontSize: 9, color: grey),
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(top: 2),
+                child: pw.Text(
+                  [data.businessPhone, data.businessAddress].where((s) => s.isNotEmpty).join('• '),
+                  style: pw.TextStyle(fontSize: 9, color: grey),
+                ),
               ),
             if (data.businessPan.isNotEmpty)
               pw.Text('PAN No: ${data.businessPan}', style: pw.TextStyle(fontSize: 9, color: grey)),
-            pw.SizedBox(height: 14),
+            pw.SizedBox(height: 16),
 
             pw.Center(
               child: pw.Text(
                 heading.toUpperCase(),
-                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: black),
+                style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: black),
               ),
             ),
-            pw.SizedBox(height: 14),
+            pw.SizedBox(height: 16),
 
             // Party + bill meta
             pw.Row(
@@ -171,7 +171,7 @@ Future<pw.Document> buildBillPdf({
               },
               children: [
                 pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.blue),
+                  decoration: const pw.BoxDecoration(color: PdfColors.blue700),
                   children: [
                     _cell('S.N.', bold: true, color: PdfColors.white),
                     _cell('Name', bold: true, color: PdfColors.white),
@@ -184,15 +184,15 @@ Future<pw.Document> buildBillPdf({
                   pw.TableRow(
                     children: [
                       _cell('${i + 1}', color: grey),
-                      _cell(data.items[i].name),
+                      _cell(data.items[i].name, bold: true, color: black),
                       _cell(Formatters.amount(data.items[i].quantity), align: pw.TextAlign.right),
                       _cell(Formatters.currency(data.items[i].unitPrice), align: pw.TextAlign.right),
-                      _cell(Formatters.currency(data.items[i].total), align: pw.TextAlign.right),
+                      _cell(Formatters.currency(data.items[i].total), align: pw.TextAlign.right, bold: true, color: black),
                     ],
                   ),
               ],
             ),
-            pw.SizedBox(height: 14),
+            pw.SizedBox(height: 16),
 
             // Amount in words + totals
             pw.Row(
@@ -202,12 +202,10 @@ Future<pw.Document> buildBillPdf({
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('Amount in Words', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: black)),
+                      pw.Text('Amount in Words', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: black)),
                       pw.Text(amountInWords(data.total), style: pw.TextStyle(fontSize: 9, color: grey)),
-                      if (isProforma) ...[
-                        pw.SizedBox(height: 8),
-                        pw.Text('*Proforma Invoice', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: grey)),
-                      ],
+                      pw.SizedBox(height: 8),
+                      pw.Text('*Proforma Invoice', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: grey)),
                     ],
                   ),
                 ),
@@ -223,8 +221,12 @@ Future<pw.Document> buildBillPdf({
                         _totalRow('Tax (${Formatters.amount(data.taxRate)}%)', '+ ${Formatters.currency(data.taxAmount)}', grey, black),
                       _totalRow('Total Amount', Formatters.currency(data.total), black, black, bold: true),
                       _totalRow('Received Amount', Formatters.currency(data.paidAmount), grey, black),
-                      pw.Divider(color: PdfColors.grey400),
-                      _totalRow('Amount Due', Formatters.currency(data.dueAmount), black, black, bold: true, big: true),
+                      pw.Divider(color: PdfColors.grey500, thickness: 1),
+                      _totalRow(
+                        data.dueAmount < 0 ? 'Advance (Overpaid)' : 'Amount Due',
+                        Formatters.currency(data.dueAmount.abs()),
+                        black, black, bold: true, big: true,
+                      ),
                     ],
                   ),
                 ),
@@ -282,12 +284,12 @@ pw.Widget _cell(
   PdfColor color = PdfColors.black,
 }) {
   return pw.Padding(
-    padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+    padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 5),
     child: pw.Text(
       text,
       textAlign: align,
       style: pw.TextStyle(
-        fontSize: 9,
+        fontSize: 10,
         fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
         color: color,
       ),
@@ -311,7 +313,7 @@ pw.Widget _totalRow(
         pw.Text(
           label,
           style: pw.TextStyle(
-            fontSize: big ? 11 : 9,
+            fontSize: big ? 13 : 9,
             fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
             color: labelColor,
           ),
@@ -319,7 +321,7 @@ pw.Widget _totalRow(
         pw.Text(
           value,
           style: pw.TextStyle(
-            fontSize: big ? 11 : 9,
+            fontSize: big ? 13 : 9,
             fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
             color: valueColor,
           ),
@@ -333,49 +335,24 @@ pw.Widget _totalRow(
 Future<void> printBillPdf({
   required BillPdfData data,
   required String documentTitle,
-  required bool isProforma,
 }) async {
   await Printing.layoutPdf(
     onLayout: (format) async {
-      final doc = await buildBillPdf(
-        data: data,
-        documentTitle: documentTitle,
-        isProforma: isProforma,
-      );
+      final doc = await buildBillPdf(data: data, documentTitle: documentTitle);
       return doc.save();
     },
   );
 }
 
-/// Asks whether to print the bill as-is or as a Proforma Invoice, then opens
-/// the print sheet. [documentTitle] is the normal heading (e.g. 'Sales
-/// Details', 'Purchase Details') used when the user doesn't pick Proforma.
+/// Opens the print sheet directly for [data] — kept as a separate entry
+/// point (rather than inlining printBillPdf at call sites) since it used to
+/// ask Proforma-or-not first; that choice is gone now that every bill
+/// always carries the "*Proforma Invoice" note (see buildBillPdf), but the
+/// name is kept so callers don't need to change.
 Future<void> showBillPrintDialog(
   BuildContext context, {
   required BillPdfData data,
   required String documentTitle,
 }) async {
-  final isProforma = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Print'),
-      content: const Text('Choose the document type to print.'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: Text(documentTitle),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('Proforma Invoice'),
-        ),
-      ],
-    ),
-  );
-  if (isProforma == null || !context.mounted) return;
-  await printBillPdf(
-    data: data,
-    documentTitle: documentTitle,
-    isProforma: isProforma,
-  );
+  await printBillPdf(data: data, documentTitle: documentTitle);
 }

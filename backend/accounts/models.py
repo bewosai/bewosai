@@ -182,6 +182,20 @@ class Business(models.Model):
     # (see BusinessSerializer.Meta.read_only_fields).
     staff_limit_override = models.PositiveIntegerField(null=True, blank=True)
 
+    # Platform-admin-granted trial window, independent of the automatic
+    # TRIAL_DAYS window below and of the license system — set via
+    # superadmin.BusinessActionView's "set_trial" action (Super Admin's
+    # "Manage Trial"). Split by platform so e.g. a business can be trialing
+    # the mobile app without that also unlocking web, or vice versa. Never
+    # editable by the business owner themselves (see
+    # BusinessSerializer.Meta.read_only_fields).
+    web_trial_enabled = models.BooleanField(default=False)
+    web_trial_start = models.DateField(null=True, blank=True)
+    web_trial_end = models.DateField(null=True, blank=True)
+    mobile_trial_enabled = models.BooleanField(default=False)
+    mobile_trial_start = models.DateField(null=True, blank=True)
+    mobile_trial_end = models.DateField(null=True, blank=True)
+
     # 120 days for now while the app is new, so people have real room to try
     # it out before needing a license — tighten this once there's an
     # established user base.
@@ -234,6 +248,22 @@ class Business(models.Model):
         now' — grandfathered, or trial window, or a currently-active license.
         Server time only; never trust a client-supplied date."""
         return self.is_grandfathered or self.is_trial_active or self.active_license is not None
+
+    def has_active_platform_trial(self, platform):
+        """Whether Super Admin has granted an active trial for this specific
+        platform ('web' or 'mobile') via Manage Trial — separate from the
+        automatic TRIAL_DAYS window."""
+        today = timezone.localdate()
+        prefix = "mobile_trial_" if platform == "mobile" else "web_trial_"
+        enabled, start, end = (getattr(self, prefix + f) for f in ("enabled", "start", "end"))
+        return bool(enabled and start and end and start <= today <= end)
+
+    def has_access(self, platform):
+        """Can this business use the app right now on this platform —
+        [has_active_subscription] OR an admin-granted platform trial, either
+        is sufficient. Use this (not has_active_subscription directly) for
+        anything platform-aware, e.g. HasActiveSubscription/LicenseMeView."""
+        return self.has_active_subscription or self.has_active_platform_trial(platform)
 
 
 class StaffMember(models.Model):

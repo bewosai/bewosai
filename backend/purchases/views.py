@@ -107,10 +107,11 @@ class RecycleBinView(APIView):
     """Lists all soft-deleted records across models for the current business."""
 
     def get(self, request):
-        from sales.models import Sale
+        from sales.models import Sale, Quotation
         from parties.models import Party, PartyPayment
         from expenses.models import Expense
         from inventory.models import Product
+        from banking.models import BankAccount, BankTransaction
 
         biz = get_business(request)
         if not biz:
@@ -160,6 +161,27 @@ class RecycleBinView(APIView):
                 "label": f"{direction} {payment.party.name}: Rs.{payment.amount}",
                 "deleted_at": payment.deleted_at,
             })
+        for quotation in Quotation.objects.filter(business=biz, is_deleted=True):
+            result.append({
+                "type": "quotation",
+                "id": quotation.id,
+                "label": f"Quotation {quotation.quotation_number}",
+                "deleted_at": quotation.deleted_at,
+            })
+        for account in BankAccount.objects.filter(business=biz, is_deleted=True):
+            result.append({
+                "type": "bank_account",
+                "id": account.id,
+                "label": f"Account: {account.account_name}",
+                "deleted_at": account.deleted_at,
+            })
+        for txn in BankTransaction.objects.filter(account__business=biz, is_deleted=True).select_related("account"):
+            result.append({
+                "type": "bank_transaction",
+                "id": txn.id,
+                "label": f"{txn.transaction_type.title()} Rs.{txn.amount} ({txn.account.account_name})",
+                "deleted_at": txn.deleted_at,
+            })
 
         result.sort(key=lambda x: x["deleted_at"] or timezone.now(), reverse=True)
         return Response(result)
@@ -167,11 +189,12 @@ class RecycleBinView(APIView):
 
 class RecycleBinRestoreView(APIView):
     def post(self, request, record_type, pk):
-        from sales.models import Sale
+        from sales.models import Sale, Quotation
         from parties.models import Party, PartyPayment
         from parties.serializers import PartyPaymentSerializer
         from expenses.models import Expense
         from inventory.models import Product
+        from banking.models import BankAccount, BankTransaction
 
         biz = get_business(request)
         if not biz:
@@ -190,6 +213,12 @@ class RecycleBinRestoreView(APIView):
                 obj = Product.objects.get(id=pk, business=biz, is_deleted=True)
             elif record_type == "payment":
                 obj = PartyPayment.objects.get(id=pk, party__business=biz, is_deleted=True)
+            elif record_type == "quotation":
+                obj = Quotation.objects.get(id=pk, business=biz, is_deleted=True)
+            elif record_type == "bank_account":
+                obj = BankAccount.objects.get(id=pk, business=biz, is_deleted=True)
+            elif record_type == "bank_transaction":
+                obj = BankTransaction.objects.get(id=pk, account__business=biz, is_deleted=True)
             else:
                 return Response({"error": "Unknown record type."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
@@ -223,10 +252,11 @@ class RecycleBinRestoreView(APIView):
 
 class RecycleBinPermanentDeleteView(APIView):
     def delete(self, request, record_type, pk):
-        from sales.models import Sale
+        from sales.models import Sale, Quotation
         from parties.models import Party, PartyPayment
         from expenses.models import Expense
         from inventory.models import Product
+        from banking.models import BankAccount, BankTransaction
 
         biz = get_business(request)
         if not biz:
@@ -248,6 +278,15 @@ class RecycleBinPermanentDeleteView(APIView):
                 # purchase amounts and mirrored BankTransaction were already
                 # reversed when this payment was first soft-deleted.
                 PartyPayment.objects.get(id=pk, party__business=biz, is_deleted=True).delete()
+            elif record_type == "quotation":
+                Quotation.objects.get(id=pk, business=biz, is_deleted=True).delete()
+            elif record_type == "bank_account":
+                # Cascades to every BankTransaction under this account,
+                # deleted or not — permanently deleting the account means
+                # permanently deleting its whole transaction history.
+                BankAccount.objects.get(id=pk, business=biz, is_deleted=True).delete()
+            elif record_type == "bank_transaction":
+                BankTransaction.objects.get(id=pk, account__business=biz, is_deleted=True).delete()
             else:
                 return Response({"error": "Unknown record type."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:

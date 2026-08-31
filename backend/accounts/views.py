@@ -10,7 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from bewosai.email import send_otp_email
-from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
+from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, get_platform, require_feature, require_staff_permission
 from bewosai.utils import get_bid, get_business, mask_email
 from .models import User, Business, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import (
@@ -675,12 +675,24 @@ class LicenseMeView(APIView):
         if not business:
             return api_response(False, "No business selected.", status.HTTP_400_BAD_REQUEST)
 
+        platform = get_platform(request)
         return Response({
             "success": True,
-            "has_active_subscription": business.has_active_subscription,
+            # True if any of: grandfathered, the automatic trial, an active
+            # license, or a Super-Admin-granted trial for this platform —
+            # see Business.has_access. Kept under the same key so existing
+            # clients don't need to change what they check.
+            "has_active_subscription": business.has_access(platform),
             "is_grandfathered": business.is_grandfathered,
             "is_trial_active": business.is_trial_active,
             "trial_expiry_date": business.trial_expiry_date,
+            "platform_trial_active": business.has_active_platform_trial(platform),
+            "web_trial_enabled": business.web_trial_enabled,
+            "web_trial_start": business.web_trial_start,
+            "web_trial_end": business.web_trial_end,
+            "mobile_trial_enabled": business.mobile_trial_enabled,
+            "mobile_trial_start": business.mobile_trial_start,
+            "mobile_trial_end": business.mobile_trial_end,
             "license": _license_payload(business.active_license),
         })
 

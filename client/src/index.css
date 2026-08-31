@@ -89,6 +89,13 @@ html, body, #root { height: 100%; }
     background: white !important;
     color: #1f2937 !important;
   }
+
+  /* A long invoice (many line items) must not split a row or the totals
+     block across a page boundary, and the column headers should repeat if
+     the item table itself spans multiple pages. */
+  #print-area table { page-break-inside: auto; }
+  #print-area thead { display: table-header-group; }
+  #print-area tr { page-break-inside: avoid; page-break-after: auto; }
 }
 .print-only { display: none; }
 

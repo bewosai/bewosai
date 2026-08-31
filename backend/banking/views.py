@@ -25,6 +25,7 @@ class BankAccountListCreateView(_RequireBanking, generics.ListCreateAPIView):
             business_id=bid,
             business__staff__user=self.request.user,
             business__staff__is_active=True,
+            is_deleted=False,
         )
 
     def get_serializer_context(self):
@@ -46,12 +47,19 @@ class BankAccountDetailView(_RequireBanking, generics.RetrieveUpdateDestroyAPIVi
             business_id=bid,
             business__staff__user=self.request.user,
             business__staff__is_active=True,
+            is_deleted=False,
         )
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
         ctx["request"] = self.request
         return ctx
+
+    def perform_destroy(self, instance):
+        from django.utils import timezone
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=["is_deleted", "deleted_at"])
 
 
 class BankTransactionListCreateView(_RequireBanking, generics.ListCreateAPIView):
@@ -66,6 +74,8 @@ class BankTransactionListCreateView(_RequireBanking, generics.ListCreateAPIView)
             account__business_id=bid,
             account__business__staff__user=self.request.user,
             account__business__staff__is_active=True,
+            is_deleted=False,
+            account__is_deleted=False,
         ).select_related("account", "created_by")
         account_id = self.request.query_params.get("account")
         if account_id:
@@ -89,6 +99,7 @@ class BankTransactionDetailView(_RequireBanking, generics.RetrieveUpdateDestroyA
             account__business_id=bid,
             account__business__staff__user=self.request.user,
             account__business__staff__is_active=True,
+            is_deleted=False,
         )
 
     def perform_update(self, serializer):
@@ -108,6 +119,8 @@ class BankTransactionDetailView(_RequireBanking, generics.RetrieveUpdateDestroyA
     _MIRROR_SOURCE_LABEL = {"SALE-": "Sales", "PURCHASE-": "Purchases", "PARTYPAYMENT-": "Payments"}
 
     def destroy(self, request, *args, **kwargs):
+        from django.utils import timezone
+
         instance = self.get_object()
         prefix = next((p for p in self._MIRROR_PREFIXES if instance.reference.startswith(p)), None)
         if prefix:
@@ -115,4 +128,7 @@ class BankTransactionDetailView(_RequireBanking, generics.RetrieveUpdateDestroyA
                 {"error": f"This transaction is linked to a record in {self._MIRROR_SOURCE_LABEL[prefix]} — delete or edit it from there instead."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return super().destroy(request, *args, **kwargs)
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=["is_deleted", "deleted_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)

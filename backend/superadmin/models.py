@@ -245,3 +245,34 @@ class LicenseAuditLog(models.Model):
 
     def __str__(self):
         return f"{self.get_action_display()} — {self.business.name}"
+
+
+class ActivityLog(models.Model):
+    """
+    A cross-business, cross-model timeline of who created or permanently
+    deleted what, for Super Admin's per-user activity view. Populated
+    automatically by signals (see superadmin.signals) rather than by editing
+    every app's views — new tracked models are added by extending the
+    TRACKED_MODELS list there, not by touching business logic anywhere.
+    """
+
+    ACTION_CREATED = "CREATED"
+    ACTION_DELETED = "DELETED"
+    ACTION_CHOICES = [(ACTION_CREATED, "Created"), (ACTION_DELETED, "Deleted")]
+
+    business = models.ForeignKey("accounts.Business", on_delete=models.CASCADE, related_name="activity_logs")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        help_text="Who performed the action — null when the underlying model has no created_by field.",
+    )
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    model_name = models.CharField(max_length=50)
+    object_repr = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["business", "-created_at"])]
+
+    def __str__(self):
+        return f"{self.get_action_display()} {self.model_name}: {self.object_repr}"

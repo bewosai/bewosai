@@ -42,6 +42,8 @@ class BankAccount(models.Model):
     qr_code = models.ImageField(upload_to="banking/qr/", null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -51,10 +53,10 @@ class BankAccount(models.Model):
 
     @property
     def balance(self):
-        credits = self.transactions.filter(transaction_type="CREDIT").aggregate(
+        credits = self.transactions.filter(transaction_type="CREDIT", is_deleted=False).aggregate(
             t=models.Sum("amount")
         )["t"] or 0
-        debits = self.transactions.filter(transaction_type="DEBIT").aggregate(
+        debits = self.transactions.filter(transaction_type="DEBIT", is_deleted=False).aggregate(
             t=models.Sum("amount")
         )["t"] or 0
         return self.opening_balance + credits - debits
@@ -73,6 +75,8 @@ class BankTransaction(models.Model):
     reference = models.CharField(max_length=100, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-date", "-created_at"]

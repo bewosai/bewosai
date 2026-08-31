@@ -13,11 +13,11 @@ from bewosai.pagination import LargePageNumberPagination
 from bewosai.utils import get_business
 from .models import (
     SupportTicket, Announcement, Feature,
-    License, BusinessFeatureOverride, LicenseAuditLog,
+    License, BusinessFeatureOverride, LicenseAuditLog, ActivityLog,
 )
 from .serializers import (
     SupportTicketSerializer, AnnouncementSerializer, FeatureSerializer,
-    LicenseSerializer, LicenseAuditLogSerializer,
+    LicenseSerializer, LicenseAuditLogSerializer, ActivityLogSerializer,
 )
 
 
@@ -80,7 +80,18 @@ class BusinessManagementView(APIView):
         if status_filter:
             qs = qs.filter(status=status_filter)
         if search:
-            qs = qs.filter(name__icontains=search)
+            # Business's own name/phone/email, or its owner's — so Super
+            # Admin can find a business from whichever detail they have on
+            # hand (the owner's phone number is usually what support gets
+            # first, not the business name).
+            qs = (
+                qs.filter(name__icontains=search)
+                | qs.filter(phone__icontains=search)
+                | qs.filter(email__icontains=search)
+                | qs.filter(owner__phone__icontains=search)
+                | qs.filter(owner__email__icontains=search)
+                | qs.filter(owner__name__icontains=search)
+            )
 
         paginator = LargePageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
@@ -121,9 +132,35 @@ class BusinessActionView(APIView):
                 if limit < 0:
                     return Response({"error": "limit cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
                 biz.staff_limit_override = limit
+        elif action == "set_trial":
+            # Grants or revokes an admin-controlled trial window for one
+            # platform (web or mobile) — independent of the automatic
+            # 120-day trial and of the license system. See
+            # Business.has_active_platform_trial / has_access.
+            platform = request.data.get("platform")
+            if platform not in ("web", "mobile"):
+                return Response({"error": "platform must be 'web' or 'mobile'."}, status=status.HTTP_400_BAD_REQUEST)
+            prefix = f"{platform}_trial_"
+            if request.data.get("enabled"):
+                start = request.data.get("start_date")
+                end = request.data.get("end_date")
+                if not start or not end:
+                    return Response(
+                        {"error": "start_date and end_date are required to enable a trial."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if end < start:
+                    return Response({"error": "end_date cannot be before start_date."}, status=status.HTTP_400_BAD_REQUEST)
+                setattr(biz, prefix + "enabled", True)
+                setattr(biz, prefix + "start", start)
+                setattr(biz, prefix + "end", end)
+            else:
+                setattr(biz, prefix + "enabled", False)
+                setattr(biz, prefix + "start", None)
+                setattr(biz, prefix + "end", None)
         else:
             return Response(
-                {"error": f"Unknown action '{action}'. Use: suspend, activate, upgrade, downgrade, set_staff_limit."},
+                {"error": f"Unknown action '{action}'. Use: suspend, activate, upgrade, downgrade, set_staff_limit, set_trial."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -140,7 +177,11 @@ class UserManagementView(APIView):
         search = request.query_params.get("search", "")
         qs = User.objects.all().order_by("-created_at")
         if search:
-            qs = qs.filter(email__icontains=search) | qs.filter(name__icontains=search)
+            qs = (
+                qs.filter(email__icontains=search)
+                | qs.filter(name__icontains=search)
+                | qs.filter(phone__icontains=search)
+            )
 
         paginator = LargePageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
@@ -161,9 +202,10 @@ class UserActionView(APIView):
             user.is_active = False
         elif action == "activate":
             user.is_active = True
-        elif action == "make_admin":
-            user.is_platform_admin = True
         elif action == "remove_admin":
+            # Demotion only — granting admin status is no longer possible
+            # from this endpoint at all (removed feature). An existing
+            # admin can still be safely demoted if needed.
             if user.pk == request.user.pk:
                 return Response({"error": "Cannot remove your own admin status."}, status=400)
             user.is_platform_admin = False
@@ -188,7 +230,94 @@ class UserActionView(APIView):
         return Response(UserSerializer(user).data)
 
 
+class UserSummaryView(APIView):
+    """
+    Super Admin: real usage totals for this user across every business they
+    own — actual row counts from Sales/Purchases/Expenses/Products/Parties,
+    not derived from ActivityLog (which only exists from whenever that
+    feature shipped, so it would under-count anything older). Also surfaces
+    their business-count limit override, since "how many businesses can they
+    still create" is exactly what that field controls.
+    """
+    permission_classes = [IsPlatformAdmin]
+
+    def get(self, request, pk):
+        from sales.models import Sale
+        from purchases.models import Purchase
+        from expenses.models import Expense
+        from inventory.models import Product
+        from parties.models import Party
+
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        owned = models.Q(business__owner_id=pk)
+        return Response({
+            "business_count": user.businesses.count(),
+            "business_limit_override": user.business_limit_override,
+            "total_sales": Sale.objects.filter(owned, is_deleted=False).count(),
+            "total_purchases": Purchase.objects.filter(owned, is_deleted=False).count(),
+            "total_expenses": Expense.objects.filter(owned, is_deleted=False).count(),
+            "total_products": Product.objects.filter(owned, is_deleted=False).count(),
+            "total_parties": Party.objects.filter(owned, is_deleted=False).count(),
+        })
+
+
+class UserActivityView(generics.ListAPIView):
+    """
+    Super Admin: what has this user actually done — every Sale, Purchase,
+    Expense, Quotation, Product, Party, Payment, and Bank Account/Transaction
+    created or permanently deleted, across every business they own. Populated
+    by superadmin.signals, not per-view logging — see ActivityLog's docstring.
+    """
+    permission_classes = [IsPlatformAdmin]
+    serializer_class = ActivityLogSerializer
+    pagination_class = LargePageNumberPagination
+
+    def get_queryset(self):
+        return ActivityLog.objects.filter(business__owner_id=self.kwargs["pk"]).select_related("business", "user")
+
+
 # ── Login activity ─────────────────────────────────────────────────────────────
+
+def _device_label(user_agent):
+    """Reduces a raw User-Agent string to a short 'OS · Browser' label for
+    the login activity list — best-effort substring matching, not a real UA
+    parser, since Super Admin just needs "was this a phone or a desktop
+    browser", not exact version numbers."""
+    if not user_agent:
+        return "Unknown device"
+    ua = user_agent.lower()
+    if "okhttp" in ua or "dart" in ua or ua.strip() == "":
+        os_label = "Mobile App"
+    elif "android" in ua:
+        os_label = "Android"
+    elif "iphone" in ua or "ipad" in ua or "ios" in ua:
+        os_label = "iOS"
+    elif "windows" in ua:
+        os_label = "Windows"
+    elif "mac os" in ua or "macintosh" in ua:
+        os_label = "Mac"
+    elif "linux" in ua:
+        os_label = "Linux"
+    else:
+        os_label = "Unknown OS"
+
+    if "edg/" in ua:
+        browser = "Edge"
+    elif "chrome/" in ua:
+        browser = "Chrome"
+    elif "firefox/" in ua:
+        browser = "Firefox"
+    elif "safari/" in ua and "chrome/" not in ua:
+        browser = "Safari"
+    else:
+        browser = None
+
+    return f"{os_label} · {browser}" if browser else os_label
+
 
 class LoginActivityView(APIView):
     permission_classes = [IsPlatformAdmin]
@@ -207,6 +336,8 @@ class LoginActivityView(APIView):
                 "user": la.user.email,
                 "user_id": la.user_id,
                 "ip": la.ip_address,
+                "user_agent": la.user_agent,
+                "device": _device_label(la.user_agent),
                 "success": la.success,
                 "timestamp": la.timestamp,
                 "logout_time": la.logout_time,

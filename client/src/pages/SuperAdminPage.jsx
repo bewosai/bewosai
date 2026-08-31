@@ -1,18 +1,15 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { superadmin as adminApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "../utils/translations";
 import { useNavigate } from "react-router-dom";
-import {
-  adToBS, BS_MONTH_NAMES_EN, BS_MONTH_NAMES_NE,
-  bsMonthStartWeekday, getBSMonthADDates, formatBS, toNepaliDigits,
-} from "../utils/nepaliDate";
+import { adToBS, formatBS } from "../utils/nepaliDate";
 import {
   Users, Building2, ShieldCheck, CheckCircle2, XCircle, X,
   CalendarDays, ChevronLeft, ChevronRight, Plus, Edit2,
   Trash2, MessageSquare, Bell, Search, RefreshCw, Loader,
   TrendingUp, AlertTriangle, ToggleLeft, ToggleRight, Crown,
-  SlidersHorizontal, Monitor, Smartphone, KeyRound, LayoutDashboard,
+  SlidersHorizontal, Monitor, Smartphone, KeyRound, LayoutDashboard, Clock,
 } from "lucide-react";
 import LicensesTab from "./superadmin/LicensesTab";
 
@@ -132,130 +129,15 @@ export function ConfirmDialog({ title, body, error, busy = false, onConfirm, onC
   );
 }
 
-/* ── Login Calendar ──────────────────────────────────────────────────────── */
-function LoginCalendar({ loginDates, lang }) {
-  const today = new Date();
-  const [calMode, setCalMode] = useState("AD");
-  const [adYear, setAdYear] = useState(today.getFullYear());
-  const [adMonth, setAdMonth] = useState(today.getMonth());
-  const todayBS = adToBS(today);
-  const [bsYear, setBsYear] = useState(todayBS.year);
-  const [bsMonth, setBsMonth] = useState(todayBS.month);
-
-  const loginSet = useMemo(() => {
-    const s = new Set();
-    loginDates.forEach((d) => {
-      const dt = new Date(d);
-      s.add(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`);
-    });
-    return s;
-  }, [loginDates]);
-
-  function adKey(y, m, d) {
-    return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  }
-
-  function renderAD() {
-    const firstDay = new Date(adYear, adMonth, 1).getDay();
-    const daysInMonth = new Date(adYear, adMonth + 1, 0).getDate();
-    const monthName = new Date(adYear, adMonth, 1).toLocaleString("default", { month: "long" });
-    const cells = [];
-    for (let i = 0; i < firstDay; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-    const prevMonth = () => { if (adMonth === 0) { setAdYear(y => y - 1); setAdMonth(11); } else setAdMonth(m => m - 1); };
-    const nextMonth = () => { if (adMonth === 11) { setAdYear(y => y + 1); setAdMonth(0); } else setAdMonth(m => m + 1); };
-    return (
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <button onClick={prevMonth} className="rounded-lg p-1.5 text-navy-400 hover:bg-navy-800"><ChevronLeft className="h-4 w-4" /></button>
-          <p className="text-sm font-semibold text-white">{monthName} {adYear}</p>
-          <button onClick={nextMonth} className="rounded-lg p-1.5 text-navy-400 hover:bg-navy-800"><ChevronRight className="h-4 w-4" /></button>
-        </div>
-        <div className="grid grid-cols-7 gap-0.5 text-center">
-          {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => <div key={d} className="py-1 text-[10px] font-semibold text-navy-400">{d}</div>)}
-          {cells.map((day, i) => {
-            if (!day) return <div key={`e-${i}`} />;
-            const key = adKey(adYear, adMonth, day);
-            const hasLogin = loginSet.has(key);
-            const isToday = adYear === today.getFullYear() && adMonth === today.getMonth() && day === today.getDate();
-            return (
-              <div key={day} className={`relative flex h-7 w-full items-center justify-center rounded-lg text-xs ${
-                isToday ? "border border-orange-500/50 bg-orange-500/10 font-bold text-orange-400"
-                : hasLogin ? "bg-green-500/15 text-green-400 font-medium" : "text-navy-300"
-              }`}>
-                {day}
-                {hasLogin && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-green-400" />}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  function renderBS() {
-    const monthDates = getBSMonthADDates(bsYear, bsMonth);
-    const startWd = bsMonthStartWeekday(bsYear, bsMonth);
-    const monthLabel = lang === "ne"
-      ? `${BS_MONTH_NAMES_NE[bsMonth - 1]} ${toNepaliDigits(bsYear)}`
-      : `${BS_MONTH_NAMES_EN[bsMonth - 1]} ${bsYear} BS`;
-    const prevMonth = () => { if (bsMonth === 1) { setBsYear(y => y - 1); setBsMonth(12); } else setBsMonth(m => m - 1); };
-    const nextMonth = () => { if (bsMonth === 12) { setBsYear(y => y + 1); setBsMonth(1); } else setBsMonth(m => m + 1); };
-    const todayBSKey = `${todayBS.year}-${todayBS.month}-${todayBS.day}`;
-    const cells = [];
-    for (let i = 0; i < startWd; i++) cells.push(null);
-    monthDates.forEach(({ bsDay, adDate }) => cells.push({ bsDay, adDate }));
-    return (
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <button onClick={prevMonth} className="rounded-lg p-1.5 text-navy-400 hover:bg-navy-800"><ChevronLeft className="h-4 w-4" /></button>
-          <p className="text-sm font-semibold text-white">{monthLabel}</p>
-          <button onClick={nextMonth} className="rounded-lg p-1.5 text-navy-400 hover:bg-navy-800"><ChevronRight className="h-4 w-4" /></button>
-        </div>
-        <div className="grid grid-cols-7 gap-0.5 text-center">
-          {["आ","सो","मं","बु","वि","शु","श"].map(d => <div key={d} className="py-1 text-[10px] font-semibold text-navy-400">{d}</div>)}
-          {cells.map((cell, i) => {
-            if (!cell) return <div key={`e-${i}`} />;
-            const { bsDay, adDate } = cell;
-            const adKey2 = `${adDate.getFullYear()}-${String(adDate.getMonth() + 1).padStart(2, "0")}-${String(adDate.getDate()).padStart(2, "0")}`;
-            const hasLogin = loginSet.has(adKey2);
-            const isToday = `${bsYear}-${bsMonth}-${bsDay}` === todayBSKey;
-            return (
-              <div key={bsDay} className={`relative flex h-7 w-full items-center justify-center rounded-lg text-xs ${
-                isToday ? "border border-orange-500/50 bg-orange-500/10 font-bold text-orange-400"
-                : hasLogin ? "bg-green-500/15 text-green-400 font-medium" : "text-navy-300"
-              }`}>
-                {lang === "ne" ? toNepaliDigits(bsDay) : bsDay}
-                {hasLogin && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-green-400" />}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="mb-4 flex gap-1 rounded-xl border border-navy-800 bg-navy-900 p-1 w-fit">
-        {["AD", "BS"].map(m => (
-          <button key={m} onClick={() => setCalMode(m)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${calMode === m ? "bg-orange-500 text-white" : "text-navy-400 hover:text-white"}`}>
-            {m}
-          </button>
-        ))}
-      </div>
-      {calMode === "AD" ? renderAD() : renderBS()}
-    </div>
-  );
-}
-
 /* ── User Detail Modal ────────────────────────────────────────────────────── */
 function UserDetailModal({ user: u, onClose, onAction }) {
   const { language } = useTranslation();
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [userActivity, setUserActivity] = useState([]);
+  const [userActivityLoading, setUserActivityLoading] = useState(true);
+  const [summary, setSummary] = useState(null);
 
   useEffect(() => {
     adminApi.userLoginActivity(u.id, { page_size: 500 })
@@ -264,7 +146,17 @@ function UserDetailModal({ user: u, onClose, onAction }) {
       .finally(() => setLoading(false));
   }, [u.id]);
 
-  const loginDates = activity.map(a => a.timestamp);
+  useEffect(() => {
+    adminApi.userActivity(u.id, { page_size: 100 })
+      .then(r => setUserActivity(r.data?.results ?? r.data ?? []))
+      .catch(() => setUserActivity([]))
+      .finally(() => setUserActivityLoading(false));
+  }, [u.id]);
+
+  useEffect(() => {
+    adminApi.userSummary(u.id).then(r => setSummary(r.data)).catch(() => setSummary(null));
+  }, [u.id]);
+
   const joinedBS = adToBS(new Date(u.created_at));
   const [actionError, setActionError] = useState("");
 
@@ -302,10 +194,14 @@ function UserDetailModal({ user: u, onClose, onAction }) {
           <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
         </div>
 
-        <div className="mb-5 grid grid-cols-3 gap-3">
+        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-navy-800 bg-navy-950 px-3 py-2.5 text-center">
             <p className="text-[10px] text-navy-400">Logins</p>
             <p className="mt-1 text-lg font-bold text-white">{activity.length}</p>
+          </div>
+          <div className="rounded-xl border border-navy-800 bg-navy-950 px-3 py-2.5 text-center">
+            <p className="text-[10px] text-navy-400">Businesses</p>
+            <p className="mt-1 text-lg font-bold text-white">{u.business_count ?? 0}</p>
           </div>
           <div className="rounded-xl border border-navy-800 bg-navy-950 px-3 py-2.5 text-center">
             <p className="text-[10px] text-navy-400">Type</p>
@@ -316,6 +212,39 @@ function UserDetailModal({ user: u, onClose, onAction }) {
             <p className="mt-1 text-[11px] font-medium text-white">{formatBS(joinedBS, language)}</p>
           </div>
         </div>
+
+        {/* Real usage totals across every business this user owns — actual
+            row counts, not derived from the Activity feed below (which only
+            has data from whenever that feature shipped). */}
+        {summary && (
+          <div className="mb-5 rounded-xl border border-navy-800 bg-navy-950 p-3">
+            <div className="grid grid-cols-3 gap-3 text-center sm:grid-cols-5">
+              <div>
+                <p className="text-[10px] text-navy-400">Sales</p>
+                <p className="mt-0.5 text-sm font-bold text-white">{summary.total_sales}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-navy-400">Purchases</p>
+                <p className="mt-0.5 text-sm font-bold text-white">{summary.total_purchases}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-navy-400">Expenses</p>
+                <p className="mt-0.5 text-sm font-bold text-white">{summary.total_expenses}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-navy-400">Products</p>
+                <p className="mt-0.5 text-sm font-bold text-white">{summary.total_products}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-navy-400">Parties</p>
+                <p className="mt-0.5 text-sm font-bold text-white">{summary.total_parties}</p>
+              </div>
+            </div>
+            <p className="mt-2 border-t border-navy-800 pt-2 text-center text-[11px] text-navy-500">
+              Business limit: {summary.business_limit_override ?? "plan default"} · currently owns {summary.business_count}
+            </p>
+          </div>
+        )}
 
         {actionError && (
           <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
@@ -336,12 +265,9 @@ function UserDetailModal({ user: u, onClose, onAction }) {
               <CheckCircle2 className="h-3.5 w-3.5" /> Activate
             </button>
           )}
-          {!u.is_platform_admin ? (
-            <button disabled={acting} onClick={() => doAction("make_admin")}
-              className="flex items-center gap-1.5 rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-1.5 text-xs font-medium text-orange-400 hover:bg-orange-500/20 disabled:opacity-50">
-              <Crown className="h-3.5 w-3.5" /> Make Admin
-            </button>
-          ) : (
+          {/* Granting admin status from this UI has been removed entirely
+              (removed feature) — an existing admin can still be demoted. */}
+          {u.is_platform_admin && (
             <button disabled={acting} onClick={() => doAction("remove_admin")}
               className="flex items-center gap-1.5 rounded-lg bg-navy-800 border border-navy-700 px-3 py-1.5 text-xs font-medium text-navy-300 hover:bg-navy-700 disabled:opacity-50">
               <ShieldCheck className="h-3.5 w-3.5" /> Remove Admin
@@ -349,29 +275,40 @@ function UserDetailModal({ user: u, onClose, onAction }) {
           )}
         </div>
 
-        {/* Calendar */}
+        {/* Last login + recent login detail — no calendar grid, just the
+            facts: when, from what device, and whether it succeeded. */}
         <div className="rounded-xl border border-navy-800 bg-navy-950 p-4">
           <div className="mb-3 flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-orange-400" />
-            <p className="text-sm font-semibold text-white">Login Activity</p>
+            <p className="text-sm font-semibold text-white">Last Login</p>
           </div>
           {loading ? (
             <p className="py-4 text-center text-xs text-navy-400">Loading...</p>
+          ) : activity.length === 0 ? (
+            <p className="py-2 text-center text-xs text-navy-500">Never logged in.</p>
           ) : (
-            <LoginCalendar loginDates={loginDates} lang={language} />
+            <div>
+              <p className="text-sm text-white">{new Date(activity[0].timestamp).toLocaleString()}</p>
+              {activity[0].device && (
+                <p className="mt-0.5 text-xs text-navy-500">{activity[0].device}{activity[0].ip ? ` · ${activity[0].ip}` : ""}</p>
+              )}
+            </div>
           )}
         </div>
 
         {activity.length > 0 && (
-          <div className="mt-4 space-y-1 max-h-36 overflow-y-auto">
+          <div className="mt-4 space-y-1 max-h-44 overflow-y-auto">
             {activity.slice(0, 10).map(a => {
               const d = new Date(a.timestamp);
               const bs = adToBS(d);
               return (
-                <div key={a.id} className="flex items-center justify-between rounded-lg border border-navy-800 bg-navy-950 px-3 py-1.5 text-xs">
-                  <span className="text-navy-300">{d.toLocaleString()}</span>
-                  <span className="text-orange-300 text-[10px]">{formatBS(bs, language)}</span>
-                  <span className={`rounded px-1.5 py-0.5 ${a.success ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+                <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-navy-800 bg-navy-950 px-3 py-1.5 text-xs">
+                  <div className="min-w-0">
+                    <p className="truncate text-navy-300">{d.toLocaleString()}</p>
+                    {a.device && <p className="truncate text-[10px] text-navy-500">{a.device}{a.ip ? ` · ${a.ip}` : ""}</p>}
+                  </div>
+                  <span className="shrink-0 text-orange-300 text-[10px]">{formatBS(bs, language)}</span>
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 ${a.success ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
                     {a.success ? "✓" : "✗"}
                   </span>
                 </div>
@@ -379,6 +316,35 @@ function UserDetailModal({ user: u, onClose, onAction }) {
             })}
           </div>
         )}
+
+        {/* Activity — what this user has actually created/deleted, across
+            every business they own. See superadmin.signals / ActivityLog. */}
+        <div className="mt-4 rounded-xl border border-navy-800 bg-navy-950 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-orange-400" />
+            <p className="text-sm font-semibold text-white">Activity{userActivity.length > 0 ? ` (${userActivity.length})` : ""}</p>
+          </div>
+          {userActivityLoading ? (
+            <p className="py-4 text-center text-xs text-navy-400">Loading...</p>
+          ) : userActivity.length === 0 ? (
+            <p className="py-4 text-center text-xs text-navy-500">No activity recorded yet.</p>
+          ) : (
+            <div className="space-y-1 max-h-56 overflow-y-auto">
+              {userActivity.map(a => (
+                <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-navy-800 bg-navy-900 px-3 py-1.5 text-xs">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${a.action === "CREATED" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+                      {a.action === "CREATED" ? "+" : "×"}
+                    </span>
+                    <span className="truncate text-navy-200">{a.object_repr}</span>
+                    {a.business_name && <span className="shrink-0 text-navy-500">· {a.business_name}</span>}
+                  </div>
+                  <span className="shrink-0 text-navy-500">{new Date(a.created_at).toLocaleDateString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="mt-4">
           <button onClick={onClose} className="w-full rounded-xl border border-navy-700 py-2.5 text-sm font-medium text-navy-400 hover:bg-navy-800">Close</button>
@@ -569,6 +535,118 @@ function ManageLimitsModal({ biz, onClose, onSaved }) {
   );
 }
 
+/* ── Manage Trial Modal ──────────────────────────────────────────────────── */
+// Grants (or revokes) an admin-controlled trial window per platform,
+// independent of the automatic 120-day trial and of the license system —
+// see accounts.Business.has_active_platform_trial / superadmin.BusinessActionView's
+// "set_trial" action.
+function TrialPlatformRow({ icon: Icon, label, hint, enabled, onToggle, start, end, onStart, onEnd }) {
+  return (
+    <div className="rounded-xl border border-navy-700 p-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy-800">
+            <Icon className="h-4 w-4 text-navy-300" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">{label}</p>
+            <p className="text-[11px] text-navy-500">{hint}</p>
+          </div>
+        </div>
+        <button type="button" onClick={onToggle}>
+          {enabled
+            ? <ToggleRight className="h-6 w-6 text-orange-400" />
+            : <ToggleLeft className="h-6 w-6 text-navy-500" />}
+        </button>
+      </div>
+      {enabled && (
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-navy-400">Trial Start Date</label>
+            <input type="date" value={start} onChange={e => onStart(e.target.value)}
+              className="w-full rounded-lg bg-navy-800 border border-navy-700 px-2.5 py-1.5 text-xs text-white focus:border-orange-500 focus:outline-none" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-navy-400">Trial End Date</label>
+            <input type="date" value={end} onChange={e => onEnd(e.target.value)}
+              className="w-full rounded-lg bg-navy-800 border border-navy-700 px-2.5 py-1.5 text-xs text-white focus:border-orange-500 focus:outline-none" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ManageTrialModal({ biz, onClose, onSaved }) {
+  const [webEnabled, setWebEnabled] = useState(!!biz.web_trial_enabled);
+  const [webStart, setWebStart] = useState(biz.web_trial_start || "");
+  const [webEnd, setWebEnd] = useState(biz.web_trial_end || "");
+  const [mobileEnabled, setMobileEnabled] = useState(!!biz.mobile_trial_enabled);
+  const [mobileStart, setMobileStart] = useState(biz.mobile_trial_start || "");
+  const [mobileEnd, setMobileEnd] = useState(biz.mobile_trial_end || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSave = async () => {
+    if (webEnabled && (!webStart || !webEnd)) {
+      setError("Set both a start and end date for the web trial, or turn it off.");
+      return;
+    }
+    if (mobileEnabled && (!mobileStart || !mobileEnd)) {
+      setError("Set both a start and end date for the mobile trial, or turn it off.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await adminApi.businessAction(biz.id, "set_trial", {
+        platform: "web", enabled: webEnabled,
+        start_date: webEnabled ? webStart : null, end_date: webEnabled ? webEnd : null,
+      });
+      await adminApi.businessAction(biz.id, "set_trial", {
+        platform: "mobile", enabled: mobileEnabled,
+        start_date: mobileEnabled ? mobileStart : null, end_date: mobileEnabled ? mobileEnd : null,
+      });
+      onSaved();
+    } catch (e) {
+      setError(e.response?.data?.error || e.response?.data?.detail || "Failed to update.");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-navy-700 bg-navy-900 p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-white">Manage Trial</h2>
+            <p className="text-xs text-navy-400 mt-0.5">{biz.name} · owned by {biz.owner_name}</p>
+          </div>
+          <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
+        </div>
+        {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
+
+        <TrialPlatformRow
+          icon={Monitor} label="Enable Web Trial" hint="User will get trial of web version"
+          enabled={webEnabled} onToggle={() => setWebEnabled(v => !v)}
+          start={webStart} end={webEnd} onStart={setWebStart} onEnd={setWebEnd}
+        />
+        <TrialPlatformRow
+          icon={Smartphone} label="Enable Mobile Trial" hint="User will get trial of mobile version"
+          enabled={mobileEnabled} onToggle={() => setMobileEnabled(v => !v)}
+          start={mobileStart} end={mobileEnd} onStart={setMobileStart} onEnd={setMobileEnd}
+        />
+
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg border border-navy-700 text-navy-400 hover:bg-navy-800 text-sm">Cancel</button>
+          <button disabled={saving} onClick={handleSave} className="px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 text-sm disabled:opacity-50">
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Business Data Modal ─────────────────────────────────────────────────── */
 function BusinessDataModal({ bizId, onClose }) {
   const [data, setData] = useState(null);
@@ -726,6 +804,7 @@ function BusinessesTab({ onCountChange }) {
   const [deletingBiz, setDeletingBiz] = useState(null);
   const [deleteError, setDeleteError] = useState("");
   const [editingBiz, setEditingBiz] = useState(null);
+  const [trialBiz, setTrialBiz] = useState(null);
   const [viewDataBiz, setViewDataBiz] = useState(null);
   const [acting, setActing] = useState(false);
   const [inlineError, setInlineError] = useState("");
@@ -791,7 +870,7 @@ function BusinessesTab({ onCountChange }) {
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-navy-500" />
           <input className="w-full rounded-lg bg-navy-800 border border-navy-700 pl-9 pr-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
-            placeholder="Search by name or owner..." value={search} onChange={e => setSearch(e.target.value)} />
+            placeholder="Search by business, owner name, email or phone..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="flex gap-2">
           <select className="rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-xs text-white focus:border-orange-500 focus:outline-none"
@@ -881,6 +960,10 @@ function BusinessesTab({ onCountChange }) {
                           className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-orange-500/40 hover:text-orange-400 transition" title="Manage Limits">
                           <SlidersHorizontal className="h-3.5 w-3.5" />
                         </button>
+                        <button onClick={() => setTrialBiz(biz)}
+                          className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-orange-500/40 hover:text-orange-400 transition" title="Manage Trial">
+                          <Clock className="h-3.5 w-3.5" />
+                        </button>
                         <button onClick={() => setDeletingBiz(biz)}
                           className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-red-500/40 hover:text-red-400 transition" title="Delete">
                           <Trash2 className="h-3.5 w-3.5" />
@@ -925,6 +1008,13 @@ function BusinessesTab({ onCountChange }) {
           biz={editingBiz}
           onClose={() => setEditingBiz(null)}
           onSaved={() => { setEditingBiz(null); load(); }}
+        />
+      )}
+      {trialBiz && (
+        <ManageTrialModal
+          biz={trialBiz}
+          onClose={() => setTrialBiz(null)}
+          onSaved={() => { setTrialBiz(null); load(); }}
         />
       )}
       {viewDataBiz && (
@@ -991,7 +1081,7 @@ function UsersTab({ onCountChange }) {
         <div className="relative max-w-xs flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-navy-500" />
           <input className="w-full rounded-lg bg-navy-800 border border-navy-700 pl-9 pr-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
-            placeholder="Search by name or email..." value={search} onChange={e => setSearch(e.target.value)} />
+            placeholder="Search by name, email or phone..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <button onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
