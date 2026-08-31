@@ -372,7 +372,9 @@ export default function QuotationPage() {
         <div className="rounded-2xl border border-navy-800 bg-navy-900 overflow-hidden">
           <div className="divide-y divide-navy-800">
             {filtered.map(q => (
-              <div key={q.id} className="flex items-center gap-4 px-5 py-4 hover:bg-navy-800/40 transition">
+              <div key={q.id}
+                onClick={() => { setEditing(q); setShowModal(true); }}
+                className="flex items-center gap-4 px-5 py-4 hover:bg-navy-800/40 transition cursor-pointer">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-white text-sm">{q.quotation_number}</p>
@@ -390,15 +392,15 @@ export default function QuotationPage() {
                   )}
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  <button onClick={() => setPrinting(q)}
+                  <button onClick={(e) => { e.stopPropagation(); setPrinting(q); }}
                     className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-blue-500/50 hover:text-blue-400 transition">
                     <Printer className="h-3.5 w-3.5" />
                   </button>
-                  <button onClick={() => { setEditing(q); setShowModal(true); }}
+                  <button onClick={(e) => { e.stopPropagation(); setEditing(q); setShowModal(true); }}
                     className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-orange-500/50 hover:text-orange-400 transition">
                     <Edit2 className="h-3.5 w-3.5" />
                   </button>
-                  <button onClick={() => setDeleting(q)}
+                  <button onClick={(e) => { e.stopPropagation(); setDeleting(q); }}
                     className="rounded-lg border border-navy-700 p-1.5 text-navy-400 hover:border-red-500/50 hover:text-red-400 transition">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

@@ -1050,27 +1050,25 @@ export default function PurchasesPage() {
           <>
             <div className="hidden sm:grid grid-cols-12 gap-2 px-4 py-2.5 text-xs font-semibold text-navy-500 border-b border-navy-800">
               <div className="col-span-2">Bill #</div>
-              <div className="col-span-3">Supplier</div>
-              <div className="col-span-2">Date</div>
+              <div className="col-span-2">Supplier</div>
+              <div className="col-span-1">Date</div>
               <div className="col-span-1 text-right">Total</div>
               <div className="col-span-1 text-right">Paid</div>
               <div className="col-span-1 text-right">Due</div>
               <div className="col-span-1">Status</div>
-              <div className="col-span-1 text-right">Actions</div>
+              <div className="col-span-3 text-right">Actions</div>
             </div>
             {filtered.map(item => (
               <div key={item.id}
-                className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/50 hover:bg-navy-800/30 transition text-sm">
-                <button
-                  onClick={() => { setEditItem(item); setShowModal(true); }}
-                  className="col-span-12 sm:col-span-2 text-left font-semibold text-orange-400 hover:underline"
-                >
+                onClick={() => { setEditItem(item); setShowModal(true); }}
+                className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/50 hover:bg-navy-800/30 transition text-sm cursor-pointer">
+                <div className="col-span-12 sm:col-span-2 font-semibold text-orange-400">
                   #{item.bill_number || item.invoice_number || item.id}
-                </button>
-                <div className="col-span-12 sm:col-span-3 text-white truncate">
+                </div>
+                <div className="col-span-12 sm:col-span-2 text-white truncate">
                   {item.supplier_name || item.party_name || "Unknown Supplier"}
                 </div>
-                <div className="col-span-6 sm:col-span-2 text-navy-400 text-xs">
+                <div className="col-span-6 sm:col-span-1 text-navy-400 text-xs">
                   {formatDate(item.purchase_date || item.date, dateMode, language)}
                 </div>
                 <div className="col-span-4 sm:col-span-1 text-right text-white font-medium">
@@ -1090,26 +1088,29 @@ export default function PurchasesPage() {
                     {PAYMENT_STATUS_META[paymentStatus(item)].label}
                   </span>
                 </div>
-                <div className="col-span-6 sm:col-span-1 flex justify-end gap-1">
+                {/* stopPropagation on every action — without it, clicking
+                    Delete (or any of these) would also bubble up and open
+                    the row's edit modal at the same time. */}
+                <div className="col-span-6 sm:col-span-3 flex justify-end gap-0.5">
                   {item.bill_image_url && (
-                    <button onClick={() => setViewBillImage(item.bill_image_url)} title="View Bill"
+                    <button onClick={(e) => { e.stopPropagation(); setViewBillImage(item.bill_image_url); }} title="View Bill"
                       className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-blue-400">
                       <Image size={13} />
                     </button>
                   )}
-                  <button onClick={() => setPrintItem(item)} title="Print"
+                  <button onClick={(e) => { e.stopPropagation(); setPrintItem(item); }} title="Print"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-white">
                     <Printer size={13} />
                   </button>
-                  <button onClick={() => { setEditItem(item); setShowModal(true); }} title="Edit"
+                  <button onClick={(e) => { e.stopPropagation(); setEditItem(item); setShowModal(true); }} title="Edit"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-white">
                     <Edit2 size={13} />
                   </button>
-                  <button onClick={() => duplicatePurchase(item)} title="Duplicate Purchase"
+                  <button onClick={(e) => { e.stopPropagation(); duplicatePurchase(item); }} title="Duplicate Purchase"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-orange-400">
                     <Copy size={13} />
                   </button>
-                  <button onClick={() => setDeleteItem(item)} title="Delete"
+                  <button onClick={(e) => { e.stopPropagation(); setDeleteItem(item); }} title="Delete"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-red-400">
                     <Trash2 size={13} />
                   </button>

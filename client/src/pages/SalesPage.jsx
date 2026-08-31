@@ -1125,27 +1125,25 @@ export default function SalesPage() {
             {/* Table header */}
             <div className="hidden sm:grid grid-cols-12 gap-2 px-4 py-2.5 text-xs font-semibold text-navy-500 border-b border-navy-800 bg-navy-900/80">
               <div className="col-span-2">Invoice #</div>
-              <div className="col-span-3">Customer</div>
-              <div className="col-span-2">Date</div>
+              <div className="col-span-2">Customer</div>
+              <div className="col-span-1">Date</div>
               <div className="col-span-1 text-right">Total</div>
               <div className="col-span-1 text-right">Paid</div>
               <div className="col-span-1 text-right">Due</div>
               <div className="col-span-1">Status</div>
-              <div className="col-span-1 text-right">Actions</div>
+              <div className="col-span-3 text-right">Actions</div>
             </div>
             {filtered.map(sale => (
               <div key={sale.id}
-                className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/50 hover:bg-navy-800/30 transition text-sm">
-                <button
-                  onClick={() => { setEditSale(sale); setShowModal(true); }}
-                  className="col-span-12 sm:col-span-2 text-left font-semibold text-orange-400 hover:underline"
-                >
+                onClick={() => { setEditSale(sale); setShowModal(true); }}
+                className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/50 hover:bg-navy-800/30 transition text-sm cursor-pointer">
+                <div className="col-span-12 sm:col-span-2 font-semibold text-orange-400">
                   #{sale.invoice_number || sale.id}
-                </button>
-                <div className="col-span-12 sm:col-span-3 text-white truncate">
+                </div>
+                <div className="col-span-12 sm:col-span-2 text-white truncate">
                   {sale.customer_name || sale.party_name || "Walk-in"}
                 </div>
-                <div className="col-span-12 sm:col-span-2 text-navy-400 text-xs">
+                <div className="col-span-12 sm:col-span-1 text-navy-400 text-xs">
                   {formatDate(sale.sale_date || sale.date, dateMode, language)}
                 </div>
                 <div className="col-span-4 sm:col-span-1 text-right text-white font-medium">
@@ -1165,24 +1163,27 @@ export default function SalesPage() {
                     {PAYMENT_STATUS_META[paymentStatus(sale)].label}
                   </span>
                 </div>
-                <div className="col-span-6 sm:col-span-1 flex justify-end gap-1">
-                  <button onClick={() => { setEditSale(sale); setShowModal(true); }} title="Edit"
+                {/* stopPropagation on every action — without it, clicking
+                    Delete (or any of these) would also bubble up and open
+                    the row's edit modal at the same time. */}
+                <div className="col-span-6 sm:col-span-3 flex justify-end gap-0.5">
+                  <button onClick={(e) => { e.stopPropagation(); setEditSale(sale); setShowModal(true); }} title="Edit"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-white">
                     <Edit2 size={13} />
                   </button>
-                  <button onClick={() => duplicateSale(sale)} title="Duplicate Invoice"
+                  <button onClick={(e) => { e.stopPropagation(); duplicateSale(sale); }} title="Duplicate Invoice"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-orange-400">
                     <Copy size={13} />
                   </button>
-                  <button onClick={() => setPrintSale(sale)} title="Print"
+                  <button onClick={(e) => { e.stopPropagation(); setPrintSale(sale); }} title="Print"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-white">
                     <Printer size={13} />
                   </button>
-                  <button onClick={() => shareWhatsApp(sale)} title="Share WhatsApp"
+                  <button onClick={(e) => { e.stopPropagation(); shareWhatsApp(sale); }} title="Share WhatsApp"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-green-400">
                     <Share2 size={13} />
                   </button>
-                  <button onClick={() => setDeleteSale(sale)} title="Delete"
+                  <button onClick={(e) => { e.stopPropagation(); setDeleteSale(sale); }} title="Delete"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-red-400">
                     <Trash2 size={13} />
                   </button>
