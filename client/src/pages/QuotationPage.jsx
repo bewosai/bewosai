@@ -36,7 +36,7 @@ function QuotationPrintModal({ quotation, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-[#ffffff] text-gray-800 shadow-2xl print:shadow-none print:rounded-none">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#ffffff] text-gray-800 shadow-2xl print:max-h-none print:overflow-visible print:shadow-none print:rounded-none">
         <div className="flex items-center justify-between border-b p-4 print:hidden">
           <span className="font-bold text-gray-900">Print Quotation</span>
           <div className="flex items-center gap-3">

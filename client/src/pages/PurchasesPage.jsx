@@ -84,7 +84,7 @@ function PrintModal({ purchase, onClose }) {
           --color-white token, which the light theme remaps to deep navy
           (so normal in-app "white" text stays readable on a white surface).
           The bracket value bypasses that token entirely. */}
-      <div className="w-full max-w-2xl rounded-2xl bg-[#ffffff] text-gray-800 shadow-2xl print:shadow-none print:rounded-none">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#ffffff] text-gray-800 shadow-2xl print:max-h-none print:overflow-visible print:shadow-none print:rounded-none">
         <div className="flex items-center justify-between border-b p-4 print:hidden">
           <span className="font-bold text-gray-900">Print Bill</span>
           <div className="flex items-center gap-3">
@@ -128,31 +128,33 @@ function PrintModal({ purchase, onClose }) {
             </div>
           </div>
 
-          <table className="w-full text-sm border-collapse mb-5">
-            <thead>
-              <tr className="bg-blue-600 text-white">
-                <th className="py-3 text-left pl-3 rounded-l-md">S.N.</th>
-                <th className="py-3 text-left">Name</th>
-                <th className="py-3 text-right">Quantity</th>
-                <th className="py-3 text-right">Rate</th>
-                <th className="py-3 text-right pr-3 rounded-r-md">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => {
-                const rowTotal = (item.quantity * item.unit_price) - (item.discount_amount || 0);
-                return (
-                  <tr key={i} className="border-b border-gray-200">
-                    <td className="py-3 pl-3 text-gray-500">{i + 1}</td>
-                    <td className="py-3 font-medium text-gray-900">{item.product_name || item.name}</td>
-                    <td className="py-3 text-right">{item.quantity}</td>
-                    <td className="py-3 text-right">Rs. {parseFloat(item.unit_price).toFixed(2)}</td>
-                    <td className="py-3 text-right pr-3 font-medium">Rs. {rowTotal.toFixed(2)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="mb-5 overflow-x-auto print:overflow-visible">
+            <table className="w-full text-sm border-collapse min-w-120">
+              <thead>
+                <tr className="bg-blue-600 text-white">
+                  <th className="py-3 text-left pl-3 rounded-l-md">S.N.</th>
+                  <th className="py-3 text-left">Name</th>
+                  <th className="py-3 text-right">Quantity</th>
+                  <th className="py-3 text-right">Rate</th>
+                  <th className="py-3 text-right pr-3 rounded-r-md">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, i) => {
+                  const rowTotal = (item.quantity * item.unit_price) - (item.discount_amount || 0);
+                  return (
+                    <tr key={i} className="border-b border-gray-200">
+                      <td className="py-3 pl-3 text-gray-500">{i + 1}</td>
+                      <td className="py-3 font-medium text-gray-900">{item.product_name || item.name}</td>
+                      <td className="py-3 text-right">{item.quantity}</td>
+                      <td className="py-3 text-right">Rs. {parseFloat(item.unit_price).toFixed(2)}</td>
+                      <td className="py-3 text-right pr-3 font-medium">Rs. {rowTotal.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
           {/* Amount in words + totals */}
           <div className="mb-2 grid grid-cols-2 gap-6">
@@ -288,6 +290,9 @@ function PurchaseModal({ onClose, onSaved, editData }) {
     status: editData.status || "CONFIRMED",
   } : { ...EMPTY_FORM, items: [{ ...EMPTY_ITEM }], tax_rate: currentBusiness?.default_tax_rate ?? 0 });
 
+  // See SalesPage's identical vatEnabled — kept separate from tax_rate so
+  // toggling VAT off doesn't lose whatever % was typed.
+  const [vatEnabled, setVatEnabled] = useState(() => parseFloat(form.tax_rate || 0) > 0);
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
@@ -359,21 +364,21 @@ function PurchaseModal({ onClose, onSaved, editData }) {
   const discountPercent = Math.min(100, Math.max(0, parseFloat(form.discount) || 0));
   const discountAmount = subtotal * discountPercent / 100;
   const taxableAmount = Math.max(0, subtotal - discountAmount);
-  const taxRate = Math.min(100, Math.max(0, parseFloat(form.tax_rate) || 0));
+  const taxRate = vatEnabled ? Math.min(100, Math.max(0, parseFloat(form.tax_rate) || 0)) : 0;
   const taxAmount = taxableAmount * taxRate / 100;
   const grandTotal = taxableAmount + taxAmount;
   const balanceDue = Math.max(0, grandTotal - parseFloat(form.paid_amount || 0));
 
-  // Same reasoning as Sales: a cash purchase is settled on the spot, so
-  // Amount Paid defaults to the full total (kept in sync as items/discount/
-  // tax change) instead of leaving a phantom payable behind. Stops once the
-  // user actually edits Amount Paid themselves, and never touches an
-  // existing purchase being edited.
+  // Cash vs Credit is a separate, explicit choice from Payment Method — see
+  // SalesPage's identical reasoning. Defaults Amount Paid to the full total
+  // for Cash or zero for Credit, until the user edits it themselves; never
+  // touches an existing purchase being edited.
+  const [creditSale, setCreditSale] = useState(() => !!editData && parseFloat(editData.due_amount || 0) > 0);
   const [paidAmountTouched, setPaidAmountTouched] = useState(!!editData);
   useEffect(() => {
-    if (paidAmountTouched || form.payment_method !== "CASH") return;
-    setForm(f => ({ ...f, paid_amount: grandTotal }));
-  }, [grandTotal, form.payment_method, paidAmountTouched]);
+    if (paidAmountTouched) return;
+    setForm(f => ({ ...f, paid_amount: creditSale ? 0 : grandTotal }));
+  }, [grandTotal, creditSale, paidAmountTouched]);
 
   const handleSubmit = async (statusOverride) => {
     setError("");
@@ -591,9 +596,15 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-navy-400">VAT / Tax (%)</label>
-                  <input type="number" min="0" max="100" step="0.01"
-                    className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-navy-400">VAT / Tax (%)</label>
+                    <label className="flex items-center gap-1.5 text-xs text-navy-400 cursor-pointer select-none">
+                      <input type="checkbox" checked={vatEnabled} onChange={e => setVatEnabled(e.target.checked)} />
+                      Apply VAT
+                    </label>
+                  </div>
+                  <input type="number" min="0" max="100" step="0.01" disabled={!vatEnabled}
+                    className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none disabled:opacity-40"
                     value={form.tax_rate}
                     onChange={e => setForm(f => ({ ...f, tax_rate: parseFloat(e.target.value) || 0 }))}
                   />
@@ -645,6 +656,24 @@ function PurchaseModal({ onClose, onSaved, editData }) {
               <div className="flex justify-between text-navy-400"><span>Tax ({taxRate}%)</span><span>+ Rs. {taxAmount.toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-white border-t border-navy-700 pt-2"><span>Grand Total</span><span>Rs. {grandTotal.toFixed(2)}</span></div>
               <div className="pt-1 space-y-2">
+                <div>
+                  <label className="text-xs text-navy-400 block mb-1">Cash or Credit?</label>
+                  <div className="flex rounded-lg border border-navy-700 overflow-hidden text-xs font-semibold">
+                    <button type="button" onClick={() => { setCreditSale(false); setPaidAmountTouched(false); }}
+                      className={`flex-1 py-2 transition ${!creditSale ? "bg-orange-500 text-white" : "bg-navy-800 text-navy-400 hover:text-white"}`}>
+                      Cash
+                    </button>
+                    <button type="button" onClick={() => { setCreditSale(true); setPaidAmountTouched(false); }}
+                      className={`flex-1 py-2 transition ${creditSale ? "bg-orange-500 text-white" : "bg-navy-800 text-navy-400 hover:text-white"}`}>
+                      Credit
+                    </button>
+                  </div>
+                  {creditSale && (
+                    <p className="mt-1 text-[11px] text-amber-400">
+                      Nothing paid yet — set a Due Date above so this shows up as overdue if it isn't settled in time.
+                    </p>
+                  )}
+                </div>
                 <div>
                   <label className="text-xs text-navy-400 block mb-1">Amount Paid</label>
                   <input type="number" min="0"

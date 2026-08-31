@@ -62,6 +62,11 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   String _paymentMethod = 'CASH';
   int? _bankAccountId;
   bool _vatEnabled = false;
+  // Separate from _paymentMethod (which channel it'll settle through) —
+  // Credit means nothing is collected today regardless of method. Only
+  // snaps Amount Paid to the current total/zero the moment it's tapped,
+  // not continuously kept in sync as items change afterward.
+  bool _creditSale = false;
   bool _saving = false;
   bool _loaded = false;
   int? _editId;
@@ -121,6 +126,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
           : sale.taxRate.toString();
     }
     _paidController.text = sale.paidAmount.toString();
+    _creditSale = sale.dueAmount > 0;
     _notesController.text = sale.notes;
     _discountPctController.text = sale.subtotal > 0
         ? ((sale.discount / sale.subtotal) * 100).toStringAsFixed(2)
@@ -729,6 +735,50 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                       if (_vatEnabled) _totalsRow('VAT (${_taxRate.toStringAsFixed(_taxRate == _taxRate.roundToDouble() ? 0 : 2)}%)', _taxAmount),
                       const Divider(height: 20),
                       _totalsRow('Grand Total', _total, bold: true),
+                      const SizedBox(height: 12),
+                      Text('Cash or Credit?', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => setState(() {
+                                _creditSale = false;
+                                _paidController.text = _total.toStringAsFixed(2);
+                              }),
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: !_creditSale ? AppColors.orange : null,
+                                foregroundColor: !_creditSale ? Colors.white : AppColors.textSecondary,
+                                side: BorderSide(color: !_creditSale ? AppColors.orange : AppColors.divider),
+                              ),
+                              child: const Text('Cash'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => setState(() {
+                                _creditSale = true;
+                                _paidController.text = '0';
+                              }),
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: _creditSale ? AppColors.orange : null,
+                                foregroundColor: _creditSale ? Colors.white : AppColors.textSecondary,
+                                side: BorderSide(color: _creditSale ? AppColors.orange : AppColors.divider),
+                              ),
+                              child: const Text('Credit'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_creditSale)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Nothing collected yet — set a Due Date above so this shows up as overdue if unpaid.',
+                            style: TextStyle(fontSize: 11, color: AppColors.warning),
+                          ),
+                        ),
                       const SizedBox(height: 12),
                       Row(
                         children: [

@@ -367,10 +367,16 @@ class BusinessListCreateView(generics.ListCreateAPIView):
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
+        from inventory.defaults import seed_default_units
+
         business = serializer.save(owner=self.request.user)
         StaffMember.objects.create(
             user=self.request.user, business=business, role=StaffMember.ROLE_OWNER
         )
+        # Common units (Piece, Dozen, Kilogram, ...) so there's something to
+        # pick from before the business has created any of their own — see
+        # inventory.defaults for the full list and the conversions used.
+        seed_default_units(business)
 
 
 class BusinessDetailView(generics.RetrieveUpdateDestroyAPIView):
