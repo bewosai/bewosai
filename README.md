@@ -46,7 +46,7 @@ flutter run -d chrome   # or a connected device/emulator
 Note: the API base URL is a compile-time constant (`kIsWeb` check) — a full rebuild is required after changing it, not just hot reload.
 
 ## Deployment
-- **Backend**: Render/Railway (see `render.yaml`, `backend/Procfile`)
+- **Backend**: Render (see `render.yaml`)
 - **Web client**: Vercel (see `client/vercel.json`)
 
 ## Auth flow

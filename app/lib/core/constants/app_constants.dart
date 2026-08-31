@@ -4,8 +4,10 @@ class AppConstants {
   static const String appName = 'Bewosai';
 
   // ── Server URL ──────────────────────────────────────────────────────────
-  // Override at build time for a real device / production APK, e.g.:
-  //   flutter build apk --release --dart-define=API_BASE_URL=https://your-backend.up.railway.app/api
+  // Override at build time for a real device / a different backend (e.g.
+  // the staging Render service instead of production), or a physical
+  // device on the same LAN as the dev machine:
+  //   flutter build apk --release --dart-define=API_BASE_URL=https://bewosai-backend-staging.onrender.com/api
   //   flutter run --dart-define=API_BASE_URL=http://192.168.1.88:8000/api   (physical device, native build)
   // Without that flag, falls back to:
   //   Release build → the deployed Render backend (_renderUrl below).

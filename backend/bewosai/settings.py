@@ -20,10 +20,10 @@ if not DEBUG and SECRET_KEY == _INSECURE_DEFAULT_KEY:
         "and set it as an environment variable before running with DEBUG=False."
     )
 
-# Render sets RENDER_EXTERNAL_HOSTNAME and Railway sets RAILWAY_PUBLIC_DOMAIN
-# on the deployed service; trust whichever is present automatically so
-# ALLOWED_HOSTS doesn't need manual updates after every deploy.
-_platform_domain = config("RENDER_EXTERNAL_HOSTNAME", default="") or config("RAILWAY_PUBLIC_DOMAIN", default="")
+# Render sets RENDER_EXTERNAL_HOSTNAME on the deployed service; trust it
+# automatically so ALLOWED_HOSTS doesn't need manual updates after every
+# deploy.
+_platform_domain = config("RENDER_EXTERNAL_HOSTNAME", default="")
 if _platform_domain:
     ALLOWED_HOSTS.append(_platform_domain)
 
@@ -85,7 +85,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "bewosai.wsgi.application"
 
-# Railway (and most PaaS hosts) inject DATABASE_URL for the attached Postgres
+# Render (and most PaaS hosts) inject DATABASE_URL for the attached Postgres
 # instance. Falls back to local SQLite when it's not set (plain `manage.py
 # runserver` in dev keeps working unchanged).
 DATABASES = {
@@ -212,7 +212,7 @@ CSRF_TRUSTED_ORIGINS = config(
 if _platform_domain:
     CSRF_TRUSTED_ORIGINS.append(f"https://{_platform_domain}")
 
-# ── Production security (Railway terminates TLS at its edge proxy, so Django
+# ── Production security (Render terminates TLS at its edge proxy, so Django
 # itself sees plain HTTP — X-Forwarded-Proto tells it the real scheme) ─────────
 
 if not DEBUG:
