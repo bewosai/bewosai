@@ -10,6 +10,7 @@ import '../../core/utils/formatters.dart';
 /// Purchase items so [buildBillPdf] doesn't need to know which one it is.
 class BillPdfItem {
   final String name;
+  final String hsCode;
   final double quantity;
   final double unitPrice;
   final double discountAmount;
@@ -17,6 +18,7 @@ class BillPdfItem {
 
   const BillPdfItem({
     required this.name,
+    this.hsCode = '',
     required this.quantity,
     required this.unitPrice,
     this.discountAmount = 0,
@@ -33,15 +35,18 @@ class BillPdfData {
   final String businessPhone;
   final String businessAddress;
   final String businessPan;
+  final String businessVat;
   final String number;
-  final String partyLabel; // 'Party' for a sale, 'Supplier' for a purchase
+  final String partyLabel; // 'Customer' for a sale, 'Supplier' for a purchase
   final String partyName;
   final String partyPan;
   final String partyAddress;
+  final String partyPhone;
   final String date;
   final String? miti; // BS date, already formatted
   final String? dueDate;
   final String paymentModeLabel;
+  final String billType; // 'Cash' or 'Credit' — see the Cash/Credit toggle on the form
   final List<BillPdfItem> items;
   final double subtotal;
   final double discount;
@@ -57,15 +62,18 @@ class BillPdfData {
     this.businessPhone = '',
     this.businessAddress = '',
     this.businessPan = '',
+    this.businessVat = '',
     required this.number,
     required this.partyLabel,
     required this.partyName,
     this.partyPan = '',
     this.partyAddress = '',
+    this.partyPhone = '',
     required this.date,
     this.miti,
     this.dueDate,
     this.paymentModeLabel = 'Cash',
+    this.billType = 'Cash',
     required this.items,
     required this.subtotal,
     required this.discount,
@@ -78,183 +86,270 @@ class BillPdfData {
   });
 }
 
-/// Builds a one-page A4 PDF for [data] on a plain white page — independent
-/// of the app's own light/dark theme, since this is a document the business
-/// hands to a customer, not an in-app screen. Always carries a small
-/// "*Proforma Invoice" note near the totals — permanent, not a per-print
-/// choice (see printBillPdf/showBillPrintDialog, which no longer ask).
+/// Builds a one-page A4 PDF for [data] on a plain white page — a classic
+/// bordered ledger-style Tax Invoice (matching the React print template's
+/// layout) rather than a plain in-app-styled card, since that's the format
+/// a Nepali business already expects a printed bill to look like. Always
+/// carries a small "*Proforma Invoice" note near the totals — permanent,
+/// not a per-print choice (see printBillPdf/showBillPrintDialog).
 Future<pw.Document> buildBillPdf({
   required BillPdfData data,
   required String documentTitle,
 }) async {
   final doc = pw.Document();
-  final heading = documentTitle;
   final black = PdfColors.grey900;
-  final grey = PdfColors.grey600;
+  final grey600 = PdfColors.grey600;
+  final ruleDark = const pw.BorderSide(width: 1.1, color: PdfColors.grey900);
+  final ruleLight = pw.BorderSide(width: 0.5, color: PdfColors.grey400);
+
+  pw.Widget section({required pw.Widget child, bool topBorder = false}) {
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border(
+          bottom: ruleDark,
+          top: topBorder ? ruleDark : pw.BorderSide.none,
+        ),
+      ),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: child,
+    );
+  }
 
   doc.addPage(
     pw.Page(
       pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(32),
+      margin: const pw.EdgeInsets.all(24),
       build: (context) {
-        return pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            // Business header
-            pw.Text(
-              data.businessName,
-              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: black),
-            ),
-            if (data.businessPhone.isNotEmpty || data.businessAddress.isNotEmpty)
-              pw.Padding(
-                padding: const pw.EdgeInsets.only(top: 2),
-                child: pw.Text(
-                  [data.businessPhone, data.businessAddress].where((s) => s.isNotEmpty).join('• '),
-                  style: pw.TextStyle(fontSize: 9, color: grey),
-                ),
-              ),
-            if (data.businessPan.isNotEmpty)
-              pw.Text('PAN No: ${data.businessPan}', style: pw.TextStyle(fontSize: 9, color: grey)),
-            pw.SizedBox(height: 16),
-
-            pw.Center(
-              child: pw.Text(
-                heading.toUpperCase(),
-                style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: black),
-              ),
-            ),
-            pw.SizedBox(height: 16),
-
-            // Party + bill meta
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('${data.partyLabel}:', style: pw.TextStyle(fontSize: 9, color: grey)),
-                    pw.Text(data.partyName, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: black)),
-                    if (data.partyAddress.isNotEmpty)
-                      pw.Text(data.partyAddress, style: pw.TextStyle(fontSize: 8, color: grey)),
-                    if (data.partyPan.isNotEmpty)
+        return pw.Container(
+          decoration: pw.BoxDecoration(border: pw.Border.all(width: 1.1, color: PdfColors.grey900)),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              // Business header
+              section(
+                child: pw.Center(
+                  child: pw.Column(
+                    children: [
+                      pw.Text(
+                        data.businessName,
+                        style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold, color: black, decoration: pw.TextDecoration.underline),
+                      ),
+                      if (data.businessAddress.isNotEmpty)
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.only(top: 2),
+                          child: pw.Text(data.businessAddress, style: pw.TextStyle(fontSize: 9, color: black)),
+                        ),
                       pw.Padding(
                         padding: const pw.EdgeInsets.only(top: 2),
-                        child: pw.Text('PAN No: ${data.partyPan}', style: pw.TextStyle(fontSize: 8, color: grey)),
+                        child: pw.Wrap(
+                          alignment: pw.WrapAlignment.center,
+                          spacing: 12,
+                          children: [
+                            if (data.businessPhone.isNotEmpty)
+                              pw.Text('Ph.No: ${data.businessPhone}', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: black)),
+                            if (data.businessPan.isNotEmpty)
+                              pw.Text('PAN No.: ${data.businessPan}', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: black)),
+                            if (data.businessVat.isNotEmpty)
+                              pw.Text('VAT No.: ${data.businessVat}', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: black)),
+                          ],
+                        ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    _metaRow('Bill No:', data.number, grey, black),
-                    _metaRow('Date:', data.date, grey, black),
-                    if (data.miti != null) _metaRow('Miti:', data.miti!, grey, black),
-                    _metaRow('Payment Mode:', data.paymentModeLabel, grey, black),
-                  ],
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 14),
-
-            pw.Table(
-              border: const pw.TableBorder(
-                bottom: pw.BorderSide(width: 0.5, color: PdfColors.grey400),
-                horizontalInside: pw.BorderSide(width: 0.5, color: PdfColors.grey300),
               ),
-              columnWidths: const {
-                0: pw.FlexColumnWidth(0.6),
-                1: pw.FlexColumnWidth(3),
-                2: pw.FlexColumnWidth(1),
-                3: pw.FlexColumnWidth(1.3),
-                4: pw.FlexColumnWidth(1.3),
-              },
-              children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.blue700),
+
+              // "Tax Invoice" heading
+              section(
+                child: pw.Center(
+                  child: pw.Text(
+                    documentTitle.toUpperCase(),
+                    style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: black, decoration: pw.TextDecoration.underline, letterSpacing: 1.2),
+                  ),
+                ),
+              ),
+
+              // Party + invoice meta
+              section(
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    _cell('S.N.', bold: true, color: PdfColors.white),
-                    _cell('Name', bold: true, color: PdfColors.white),
-                    _cell('Qty', bold: true, align: pw.TextAlign.right, color: PdfColors.white),
-                    _cell('Rate', bold: true, align: pw.TextAlign.right, color: PdfColors.white),
-                    _cell('Amount', bold: true, align: pw.TextAlign.right, color: PdfColors.white),
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          _kv('${data.partyLabel} Name', data.partyName, black, bold: true),
+                          _kv('Pan / Vat No.', data.partyPan, black),
+                          _kv('${data.partyLabel} Address', data.partyAddress, black),
+                          _kv('${data.partyLabel} Cnt No.', data.partyPhone, black),
+                        ],
+                      ),
+                    ),
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          _kv('Invoice No.', data.number, black, bold: true, alignEnd: true),
+                          _kv('Date of Transaction', data.date, black, alignEnd: true),
+                          if (data.miti != null) _kv('Miti of Transaction', data.miti!, black, alignEnd: true),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-                for (var i = 0; i < data.items.length; i++)
-                  pw.TableRow(
-                    children: [
-                      _cell('${i + 1}', color: grey),
-                      _cell(data.items[i].name, bold: true, color: black),
-                      _cell(Formatters.amount(data.items[i].quantity), align: pw.TextAlign.right),
-                      _cell(Formatters.currency(data.items[i].unitPrice), align: pw.TextAlign.right),
-                      _cell(Formatters.currency(data.items[i].total), align: pw.TextAlign.right, bold: true, color: black),
-                    ],
-                  ),
-              ],
-            ),
-            pw.SizedBox(height: 16),
+              ),
 
-            // Amount in words + totals
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Amount in Words', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: black)),
-                      pw.Text(amountInWords(data.total), style: pw.TextStyle(fontSize: 9, color: grey)),
-                      pw.SizedBox(height: 8),
-                      pw.Text('*Proforma Invoice', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: grey)),
-                    ],
-                  ),
+              // Mode of Payment / Bill Type
+              section(
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.RichText(
+                      text: pw.TextSpan(style: pw.TextStyle(fontSize: 9, color: black), children: [
+                        const pw.TextSpan(text: 'Mode of Payment : '),
+                        pw.TextSpan(text: data.paymentModeLabel, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ]),
+                    ),
+                    pw.RichText(
+                      text: pw.TextSpan(style: pw.TextStyle(fontSize: 9, color: black), children: [
+                        const pw.TextSpan(text: 'Bill Type : '),
+                        pw.TextSpan(text: data.billType, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ]),
+                    ),
+                  ],
                 ),
-                pw.SizedBox(
-                  width: 220,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                    children: [
-                      _totalRow('Subtotal', Formatters.currency(data.subtotal), grey, black),
-                      if (data.discount > 0)
-                        _totalRow('Discount', '- ${Formatters.currency(data.discount)}', grey, black),
-                      if (data.taxAmount > 0)
-                        _totalRow('Tax (${Formatters.amount(data.taxRate)}%)', '+ ${Formatters.currency(data.taxAmount)}', grey, black),
-                      _totalRow('Total Amount', Formatters.currency(data.total), black, black, bold: true),
-                      _totalRow('Received Amount', Formatters.currency(data.paidAmount), grey, black),
-                      pw.Divider(color: PdfColors.grey500, thickness: 1),
-                      _totalRow(
-                        data.dueAmount < 0 ? 'Advance (Overpaid)' : 'Amount Due',
-                        Formatters.currency(data.dueAmount.abs()),
-                        black, black, bold: true, big: true,
-                      ),
-                    ],
-                  ),
+              ),
+
+              // Items — fully ruled table
+              pw.Table(
+                border: pw.TableBorder(
+                  bottom: ruleDark,
+                  horizontalInside: ruleLight,
+                  verticalInside: ruleLight,
                 ),
-              ],
-            ),
-
-            if (data.notes.isNotEmpty) ...[
-              pw.SizedBox(height: 12),
-              pw.Text('Notes: ${data.notes}', style: pw.TextStyle(fontSize: 8, color: grey)),
-            ],
-
-            pw.SizedBox(height: 36),
-            pw.Align(
-              alignment: pw.Alignment.centerRight,
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(0.5),
+                  1: pw.FlexColumnWidth(0.9),
+                  2: pw.FlexColumnWidth(3),
+                  3: pw.FlexColumnWidth(0.8),
+                  4: pw.FlexColumnWidth(1),
+                  5: pw.FlexColumnWidth(0.8),
+                  6: pw.FlexColumnWidth(1.2),
+                },
                 children: [
-                  pw.Container(
-                    width: 140,
-                    height: 1,
-                    color: PdfColors.grey400,
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(width: 1.1, color: PdfColors.grey900))),
+                    children: [
+                      _cell('SNo', bold: true),
+                      _cell('HSCode', bold: true),
+                      _cell('Particular', bold: true),
+                      _cell('Qty', bold: true, align: pw.TextAlign.right),
+                      _cell('Rate', bold: true, align: pw.TextAlign.right),
+                      _cell('P.Disc', bold: true, align: pw.TextAlign.right),
+                      _cell('Amount', bold: true, align: pw.TextAlign.right),
+                    ],
                   ),
-                  pw.SizedBox(height: 4),
-                  pw.Text('Authorized Signature', style: pw.TextStyle(fontSize: 8, color: grey)),
+                  for (var i = 0; i < data.items.length; i++)
+                    pw.TableRow(
+                      children: [
+                        _cell('${i + 1}'),
+                        _cell(data.items[i].hsCode),
+                        _cell(data.items[i].name, bold: true),
+                        _cell(Formatters.amount(data.items[i].quantity), align: pw.TextAlign.right),
+                        _cell(data.items[i].unitPrice.toStringAsFixed(2), align: pw.TextAlign.right),
+                        _cell(data.items[i].discountAmount.toStringAsFixed(2), align: pw.TextAlign.right),
+                        _cell(data.items[i].total.toStringAsFixed(2), align: pw.TextAlign.right, bold: true),
+                      ],
+                    ),
+                  // A few ruled blank rows so a short bill still reads like a
+                  // real invoice book instead of the table just stopping.
+                  for (var i = 0; i < (data.items.length < 3 ? 3 - data.items.length : 0); i++)
+                    pw.TableRow(children: [
+                      _cell(' ', pad: 10), _cell(''), _cell(''), _cell(''), _cell(''), _cell(''), _cell(''),
+                    ]),
                 ],
               ),
-            ),
-          ],
+
+              // Remarks/words + totals box
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  pw.Expanded(
+                    child: pw.Container(
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border(right: ruleDark, bottom: ruleDark),
+                      ),
+                      padding: const pw.EdgeInsets.all(10),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          if (data.notes.isNotEmpty) ...[
+                            pw.RichText(text: pw.TextSpan(style: pw.TextStyle(fontSize: 9, color: black), children: [
+                              pw.TextSpan(text: 'Remarks : ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                              pw.TextSpan(text: data.notes),
+                            ])),
+                            pw.SizedBox(height: 6),
+                          ],
+                          pw.RichText(text: pw.TextSpan(style: pw.TextStyle(fontSize: 9, color: black), children: [
+                            pw.TextSpan(text: 'In Words : ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            pw.TextSpan(text: 'Rs. ${amountInWords(data.total)}'),
+                          ])),
+                          pw.SizedBox(height: 6),
+                          pw.Text('*Proforma Invoice', style: pw.TextStyle(fontSize: 7.5, fontStyle: pw.FontStyle.italic, color: grey600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  pw.Container(
+                    width: 190,
+                    decoration: pw.BoxDecoration(border: pw.Border(bottom: ruleDark)),
+                    child: pw.Table(
+                      border: pw.TableBorder(horizontalInside: ruleLight),
+                      children: [
+                        _totalTableRow('Basic Amount', Formatters.currency(data.subtotal).replaceFirst('Rs. ', ''), black, bold: true),
+                        _totalTableRow('Discount', data.discount.toStringAsFixed(2), black),
+                        _totalTableRow('Taxable value', (data.subtotal - data.discount).toStringAsFixed(2), black, bold: true),
+                        _totalTableRow('Vat ${Formatters.amount(data.taxRate)} %', data.taxAmount.toStringAsFixed(2), black),
+                        _totalTableRow('Net Amount', data.total.toStringAsFixed(2), black, bold: true),
+                        if (data.paidAmount > 0)
+                          _totalTableRow('Received Amount', data.paidAmount.toStringAsFixed(2), black),
+                        _totalTableRow(
+                          data.dueAmount < 0 ? 'Advance (Overpaid)' : 'Amount Due',
+                          data.dueAmount.abs().toStringAsFixed(2),
+                          black, bold: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              // Signatures
+              pw.Container(
+                decoration: pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(width: 0.5, color: PdfColors.grey400))),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    _signatureLine('Received By'),
+                    _signatureLine('Prepaid By'),
+                    pw.Text('For : ${data.businessName}', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: black)),
+                  ],
+                ),
+              ),
+
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                child: pw.Align(
+                  alignment: pw.Alignment.centerRight,
+                  child: pw.Text(
+                    'Print Date & Time : ${_now()}',
+                    style: pw.TextStyle(fontSize: 7.5, color: grey600),
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     ),
@@ -263,16 +358,26 @@ Future<pw.Document> buildBillPdf({
   return doc;
 }
 
-pw.Widget _metaRow(String label, String value, PdfColor labelColor, PdfColor valueColor) {
+String _now() {
+  final n = DateTime.now();
+  final d = n.day.toString().padLeft(2, '0');
+  final m = n.month.toString().padLeft(2, '0');
+  final hour = n.hour % 12 == 0 ? 12 : n.hour % 12;
+  final min = n.minute.toString().padLeft(2, '0');
+  final ampm = n.hour >= 12 ? 'PM' : 'AM';
+  return '$d/$m/${n.year} $hour:$min $ampm';
+}
+
+pw.Widget _kv(String label, String value, PdfColor color, {bool bold = false, bool alignEnd = false}) {
+  if (value.isEmpty) return pw.SizedBox();
   return pw.Padding(
-    padding: const pw.EdgeInsets.only(bottom: 2),
-    child: pw.RichText(
-      text: pw.TextSpan(
-        children: [
-          pw.TextSpan(text: '$label ', style: pw.TextStyle(fontSize: 8, color: labelColor)),
-          pw.TextSpan(text: value, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: valueColor)),
-        ],
-      ),
+    padding: const pw.EdgeInsets.only(bottom: 1.5),
+    child: pw.Row(
+      mainAxisSize: pw.MainAxisSize.min,
+      children: [
+        pw.Text('$label : ', style: pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+        pw.Text(value, style: pw.TextStyle(fontSize: 8.5, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal, color: color)),
+      ],
     ),
   );
 }
@@ -281,53 +386,40 @@ pw.Widget _cell(
   String text, {
   bool bold = false,
   pw.TextAlign align = pw.TextAlign.left,
-  PdfColor color = PdfColors.black,
+  double pad = 5,
 }) {
   return pw.Padding(
-    padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 5),
+    padding: pw.EdgeInsets.symmetric(vertical: pad, horizontal: 4),
     child: pw.Text(
       text,
       textAlign: align,
-      style: pw.TextStyle(
-        fontSize: 10,
-        fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-        color: color,
-      ),
+      style: pw.TextStyle(fontSize: 8.5, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal, color: PdfColors.grey900),
     ),
   );
 }
 
-pw.Widget _totalRow(
-  String label,
-  String value,
-  PdfColor labelColor,
-  PdfColor valueColor, {
-  bool bold = false,
-  bool big = false,
-}) {
-  return pw.Padding(
-    padding: const pw.EdgeInsets.symmetric(vertical: 2),
-    child: pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        pw.Text(
-          label,
-          style: pw.TextStyle(
-            fontSize: big ? 13 : 9,
-            fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-            color: labelColor,
-          ),
-        ),
-        pw.Text(
-          value,
-          style: pw.TextStyle(
-            fontSize: big ? 13 : 9,
-            fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-            color: valueColor,
-          ),
-        ),
-      ],
-    ),
+pw.TableRow _totalTableRow(String label, String value, PdfColor color, {bool bold = false}) {
+  return pw.TableRow(
+    children: [
+      pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 8),
+        child: pw.Text(label, style: pw.TextStyle(fontSize: 8.5, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal, color: color)),
+      ),
+      pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 8),
+        child: pw.Text(value, textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 8.5, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal, color: color)),
+      ),
+    ],
+  );
+}
+
+pw.Widget _signatureLine(String label) {
+  return pw.Column(
+    children: [
+      pw.Container(width: 100, height: 0.75, color: PdfColors.grey500),
+      pw.SizedBox(height: 3),
+      pw.Text(label, style: pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+    ],
   );
 }
 

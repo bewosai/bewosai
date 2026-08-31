@@ -11,10 +11,14 @@ class PurchaseItemSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(), required=False, allow_null=True
     )
+    # Nepal customs/VAT classification code, shown on the printed Tax
+    # Invoice — sourced from the product since it isn't duplicated onto
+    # every PurchaseItem row.
+    product_hs_code = serializers.CharField(source="product.hs_code", read_only=True, default="")
 
     class Meta:
         model = PurchaseItem
-        fields = ["id", "product", "product_name", "quantity", "unit_price", "discount_amount", "total"]
+        fields = ["id", "product", "product_name", "product_hs_code", "quantity", "unit_price", "discount_amount", "total"]
         read_only_fields = ["id", "total"]
 
 

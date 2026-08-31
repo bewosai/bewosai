@@ -4,6 +4,7 @@ class PurchaseItem {
   final int? id;
   final int? product;
   final String productName;
+  final String hsCode;
   final double quantity;
   final double unitPrice;
   final double discountAmount;
@@ -13,6 +14,7 @@ class PurchaseItem {
     this.id,
     this.product,
     required this.productName,
+    this.hsCode = '',
     required this.quantity,
     required this.unitPrice,
     this.discountAmount = 0,
@@ -23,6 +25,7 @@ class PurchaseItem {
         id: json['id'] as int?,
         product: json['product'] as int?,
         productName: json['product_name'] as String? ?? '',
+        hsCode: json['product_hs_code'] as String? ?? '',
         quantity: Formatters.toDouble(json['quantity']),
         unitPrice: Formatters.toDouble(json['unit_price']),
         discountAmount: Formatters.toDouble(json['discount_amount']),

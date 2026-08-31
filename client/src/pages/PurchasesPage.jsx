@@ -56,7 +56,18 @@ const EMPTY_FORM = {
   status: "CONFIRMED",
 };
 
-/* ─── Print Modal ─── */
+/* ─── Print field row: "Label : Value" ─── */
+function PrintRow({ label, value, bold, align }) {
+  if (!value) return null;
+  return (
+    <p className={`flex gap-2 ${align === "right" ? "justify-end" : ""}`}>
+      <span className="text-gray-600">{label} :</span>
+      <span className={bold ? "font-semibold text-gray-900" : "text-gray-800"}>{value}</span>
+    </p>
+  );
+}
+
+/* ─── Print Modal — same classic ruled Tax Invoice layout as Sales ─── */
 function PrintModal({ purchase, onClose }) {
   const { currentBusiness } = useAuth();
   const businessName = localStorage.getItem("business_name") || "Business Name";
@@ -64,27 +75,25 @@ function PrintModal({ purchase, onClose }) {
   const businessPhone = localStorage.getItem("business_phone") || "";
   const businessLogo = localStorage.getItem("business_logo") || null;
   const businessPan = currentBusiness?.pan_number || "";
-  const footerText = localStorage.getItem("invoice_footer_text") || "Thank you for your business!";
+  const businessVat = currentBusiness?.vat_number || "";
   const items = purchase.items || [];
 
+  const subtotal = parseFloat(purchase.subtotal || 0);
+  const discount = parseFloat(purchase.discount || 0);
+  const taxAmount = parseFloat(purchase.tax_amount || 0);
+  const taxRate = parseFloat(purchase.tax_rate || 0);
   const total = parseFloat(purchase.total || 0);
   const paid = parseFloat(purchase.paid_amount || 0);
   const due = total - paid;
   const isAdvance = due < 0;
-  const paymentModeLabel = paid <= 0 && due > 0
-    ? "Credit"
-    : (PAYMENT_METHODS.find(m => m.value === purchase.payment_method)?.label || purchase.payment_method || "Cash");
+  const paymentModeLabel = PAYMENT_METHODS.find(m => m.value === purchase.payment_method)?.label || purchase.payment_method || "Cash";
+  const billType = paid <= 0 && due > 0 ? "Credit" : "Cash";
   const billDate = purchase.purchase_date || purchase.date;
   const miti = billDate ? formatBS(adToBS(new Date(billDate))) : "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      {/* A printed bill must always be pure white paper regardless of the
-          app's own theme — plain bg-white would resolve through this app's
-          --color-white token, which the light theme remaps to deep navy
-          (so normal in-app "white" text stays readable on a white surface).
-          The bracket value bypasses that token entirely. */}
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#ffffff] text-gray-800 shadow-2xl print:max-h-none print:overflow-visible print:shadow-none print:rounded-none">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#ffffff] shadow-2xl print:max-h-none print:overflow-visible print:shadow-none print:rounded-none">
         <div className="flex items-center justify-between border-b p-4 print:hidden">
           <span className="font-bold text-gray-900">Print Bill</span>
           <div className="flex items-center gap-3">
@@ -95,106 +104,155 @@ function PrintModal({ purchase, onClose }) {
           </div>
         </div>
 
-        <div className="p-8 print:p-4 text-gray-800" id="print-area">
+        {/* A printed bill must always be pure white paper regardless of the
+            app's own theme — plain bg-white would resolve through this app's
+            --color-white token, which the light theme remaps to deep navy.
+            The bracket value bypasses that token entirely. */}
+        <div className="m-4 print:m-0 border-2 border-gray-800 bg-[#ffffff] text-xs text-gray-900" id="print-area">
           {/* Business header */}
-          <div className="mb-5 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">{businessName}</h2>
-              <p className="text-xs text-gray-600 mt-0.5">
-                {businessPhone}{businessPhone && businessAddress ? "• " : ""}{businessAddress}
-              </p>
-              {businessPan && <p className="text-xs text-gray-600">PAN No: {businessPan}</p>}
+          <div className="flex items-center gap-4 border-b-2 border-gray-800 p-4">
+            {businessLogo && <img src={businessLogo} alt="logo" className="h-16 w-16 shrink-0 object-contain" />}
+            <div className="flex-1 text-center">
+              <h1 className="text-xl font-bold underline">{businessName}</h1>
+              {businessAddress && <p className="mt-0.5">{businessAddress}</p>}
+              <div className="mt-0.5 flex flex-wrap items-center justify-center gap-x-3 font-semibold">
+                {businessPhone && <span>Ph.No: {businessPhone}</span>}
+                {businessPan && <span>PAN No.: {businessPan}</span>}
+                {businessVat && <span>VAT No.: {businessVat}</span>}
+              </div>
             </div>
-            {businessLogo && <img src={businessLogo} alt="logo" className="h-14 w-14 rounded-lg object-cover border" />}
+            {businessLogo && <div className="w-16 shrink-0" />}
           </div>
 
-          <h3 className="mb-5 text-center text-xl font-bold uppercase tracking-wide text-gray-900">
-            Purchase Details
-          </h3>
+          <h2 className="border-b-2 border-gray-800 py-1.5 text-center text-sm font-bold uppercase tracking-widest underline">
+            Tax Invoice
+          </h2>
 
           {/* Supplier + bill meta */}
-          <div className="mb-5 grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-gray-500">Supplier:</p>
-              <p className="font-semibold text-gray-900">{purchase.supplier_name || purchase.party_name || "Unknown Supplier"}</p>
-              {purchase.supplier_address && <p className="text-xs text-gray-500">{purchase.supplier_address}</p>}
-              {purchase.supplier_pan && <p className="mt-1 text-xs text-gray-600">PAN No: {purchase.supplier_pan}</p>}
+          <div className="grid grid-cols-2 gap-3 border-b-2 border-gray-800 px-4 py-2">
+            <div className="space-y-0.5">
+              <PrintRow label="Supplier Name" value={purchase.supplier_name || purchase.party_name || "Unknown Supplier"} bold />
+              <PrintRow label="Pan / Vat No." value={purchase.supplier_pan} />
+              <PrintRow label="Supplier Address" value={purchase.supplier_address} />
+              <PrintRow label="Supplier Cnt No." value={purchase.supplier_phone} />
             </div>
-            <div className="text-right text-xs space-y-0.5">
-              <p className="text-gray-500">Bill No: <span className="font-semibold text-gray-900">{purchase.bill_number || purchase.invoice_number || purchase.id}</span></p>
-              <p className="text-gray-500">Bill Date: <span className="font-semibold text-gray-900">{billDate}</span></p>
-              {miti && <p className="text-gray-500">Miti: <span className="font-semibold text-gray-900">{miti}</span></p>}
-              <p className="text-gray-500">Payment Mode: <span className="font-semibold text-gray-900">{paymentModeLabel}</span></p>
+            <div className="space-y-0.5">
+              <PrintRow label="Bill No." value={purchase.bill_number || purchase.invoice_number || purchase.id} bold align="right" />
+              <PrintRow label="Date of Transaction" value={billDate} align="right" />
+              <PrintRow label="Miti of Transaction" value={miti} align="right" />
             </div>
           </div>
 
-          <div className="mb-5 overflow-x-auto print:overflow-visible">
-            <table className="w-full text-sm border-collapse min-w-120">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-gray-800 px-4 py-1.5">
+            <span>Mode of Payment : <strong>{paymentModeLabel}</strong></span>
+            <span>Bill Type : <strong>{billType}</strong></span>
+          </div>
+
+          {/* Items */}
+          <div className="overflow-x-auto print:overflow-visible">
+            <table className="w-full min-w-120 border-collapse">
               <thead>
-                <tr className="bg-blue-600 text-white">
-                  <th className="py-3 text-left pl-3 rounded-l-md">S.N.</th>
-                  <th className="py-3 text-left">Name</th>
-                  <th className="py-3 text-right">Quantity</th>
-                  <th className="py-3 text-right">Rate</th>
-                  <th className="py-3 text-right pr-3 rounded-r-md">Amount</th>
+                <tr className="border-b-2 border-gray-800 font-semibold">
+                  <th className="w-10 border-r border-gray-400 px-2 py-1.5 text-left">SNo</th>
+                  <th className="w-20 border-r border-gray-400 px-2 py-1.5 text-left">HSCode</th>
+                  <th className="border-r border-gray-400 px-2 py-1.5 text-left">Particular</th>
+                  <th className="w-16 border-r border-gray-400 px-2 py-1.5 text-right">Qty</th>
+                  <th className="w-20 border-r border-gray-400 px-2 py-1.5 text-right">Rate</th>
+                  <th className="w-16 border-r border-gray-400 px-2 py-1.5 text-right">P.Disc</th>
+                  <th className="w-24 px-2 py-1.5 text-right">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, i) => {
                   const rowTotal = (item.quantity * item.unit_price) - (item.discount_amount || 0);
                   return (
-                    <tr key={i} className="border-b border-gray-200">
-                      <td className="py-3 pl-3 text-gray-500">{i + 1}</td>
-                      <td className="py-3 font-medium text-gray-900">{item.product_name || item.name}</td>
-                      <td className="py-3 text-right">{item.quantity}</td>
-                      <td className="py-3 text-right">Rs. {parseFloat(item.unit_price).toFixed(2)}</td>
-                      <td className="py-3 text-right pr-3 font-medium">Rs. {rowTotal.toFixed(2)}</td>
+                    <tr key={i} className="border-b border-gray-300">
+                      <td className="border-r border-gray-300 px-2 py-1.5">{i + 1}</td>
+                      <td className="border-r border-gray-300 px-2 py-1.5">{item.product_hs_code || ""}</td>
+                      <td className="border-r border-gray-300 px-2 py-1.5 font-medium">{item.product_name || item.name}</td>
+                      <td className="border-r border-gray-300 px-2 py-1.5 text-right">{item.quantity}</td>
+                      <td className="border-r border-gray-300 px-2 py-1.5 text-right">{parseFloat(item.unit_price).toFixed(2)}</td>
+                      <td className="border-r border-gray-300 px-2 py-1.5 text-right">{parseFloat(item.discount_amount || 0).toFixed(2)}</td>
+                      <td className="px-2 py-1.5 text-right font-medium">{rowTotal.toFixed(2)}</td>
                     </tr>
                   );
                 })}
+                {Array.from({ length: Math.max(0, 3 - items.length) }).map((_, i) => (
+                  <tr key={`blank-${i}`} className="border-b border-gray-300">
+                    <td className="border-r border-gray-300 px-2 py-3">&nbsp;</td>
+                    <td className="border-r border-gray-300 px-2 py-3"></td>
+                    <td className="border-r border-gray-300 px-2 py-3"></td>
+                    <td className="border-r border-gray-300 px-2 py-3"></td>
+                    <td className="border-r border-gray-300 px-2 py-3"></td>
+                    <td className="border-r border-gray-300 px-2 py-3"></td>
+                    <td className="px-2 py-3"></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
-          {/* Amount in words + totals */}
-          <div className="mb-2 grid grid-cols-2 gap-6">
-            <div className="text-sm">
-              <p className="font-semibold text-gray-700">Amount in Words</p>
-              <p className="text-gray-600">{amountInWords(total)}</p>
-              <p className="mt-2 text-xs italic text-gray-500">*Proforma Invoice</p>
+          {/* Remarks/words + totals box */}
+          <div className="grid grid-cols-2 border-t-2 border-gray-800">
+            <div className="border-r-2 border-gray-800 p-3">
+              {purchase.notes && <p><span className="font-semibold">Remarks :</span> {purchase.notes}</p>}
+              <p className={purchase.notes ? "mt-2" : ""}>
+                <span className="font-semibold">In Words :</span> Rs. {amountInWords(total)}
+              </p>
+              <p className="mt-2 text-[10px] italic text-gray-500">*Proforma Invoice</p>
             </div>
-            <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">Subtotal:</span><span>Rs. {parseFloat(purchase.subtotal || 0).toFixed(2)}</span></div>
-              {parseFloat(purchase.discount || 0) > 0 && (
-                <div className="flex justify-between text-red-500"><span>Discount:</span><span>- Rs. {parseFloat(purchase.discount).toFixed(2)}</span></div>
-              )}
-              {parseFloat(purchase.tax_amount || 0) > 0 && (
-                <div className="flex justify-between"><span className="text-gray-500">Tax ({parseFloat(purchase.tax_rate || 0)}%):</span><span>+ Rs. {parseFloat(purchase.tax_amount).toFixed(2)}</span></div>
-              )}
-              <div className="flex justify-between font-semibold"><span className="text-gray-700">Total Amount:</span><span>Rs. {total.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Paid Amount:</span><span className="font-semibold">Rs. {paid.toFixed(2)}</span></div>
-              <div className="flex justify-between border-t border-gray-300 pt-2 text-lg font-bold">
-                <span>{isAdvance ? "Advance (Overpaid)" : "Amount Due"}</span>
-                <span>Rs. {Math.abs(due).toFixed(2)}</span>
-              </div>
+            <table className="border-collapse">
+              <tbody>
+                <tr className="border-b border-gray-300">
+                  <td className="px-3 py-1">Basic Amount</td><td>:</td>
+                  <td className="px-3 py-1 text-right font-semibold">{subtotal.toFixed(2)}</td>
+                </tr>
+                <tr className="border-b border-gray-300">
+                  <td className="px-3 py-1">Discount</td><td>:</td>
+                  <td className="px-3 py-1 text-right">{discount.toFixed(2)}</td>
+                </tr>
+                <tr className="border-b border-gray-300">
+                  <td className="px-3 py-1 font-semibold">Taxable value</td><td>:</td>
+                  <td className="px-3 py-1 text-right font-semibold">{(subtotal - discount).toFixed(2)}</td>
+                </tr>
+                <tr className="border-b border-gray-300">
+                  <td className="px-3 py-1">Vat {taxRate % 1 === 0 ? taxRate.toFixed(0) : taxRate} %</td><td>:</td>
+                  <td className="px-3 py-1 text-right">{taxAmount.toFixed(2)}</td>
+                </tr>
+                <tr className="border-b border-gray-300">
+                  <td className="px-3 py-1 font-bold">Net Amount</td><td>:</td>
+                  <td className="px-3 py-1 text-right font-bold">{total.toFixed(2)}</td>
+                </tr>
+                {paid > 0 && (
+                  <tr className="border-b border-gray-300">
+                    <td className="px-3 py-1">Paid Amount</td><td>:</td>
+                    <td className="px-3 py-1 text-right">{paid.toFixed(2)}</td>
+                  </tr>
+                )}
+                <tr>
+                  <td className="px-3 py-1.5 font-bold">{isAdvance ? "Advance (Overpaid)" : "Amount Due"}</td><td>:</td>
+                  <td className="px-3 py-1.5 text-right font-bold">{Math.abs(due).toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Signatures */}
+          <div className="grid grid-cols-3 border-t-2 border-gray-800 px-6 py-8 text-center">
+            <div>
+              <div className="mx-auto mb-1 w-32 border-t border-gray-500 pt-1">Received By</div>
+            </div>
+            <div>
+              <div className="mx-auto mb-1 w-32 border-t border-gray-500 pt-1">Paid By</div>
+            </div>
+            <div>
+              <p className="mb-8 font-semibold">For : {businessName}</p>
             </div>
           </div>
 
-          {purchase.notes && (
-            <div className="mt-4 text-xs text-gray-500 border-t pt-2">Notes: {purchase.notes}</div>
-          )}
-
-          {/* Signature */}
-          <div className="mt-10 flex justify-end">
-            <div className="text-center">
-              <div className="h-14 w-40 border-b border-gray-400" />
-              <p className="mt-1 text-xs text-gray-600">Authorized Signature</p>
-            </div>
+          <div className="border-t border-gray-400 px-4 py-1 text-right text-[10px] text-gray-500">
+            Print Date &amp; Time : {new Date().toLocaleDateString("en-GB")} {new Date().toLocaleTimeString()}
           </div>
-
-          {footerText && (
-            <div className="mt-4 border-t pt-3 text-center text-xs text-gray-400 italic">{footerText}</div>
-          )}
         </div>
       </div>
     </div>

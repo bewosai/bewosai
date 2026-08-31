@@ -44,30 +44,35 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
 
   void _print(Purchase p) {
     final business = context.read<AuthProvider>().currentBusiness;
-    final paymentModeLabel = p.paidAmount <= 0 && p.dueAmount > 0
-        ? 'Credit'
-        : (AppConstants.paymentMethodLabels[p.paymentMethod] ?? p.paymentMethod);
+    // Mode of Payment (channel) and Bill Type (paid now vs owed) are
+    // separate facts — see the Cash/Credit toggle on the form itself.
+    final paymentModeLabel = AppConstants.paymentMethodLabels[p.paymentMethod] ?? p.paymentMethod;
+    final billType = p.paidAmount <= 0 && p.dueAmount > 0 ? 'Credit' : 'Cash';
     showBillPrintDialog(
       context,
-      documentTitle: 'Purchase Details',
+      documentTitle: 'Tax Invoice',
       data: BillPdfData(
         businessName: business?.name ?? '',
         businessPhone: business?.phone ?? '',
         businessAddress: business?.address ?? '',
         businessPan: business?.panNumber ?? '',
+        businessVat: business?.vatNumber ?? '',
         number: p.billNumber,
         partyLabel: 'Supplier',
         partyName: p.supplierName.isNotEmpty ? p.supplierName : 'Unknown',
         partyPan: p.supplierPan,
         partyAddress: p.supplierAddress,
+        partyPhone: p.supplierPhone,
         date: Formatters.date(p.purchaseDate),
         miti: p.purchaseDate != null ? NepaliCalendarService.fromDateTime(p.purchaseDate!) : null,
         dueDate: p.dueDate != null ? Formatters.date(p.dueDate) : null,
         paymentModeLabel: paymentModeLabel,
+        billType: billType,
         items: p.items
             .map(
               (i) => BillPdfItem(
                 name: i.productName,
+                hsCode: i.hsCode,
                 quantity: i.quantity,
                 unitPrice: i.unitPrice,
                 discountAmount: i.discountAmount,
