@@ -8,8 +8,8 @@ import {
 
 const PAGE_SIZE = 50;
 
-const DURATION_LABELS = { "7D": "7 Days", "30D": "30 Days", "1Y": "1 Year", "5Y": "5 Years", CUSTOM: "Custom" };
-const DURATION_OPTIONS = ["7D", "30D", "1Y", "5Y", "CUSTOM"];
+const DURATION_LABELS = { "7D": "7 Days", "30D": "30 Days", "1Y": "1 Year", "5Y": "5 Years", LIFETIME: "Lifetime", CUSTOM: "Custom" };
+const DURATION_OPTIONS = ["7D", "30D", "1Y", "5Y", "LIFETIME", "CUSTOM"];
 const STATUS_OPTIONS = ["PENDING", "ACTIVE", "EXPIRED", "REVOKED"];
 const STATUS_COLORS = { PENDING: "gray", ACTIVE: "green", EXPIRED: "orange", REVOKED: "red" };
 
@@ -23,12 +23,20 @@ function GenerateLicenseModal({ businesses, onClose, onGenerated }) {
   const [businessId, setBusinessId] = useState("");
   const [businessSearch, setBusinessSearch] = useState("");
   const [durationType, setDurationType] = useState("30D");
-  const [customDays, setCustomDays] = useState(30);
+  const [endDate, setEndDate] = useState("");
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  // duration_days the backend needs for Custom — the day count between the
+  // two dates the admin actually picked, not a raw number they'd have to
+  // work out themselves.
+  const customDays = useMemo(() => {
+    if (!endDate || !startDate) return 0;
+    return Math.max(1, Math.round((new Date(endDate) - new Date(startDate)) / 86400000));
+  }, [startDate, endDate]);
 
   const filteredBusinesses = useMemo(() => {
     const q = businessSearch.trim().toLowerCase();
@@ -42,8 +50,8 @@ function GenerateLicenseModal({ businesses, onClose, onGenerated }) {
 
   const handleGenerate = async () => {
     if (!businessId) { setError("Select a business."); return; }
-    if (durationType === "CUSTOM" && (!customDays || customDays < 1)) {
-      setError("Enter a valid number of days."); return;
+    if (durationType === "CUSTOM" && (!endDate || customDays < 1)) {
+      setError("Pick an end date after the start date."); return;
     }
     setSaving(true);
     setError("");
@@ -51,7 +59,7 @@ function GenerateLicenseModal({ businesses, onClose, onGenerated }) {
       const { data } = await adminApi.generateLicense({
         business: businessId,
         duration_type: durationType,
-        duration_days: durationType === "CUSTOM" ? Number(customDays) : undefined,
+        duration_days: durationType === "CUSTOM" ? customDays : undefined,
         start_date: startDate,
       });
       setResult(data);
@@ -159,26 +167,33 @@ function GenerateLicenseModal({ businesses, onClose, onGenerated }) {
                     </button>
                   ))}
                 </div>
-                {durationType === "CUSTOM" && (
-                  <input
-                    type="number"
-                    min={1}
-                    value={customDays}
-                    onChange={(e) => setCustomDays(e.target.value)}
-                    placeholder="Number of days"
-                    className="mt-2 w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white focus:border-orange-500 focus:outline-none"
-                  />
-                )}
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-navy-400">Start Date</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white focus:border-orange-500 focus:outline-none"
-                />
+              <div className={durationType === "CUSTOM" ? "grid grid-cols-2 gap-3" : ""}>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-navy-400">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                {durationType === "CUSTOM" && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-navy-400">End Date</label>
+                    <input
+                      type="date"
+                      min={startDate}
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white focus:border-orange-500 focus:outline-none"
+                    />
+                    {endDate && (
+                      <p className="mt-1 text-[11px] text-navy-500">{customDays} day{customDays === 1 ? "" : "s"}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {error && <p className="text-sm text-red-400">{error}</p>}
@@ -202,17 +217,30 @@ function GenerateLicenseModal({ businesses, onClose, onGenerated }) {
 /* ── Extend modal ────────────────────────────────────────────────────────── */
 function ExtendModal({ license, onClose, onExtended }) {
   const [durationType, setDurationType] = useState("30D");
-  const [customDays, setCustomDays] = useState(30);
+  const [endDate, setEndDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Mirrors the backend's own "extend from whichever is later — the
+  // current expiry, or today" (LicenseExtendView) so the day count shown
+  // here matches what actually gets applied.
+  const today = new Date().toISOString().slice(0, 10);
+  const extendBase = license.expiry_date > today ? license.expiry_date : today;
+  const customDays = endDate
+    ? Math.max(1, Math.round((new Date(endDate) - new Date(extendBase)) / 86400000))
+    : 0;
+
   const handleExtend = async () => {
+    if (durationType === "CUSTOM" && (!endDate || customDays < 1)) {
+      setError("Pick an end date after the current expiry.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       await adminApi.extendLicense(license.id, {
         duration_type: durationType,
-        duration_days: durationType === "CUSTOM" ? Number(customDays) : undefined,
+        duration_days: durationType === "CUSTOM" ? customDays : undefined,
       });
       onExtended();
       onClose();
@@ -230,8 +258,8 @@ function ExtendModal({ license, onClose, onExtended }) {
         <p className="text-sm text-navy-400">
           Code <span className="font-mono font-bold text-white">{license.code}</span> — currently expires {fmtDate(license.expiry_date)}
         </p>
-        <div className="grid grid-cols-2 gap-2">
-          {["30D", "1Y", "5Y", "CUSTOM"].map((d) => (
+        <div className="grid grid-cols-3 gap-2">
+          {["30D", "1Y", "5Y", "LIFETIME", "CUSTOM"].map((d) => (
             <button
               key={d}
               onClick={() => setDurationType(d)}
@@ -244,13 +272,19 @@ function ExtendModal({ license, onClose, onExtended }) {
           ))}
         </div>
         {durationType === "CUSTOM" && (
-          <input
-            type="number"
-            min={1}
-            value={customDays}
-            onChange={(e) => setCustomDays(e.target.value)}
-            className="w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white"
-          />
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-navy-400">New End Date</label>
+            <input
+              type="date"
+              min={extendBase}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white"
+            />
+            {endDate && (
+              <p className="mt-1 text-[11px] text-navy-500">{customDays} day{customDays === 1 ? "" : "s"} from {fmtDate(extendBase)}</p>
+            )}
+          </div>
         )}
         {error && <p className="text-sm text-red-400">{error}</p>}
         <div className="flex gap-3">

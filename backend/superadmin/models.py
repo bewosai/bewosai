@@ -114,15 +114,23 @@ class License(models.Model):
     DURATION_30D = "30D"
     DURATION_1Y = "1Y"
     DURATION_5Y = "5Y"
+    DURATION_LIFETIME = "LIFETIME"
     DURATION_CUSTOM = "CUSTOM"
     DURATION_CHOICES = [
         (DURATION_7D, "7 Days"),
         (DURATION_30D, "30 Days"),
         (DURATION_1Y, "1 Year"),
         (DURATION_5Y, "5 Years"),
+        (DURATION_LIFETIME, "Lifetime"),
         (DURATION_CUSTOM, "Custom"),
     ]
-    DURATION_DAYS = {DURATION_7D: 7, DURATION_30D: 30, DURATION_1Y: 365, DURATION_5Y: 365 * 5}
+    # "Lifetime" is a very long fixed expiry (100 years) rather than a
+    # nullable never-expires field — every other query in this app
+    # (is_currently_active, active_license's expiry_date__gt filter, the
+    # extend/revoke flows) already assumes expiry_date is a real comparable
+    # date, so this gets the same "never expires in practice" behavior
+    # without touching any of that.
+    DURATION_DAYS = {DURATION_7D: 7, DURATION_30D: 30, DURATION_1Y: 365, DURATION_5Y: 365 * 5, DURATION_LIFETIME: 365 * 100}
 
     STATUS_PENDING = "PENDING"  # generated, not yet activated by the business
     STATUS_ACTIVE = "ACTIVE"
