@@ -271,7 +271,7 @@ export default function LicensesTab({ businesses }) {
   const [page, setPage] = useState(1);
   const [years, setYears] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ duration_type: "", status: "", year: "", search: "" });
+  const [filters, setFilters] = useState({ duration_type: "", status: "", year: "", search: "", start_from: "", start_to: "" });
   const [showGenerate, setShowGenerate] = useState(false);
   const [extendTarget, setExtendTarget] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null);
@@ -368,6 +368,30 @@ export default function LicensesTab({ businesses }) {
           <option value="">All Years</option>
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
+        <div className="flex items-center gap-1.5 rounded-lg border border-navy-700 bg-navy-900 px-2 py-1.5">
+          <span className="text-xs text-navy-500">From</span>
+          <input
+            type="date"
+            value={filters.start_from}
+            onChange={(e) => setFilters((f) => ({ ...f, start_from: e.target.value }))}
+            className="bg-transparent text-xs text-navy-300 focus:outline-none scheme-dark"
+          />
+          <span className="text-xs text-navy-500">To</span>
+          <input
+            type="date"
+            value={filters.start_to}
+            onChange={(e) => setFilters((f) => ({ ...f, start_to: e.target.value }))}
+            className="bg-transparent text-xs text-navy-300 focus:outline-none scheme-dark"
+          />
+        </div>
+        {(filters.start_from || filters.start_to) && (
+          <button
+            onClick={() => setFilters((f) => ({ ...f, start_from: "", start_to: "" }))}
+            className="flex items-center gap-1 rounded-lg border border-navy-700 px-2.5 py-2 text-xs text-navy-400 hover:bg-navy-800"
+          >
+            <X className="h-3 w-3" /> Clear dates
+          </button>
+        )}
         <button onClick={load} className="flex items-center gap-1.5 rounded-lg border border-navy-700 px-3 py-2 text-xs text-navy-400 hover:bg-navy-800">
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
         </button>

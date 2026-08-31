@@ -433,7 +433,7 @@ export default function ReportsPage() {
           {REPORT_CATEGORIES.map((cat) => {
             const isOpen = openCategory === cat.label;
             return (
-              <div key={cat.label} className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+              <div key={cat.label} className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
                 <button
                   onClick={() => setOpenCategory(isOpen ? null : cat.label)}
                   className="flex w-full items-center justify-between px-4 py-3 text-left"
@@ -557,7 +557,7 @@ export default function ReportsPage() {
           </div>
 
           {/* Top Products */}
-          <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+          <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
             <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
               <h3 className="text-sm font-semibold text-white">Top Products by Revenue</h3>
               <button onClick={exportProducts}
@@ -569,14 +569,14 @@ export default function ReportsPage() {
               <div className="py-10 text-center text-sm text-navy-400">No product data</div>
             ) : (
               <>
-                <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                   <div className="col-span-1">#</div>
                   <div className="col-span-6">Product</div>
                   <div className="col-span-2 text-right">Qty Sold</div>
                   <div className="col-span-3 text-right">Revenue</div>
                 </div>
                 {topProducts.map((p, i) => (
-                  <div key={p.name} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 transition text-sm">
+                  <div key={p.name} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 transition text-sm min-w-160">
                     <div className="col-span-1 text-navy-500 font-medium">{i + 1}</div>
                     <div className="col-span-6 text-white font-medium">{p.name}</div>
                     <div className="col-span-2 text-right text-navy-400">{p.qty.toLocaleString()}</div>
@@ -678,7 +678,7 @@ export default function ReportsPage() {
                   </div>
                 ))}
               </div>
-              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
                 <div className="px-4 py-3 border-b border-navy-800">
                   <h3 className="text-sm font-semibold text-white">Low Stock Items ({stockData.low_stock_items?.length || 0})</h3>
                 </div>
@@ -686,14 +686,14 @@ export default function ReportsPage() {
                   <div className="py-10 text-center text-sm text-navy-400">No low-stock items</div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                       <div className="col-span-5">Product</div>
                       <div className="col-span-3 text-right">Stock Qty</div>
                       <div className="col-span-2 text-right">Min Level</div>
                       <div className="col-span-2 text-right">Sale Price</div>
                     </div>
                     {stockData.low_stock_items.map(p => (
-                      <div key={p.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                      <div key={p.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                         <div className="col-span-5 text-white truncate">{p.name}</div>
                         <div className="col-span-3 text-right text-yellow-400 font-semibold">{p.stock_quantity}</div>
                         <div className="col-span-2 text-right text-navy-400">{p.low_stock_threshold}</div>
@@ -705,7 +705,7 @@ export default function ReportsPage() {
               </div>
 
               {/* Full per-product stock valuation */}
-              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
                   <h3 className="text-sm font-semibold text-white">All Products ({stockReport?.items?.length || 0})</h3>
                   <button onClick={exportStockReport}
@@ -719,7 +719,7 @@ export default function ReportsPage() {
                   <div className="py-10 text-center text-sm text-navy-400">No products found</div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                       <div className="col-span-4">Product</div>
                       <div className="col-span-2">Category</div>
                       <div className="col-span-2 text-right">Qty</div>
@@ -727,7 +727,7 @@ export default function ReportsPage() {
                       <div className="col-span-2 text-right">Stock Value</div>
                     </div>
                     {stockReport.items.map(p => (
-                      <div key={p.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                      <div key={p.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                         <div className="col-span-4 text-white truncate">
                           {p.name}
                           {p.is_low_stock && <span className="ml-1.5 rounded bg-yellow-500/10 px-1.5 py-0.5 text-[10px] text-yellow-400">Low</span>}
@@ -778,7 +778,7 @@ export default function ReportsPage() {
                   </div>
                 ))}
               </div>
-              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
                 <div className="px-4 py-3 border-b border-navy-800">
                   <h3 className="text-sm font-semibold text-white">Top Overdue Customers</h3>
                 </div>
@@ -786,13 +786,13 @@ export default function ReportsPage() {
                   <div className="py-10 text-center text-sm text-navy-400">No outstanding receivables</div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                       <div className="col-span-6">Customer</div>
                       <div className="col-span-3 text-right">Invoices</div>
                       <div className="col-span-3 text-right">Due</div>
                     </div>
                     {agingData.top_debtors.map((d, i) => (
-                      <div key={d.customer_id ?? i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                      <div key={d.customer_id ?? i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                         <div className="col-span-6 text-white truncate">{d.customer__name || "Walk-in"}</div>
                         <div className="col-span-3 text-right text-navy-400">{d.invoice_count}</div>
                         <div className="col-span-3 text-right text-red-400 font-semibold">Rs. {parseFloat(d.total_due || 0).toLocaleString()}</div>
@@ -808,7 +808,7 @@ export default function ReportsPage() {
 
       {/* Sales Detail Tab */}
       {activeReport === "sales" && (
-        <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+        <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
           <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
             <h3 className="text-sm font-semibold text-white">Sales ({filteredSales.length})</h3>
             <button onClick={exportSales}
@@ -820,7 +820,7 @@ export default function ReportsPage() {
             <div className="py-10 text-center text-sm text-navy-400">No sales in selected range</div>
           ) : (
             <>
-              <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+              <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                 <div className="col-span-2">Invoice</div>
                 <div className="col-span-2">Date</div>
                 <div className="col-span-3">Customer</div>
@@ -829,7 +829,7 @@ export default function ReportsPage() {
                 <div className="col-span-1 text-right">Due</div>
               </div>
               {filteredSales.map(s => (
-                <div key={s.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                <div key={s.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                   <div className="col-span-2 font-medium text-orange-400">{s.invoice_number}</div>
                   <div className="col-span-2 text-navy-400">{s.sale_date}</div>
                   <div className="col-span-3 text-white truncate">{s.customer_name || "—"}</div>
@@ -849,7 +849,7 @@ export default function ReportsPage() {
 
       {/* Expenses Detail Tab */}
       {activeReport === "expenses" && (
-        <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+        <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
           <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
             <h3 className="text-sm font-semibold text-white">Expenses ({filteredExp.length})</h3>
             <button onClick={exportExpenses}
@@ -861,7 +861,7 @@ export default function ReportsPage() {
             <div className="py-10 text-center text-sm text-navy-400">No expenses in selected range</div>
           ) : (
             <>
-              <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+              <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                 <div className="col-span-2">Date</div>
                 <div className="col-span-3">Category</div>
                 <div className="col-span-4">Description</div>
@@ -869,7 +869,7 @@ export default function ReportsPage() {
                 <div className="col-span-1 text-right">Method</div>
               </div>
               {filteredExp.map(e => (
-                <div key={e.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                <div key={e.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                   <div className="col-span-2 text-navy-400">{e.date}</div>
                   <div className="col-span-3 text-white">{e.category_name || "—"}</div>
                   <div className="col-span-4 text-navy-400 truncate">{e.description || "—"}</div>
@@ -888,7 +888,7 @@ export default function ReportsPage() {
 
       {/* Purchases Detail Tab */}
       {activeReport === "purchases" && (
-        <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+        <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
           <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
             <h3 className="text-sm font-semibold text-white">Purchases ({filteredPurchases.length})</h3>
             <button onClick={exportPurchases}
@@ -900,7 +900,7 @@ export default function ReportsPage() {
             <div className="py-10 text-center text-sm text-navy-400">No purchases in selected range</div>
           ) : (
             <>
-              <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+              <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                 <div className="col-span-2">Bill No</div>
                 <div className="col-span-2">Date</div>
                 <div className="col-span-3">Supplier</div>
@@ -909,7 +909,7 @@ export default function ReportsPage() {
                 <div className="col-span-1 text-right">Due</div>
               </div>
               {filteredPurchases.map(p => (
-                <div key={p.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                <div key={p.id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                   <div className="col-span-2 font-medium text-blue-400">{p.bill_number}</div>
                   <div className="col-span-2 text-navy-400">{p.purchase_date}</div>
                   <div className="col-span-3 text-white truncate">{p.supplier_name || "—"}</div>
@@ -945,7 +945,7 @@ export default function ReportsPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
                   <p className="text-xs text-navy-500">Cash In</p>
                   <p className="mt-1 text-lg font-bold text-green-400">
@@ -966,7 +966,7 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
                 <div className="px-4 py-3 border-b border-navy-800">
                   <h3 className="text-sm font-semibold text-white">Entries ({dayBookData.entries?.length || 0})</h3>
                 </div>
@@ -974,7 +974,7 @@ export default function ReportsPage() {
                   <div className="py-10 text-center text-sm text-navy-400">No transactions on this date</div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                       <div className="col-span-2">Type</div>
                       <div className="col-span-2">Ref</div>
                       <div className="col-span-3">Party</div>
@@ -983,7 +983,7 @@ export default function ReportsPage() {
                       <div className="col-span-1">Method</div>
                     </div>
                     {dayBookData.entries.map((e, i) => (
-                      <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                      <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                         <div className="col-span-2 text-navy-300">{e.type}</div>
                         <div className="col-span-2 text-navy-400 truncate">{e.ref}</div>
                         <div className="col-span-3 text-white truncate">{e.party}</div>
@@ -1050,7 +1050,7 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
                   <h3 className="text-sm font-semibold text-white">Transactions ({allTxData.count})</h3>
                   <button onClick={exportAllTransactions}
@@ -1062,7 +1062,7 @@ export default function ReportsPage() {
                   <div className="py-10 text-center text-sm text-navy-400">No transactions in selected range</div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                       <div className="col-span-2">Date</div>
                       <div className="col-span-2">Type</div>
                       <div className="col-span-2">Ref</div>
@@ -1071,7 +1071,7 @@ export default function ReportsPage() {
                       <div className="col-span-1 text-right">Due</div>
                     </div>
                     {allTxData.entries.map((e, i) => (
-                      <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                      <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                         <div className="col-span-2 text-navy-400">{e.date}</div>
                         <div className="col-span-2 text-navy-300">{e.type}</div>
                         <div className="col-span-2 text-navy-400 truncate">{e.ref}</div>
@@ -1092,7 +1092,7 @@ export default function ReportsPage() {
       {activeReport === "party-statement" && (
         <div className="space-y-5">
           {!selectedParty ? (
-            <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+            <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
               <div className="flex items-center gap-2 border-b border-navy-800 px-4 py-3">
                 <Search className="h-4 w-4 text-navy-500" />
                 <input value={partySearch} onChange={e => setPartySearch(e.target.value)}
@@ -1141,7 +1141,7 @@ export default function ReportsPage() {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div className="rounded-xl border border-navy-800 bg-navy-900 p-4">
                       <p className="text-xs text-navy-500">Total Debit</p>
                       <p className="mt-1 text-lg font-bold text-red-400">
@@ -1162,7 +1162,7 @@ export default function ReportsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                  <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
                       <h3 className="text-sm font-semibold text-white">{selectedParty.name} — Statement</h3>
                       <button onClick={exportPartyStatement}
@@ -1174,7 +1174,7 @@ export default function ReportsPage() {
                       <div className="py-10 text-center text-sm text-navy-400">No transactions yet</div>
                     ) : (
                       <>
-                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                           <div className="col-span-2">Date</div>
                           <div className="col-span-2">Type</div>
                           <div className="col-span-3">Ref</div>
@@ -1183,7 +1183,7 @@ export default function ReportsPage() {
                           <div className="col-span-1 text-right">Balance</div>
                         </div>
                         {partyLedger.entries.map((e, i) => (
-                          <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                          <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                             <div className="col-span-2 text-navy-400">{e.date}</div>
                             <div className="col-span-2 text-navy-300">{e.type}</div>
                             <div className="col-span-3 text-navy-400 truncate">{e.ref}{e.note ? ` · ${e.note}` : ""}</div>
@@ -1240,7 +1240,7 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+              <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
                   <h3 className="text-sm font-semibold text-white">Entries ({cashHandData.entries?.length || 0})</h3>
                   <button onClick={exportCashInHand}
@@ -1252,7 +1252,7 @@ export default function ReportsPage() {
                   <div className="py-10 text-center text-sm text-navy-400">No cash transactions in selected range</div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                       <div className="col-span-2">Date</div>
                       <div className="col-span-2">Type</div>
                       <div className="col-span-3">Party</div>
@@ -1261,7 +1261,7 @@ export default function ReportsPage() {
                       <div className="col-span-1 text-right">Balance</div>
                     </div>
                     {cashHandData.entries.map((e, i) => (
-                      <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                      <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                         <div className="col-span-2 text-navy-400">{e.date}</div>
                         <div className="col-span-2 text-navy-300">{e.type}</div>
                         <div className="col-span-3 text-white truncate">{e.party}</div>
@@ -1282,7 +1282,7 @@ export default function ReportsPage() {
       {activeReport === "bank-statement" && (
         <div className="space-y-5">
           {!selectedAccount ? (
-            <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+            <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
               <div className="px-4 py-3 border-b border-navy-800">
                 <h3 className="text-sm font-semibold text-white">Select an Account</h3>
               </div>
@@ -1352,7 +1352,7 @@ export default function ReportsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                  <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-x-auto">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-navy-800">
                       <h3 className="text-sm font-semibold text-white">{bankStatement.account.account_name} — Statement</h3>
                       <button onClick={exportBankStatement}
@@ -1364,7 +1364,7 @@ export default function ReportsPage() {
                       <div className="py-10 text-center text-sm text-navy-400">No transactions in selected range</div>
                     ) : (
                       <>
-                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50">
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-navy-500 border-b border-navy-800/50 min-w-160">
                           <div className="col-span-2">Date</div>
                           <div className="col-span-2">Type</div>
                           <div className="col-span-3">Description</div>
@@ -1373,7 +1373,7 @@ export default function ReportsPage() {
                           <div className="col-span-1 text-right">Balance</div>
                         </div>
                         {bankStatement.entries.map((e, i) => (
-                          <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs">
+                          <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
                             <div className="col-span-2 text-navy-400">{e.date}</div>
                             <div className="col-span-2 text-navy-300">{e.type}</div>
                             <div className="col-span-3 text-navy-400 truncate">{e.description || e.reference || "—"}</div>

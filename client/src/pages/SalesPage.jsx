@@ -507,7 +507,11 @@ function SaleModal({ onClose, onSaved, editData }) {
       <div className="w-full max-w-3xl max-h-[95vh] flex flex-col rounded-2xl bg-navy-900 border border-navy-800 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-navy-800 p-5 shrink-0">
-          <h2 className="text-lg font-bold text-white">{editData ? "Edit Invoice" : "New Invoice"}</h2>
+          {/* editData?.id, not just editData — duplicateSale() prefills
+              editData with a copy that has its id deleted so it saves as a
+              new invoice; checking editData alone would still show "Edit
+              Invoice" for what's actually a new one. */}
+          <h2 className="text-lg font-bold text-white">{editData?.id ? "Edit Invoice" : "New Invoice"}</h2>
           <button onClick={onClose} className="text-navy-500 hover:text-white"><X size={20} /></button>
         </div>
 
@@ -1132,9 +1136,12 @@ export default function SalesPage() {
             {filtered.map(sale => (
               <div key={sale.id}
                 className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/50 hover:bg-navy-800/30 transition text-sm">
-                <div className="col-span-12 sm:col-span-2 font-semibold text-orange-400">
+                <button
+                  onClick={() => { setEditSale(sale); setShowModal(true); }}
+                  className="col-span-12 sm:col-span-2 text-left font-semibold text-orange-400 hover:underline"
+                >
                   #{sale.invoice_number || sale.id}
-                </div>
+                </button>
                 <div className="col-span-12 sm:col-span-3 text-white truncate">
                   {sale.customer_name || sale.party_name || "Walk-in"}
                 </div>

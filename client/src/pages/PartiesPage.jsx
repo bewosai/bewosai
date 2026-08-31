@@ -244,7 +244,7 @@ function LedgerModal({ party, onClose }) {
       ) : (
         <div className="space-y-4">
           {/* Summary strip */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-navy-700 bg-navy-950 p-3 text-center">
               <p className="text-xs text-navy-400">Total Debit</p>
               <p className="mt-1 font-bold text-white">{fmt(ledger.total_debit)}</p>
@@ -265,9 +265,9 @@ function LedgerModal({ party, onClose }) {
           {ledger.entries.length === 0 ? (
             <p className="py-8 text-center text-sm text-navy-400">No transactions yet.</p>
           ) : (
-            <div className="rounded-xl border border-navy-800 overflow-hidden">
+            <div className="rounded-xl border border-navy-800 overflow-x-auto">
               {/* Header */}
-              <div className="grid grid-cols-12 gap-2 bg-navy-800/60 px-4 py-2.5 text-xs font-semibold text-navy-400">
+              <div className="grid grid-cols-12 gap-2 bg-navy-800/60 px-4 py-2.5 text-xs font-semibold text-navy-400 min-w-140">
                 <div className="col-span-2">Date</div>
                 <div className="col-span-2">Type</div>
                 <div className="col-span-3">Ref</div>
@@ -279,7 +279,7 @@ function LedgerModal({ party, onClose }) {
                 const meta = ENTRY_META[e.type] || ENTRY_META.SALE;
                 const Icon = meta.icon;
                 return (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-center border-t border-navy-800/50 px-4 py-2.5 hover:bg-navy-800/20 text-sm">
+                  <div key={i} className="grid grid-cols-12 gap-2 items-center border-t border-navy-800/50 px-4 py-2.5 hover:bg-navy-800/20 text-sm min-w-140">
                     <div className="col-span-2 text-xs text-navy-400">{e.date}</div>
                     <div className="col-span-2">
                       <div className={`inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold ${meta.bg} ${meta.color}`}>

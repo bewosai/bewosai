@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRef } from "react";
 import {
-  Plus, Search, Edit2, Trash2, X, AlertCircle, ShoppingCart, Upload, Image, Eye, Printer,
+  Plus, Search, Edit2, Trash2, X, AlertCircle, ShoppingCart, Upload, Image, Eye, Printer, Copy,
 } from "lucide-react";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext";
@@ -497,7 +497,10 @@ function PurchaseModal({ onClose, onSaved, editData }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
       <div className="w-full max-w-3xl max-h-[95vh] flex flex-col rounded-2xl bg-navy-900 border border-navy-800 shadow-2xl">
         <div className="flex items-center justify-between border-b border-navy-800 p-5 shrink-0">
-          <h2 className="text-lg font-bold text-white">{editData ? "Edit Purchase" : "New Purchase"}</h2>
+          {/* editData?.id, not just editData — see SalesPage's identical
+              fix; duplicatePurchase() prefills editData with an id-less
+              copy that must still read as "New Purchase". */}
+          <h2 className="text-lg font-bold text-white">{editData?.id ? "Edit Purchase" : "New Purchase"}</h2>
           <button onClick={onClose} className="text-navy-500 hover:text-white"><X size={20} /></button>
         </div>
 
@@ -933,6 +936,24 @@ export default function PurchasesPage() {
 
   useEffect(load, []);
 
+  // The list response already includes each purchase's items (same
+  // PurchaseSerializer as the detail endpoint), so no re-fetch is needed —
+  // just prefill the form with a copy that has no id, so it saves as a new
+  // purchase (see the modal title's editData?.id check).
+  const duplicatePurchase = async (item) => {
+    const numRes = await purchasesApi.nextNumber?.();
+    const newPurchase = {
+      ...item,
+      bill_number: numRes?.data?.next_number || `COPY-${item.bill_number}`,
+      purchase_date: new Date().toISOString().slice(0, 10),
+      status: "DRAFT",
+      paid_amount: 0,
+    };
+    delete newPurchase.id;
+    setEditItem(newPurchase);
+    setShowModal(true);
+  };
+
   const thisMonth = new Date().toISOString().slice(0, 7);
   const monthPurchases = list.filter(p => (p.purchase_date || p.date || "").startsWith(thisMonth));
   const totalPurchases = monthPurchases.reduce((s, x) => s + parseFloat(x.total || 0), 0);
@@ -1040,9 +1061,12 @@ export default function PurchasesPage() {
             {filtered.map(item => (
               <div key={item.id}
                 className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/50 hover:bg-navy-800/30 transition text-sm">
-                <div className="col-span-12 sm:col-span-2 font-semibold text-orange-400">
+                <button
+                  onClick={() => { setEditItem(item); setShowModal(true); }}
+                  className="col-span-12 sm:col-span-2 text-left font-semibold text-orange-400 hover:underline"
+                >
                   #{item.bill_number || item.invoice_number || item.id}
-                </div>
+                </button>
                 <div className="col-span-12 sm:col-span-3 text-white truncate">
                   {item.supplier_name || item.party_name || "Unknown Supplier"}
                 </div>
@@ -1080,6 +1104,10 @@ export default function PurchasesPage() {
                   <button onClick={() => { setEditItem(item); setShowModal(true); }} title="Edit"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-white">
                     <Edit2 size={13} />
+                  </button>
+                  <button onClick={() => duplicatePurchase(item)} title="Duplicate Purchase"
+                    className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-orange-400">
+                    <Copy size={13} />
                   </button>
                   <button onClick={() => setDeleteItem(item)} title="Delete"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-red-400">
