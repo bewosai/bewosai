@@ -264,6 +264,19 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                                         color: AppColors.textPrimary,
                                       ),
                                     ),
+                                    // Due (or an overpaid advance) shown right
+                                    // under the total — previously only
+                                    // inferable from the badge below.
+                                    if (p.dueAmount > 0)
+                                      Text(
+                                        'Due ${Formatters.currency(p.dueAmount)}',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error),
+                                      )
+                                    else if (p.dueAmount < 0)
+                                      Text(
+                                        'Advance ${Formatters.currency(p.dueAmount.abs())}',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.success),
+                                      ),
                                     const SizedBox(height: 4),
                                     StatusBadge(label: p.status),
                                     const SizedBox(height: 4),

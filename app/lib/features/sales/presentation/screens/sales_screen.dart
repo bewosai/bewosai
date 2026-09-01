@@ -218,6 +218,20 @@ class _SalesScreenState extends State<SalesScreen> {
                                         color: AppColors.textPrimary,
                                       ),
                                     ),
+                                    // Due (or an overpaid advance) shown right
+                                    // under the total — the one number that
+                                    // actually matters day to day, previously
+                                    // only inferable from the badge below.
+                                    if (s.dueAmount > 0)
+                                      Text(
+                                        'Due ${Formatters.currency(s.dueAmount)}',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error),
+                                      )
+                                    else if (s.dueAmount < 0)
+                                      Text(
+                                        'Advance ${Formatters.currency(s.dueAmount.abs())}',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.success),
+                                      ),
                                     const SizedBox(height: 4),
                                     StatusBadge(
                                       label: s.syncError != null
