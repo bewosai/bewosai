@@ -179,13 +179,18 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            s!.invoiceNumber,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
+                          Flexible(
+                            child: Text(
+                              s!.invoiceNumber,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 8),
                           StatusBadge(
                             label: s.isOverdue ? 'OVERDUE' : s.status,
                           ),
@@ -354,7 +359,13 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                             'Payment Method: ',
                             style: TextStyle(color: AppColors.textSecondary),
                           ),
-                          Text(s.paymentMethod),
+                          Flexible(
+                            child: Text(
+                              s.paymentMethod,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
                         ],
                       ),
                     ],

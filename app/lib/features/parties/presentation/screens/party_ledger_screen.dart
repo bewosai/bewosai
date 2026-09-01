@@ -188,11 +188,15 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
                                             color: AppColors.navy500,
                                           ),
                                           const SizedBox(width: 6),
-                                          Text(
-                                            e.ref,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 12,
+                                          Flexible(
+                                            child: Text(
+                                              e.ref,
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 1,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 12,
+                                              ),
                                             ),
                                           ),
                                         ],

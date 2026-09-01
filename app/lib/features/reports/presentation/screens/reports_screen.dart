@@ -645,11 +645,15 @@ class _DayBookTabState extends State<_DayBookTab> {
                                   color: AppColors.navy500,
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
-                                  e.ref,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+                                Flexible(
+                                  child: Text(
+                                    e.ref,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ],
