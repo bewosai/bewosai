@@ -138,6 +138,29 @@ function UserDetailModal({ user: u, onClose, onAction }) {
   const [userActivity, setUserActivity] = useState([]);
   const [userActivityLoading, setUserActivityLoading] = useState(true);
   const [summary, setSummary] = useState(null);
+  const [userBusinesses, setUserBusinesses] = useState([]);
+  const [businessActing, setBusinessActing] = useState(null);
+
+  const loadBusinesses = () => {
+    adminApi.businesses({ owner: u.id, page_size: 50 })
+      .then(r => setUserBusinesses(r.data?.results ?? r.data ?? []))
+      .catch(() => setUserBusinesses([]));
+  };
+  useEffect(loadBusinesses, [u.id]);
+
+  const doBusinessAction = async (bizId, action) => {
+    setBusinessActing(bizId);
+    try {
+      await adminApi.businessAction(bizId, action);
+      loadBusinesses();
+    } catch {
+      // Surfaced well enough by the plan/status just not changing — this
+      // panel doesn't have its own error banner, matching how compact the
+      // rest of the business row is.
+    } finally {
+      setBusinessActing(null);
+    }
+  };
 
   useEffect(() => {
     adminApi.userLoginActivity(u.id, { page_size: 500 })
@@ -243,6 +266,37 @@ function UserDetailModal({ user: u, onClose, onAction }) {
             <p className="mt-2 border-t border-navy-800 pt-2 text-center text-[11px] text-navy-500">
               Business limit: {summary.business_limit_override ?? "plan default"} · currently owns {summary.business_count}
             </p>
+          </div>
+        )}
+
+        {/* This user's business(es) and plan — upgrade/downgrade directly
+            here instead of having to find the same business again in the
+            Businesses tab. */}
+        {userBusinesses.length > 0 && (
+          <div className="mb-5 space-y-2">
+            <p className="text-xs font-semibold text-navy-400">Business & Plan</p>
+            {userBusinesses.map(biz => (
+              <div key={biz.id} className="flex items-center justify-between gap-2 rounded-xl border border-navy-800 bg-navy-950 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">{biz.name}</p>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <Badge label={biz.plan} color={biz.plan === "PREMIUM" ? "yellow" : "gray"} />
+                    <Badge label={biz.status} color={biz.status === "ACTIVE" ? "green" : "red"} />
+                  </div>
+                </div>
+                {biz.plan === "FREE" ? (
+                  <button disabled={businessActing === biz.id} onClick={() => doBusinessAction(biz.id, "upgrade")}
+                    className="flex shrink-0 items-center gap-1 rounded-lg border border-yellow-500/30 px-2.5 py-1.5 text-xs text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50">
+                    <Crown className="h-3.5 w-3.5" /> Upgrade
+                  </button>
+                ) : (
+                  <button disabled={businessActing === biz.id} onClick={() => doBusinessAction(biz.id, "downgrade")}
+                    className="shrink-0 rounded-lg border border-navy-700 px-2.5 py-1.5 text-xs text-navy-400 hover:bg-navy-800 disabled:opacity-50">
+                    Downgrade
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         )}
 

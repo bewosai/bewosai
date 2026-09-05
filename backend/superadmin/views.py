@@ -73,12 +73,17 @@ class BusinessManagementView(APIView):
         plan = request.query_params.get("plan")
         status_filter = request.query_params.get("status")
         search = request.query_params.get("search", "")
+        owner = request.query_params.get("owner")
 
         qs = Business.objects.select_related("owner").order_by("-created_at")
         if plan:
             qs = qs.filter(plan=plan)
         if status_filter:
             qs = qs.filter(status=status_filter)
+        if owner:
+            # Lets Super Admin's Users tab show/manage a user's plan(s)
+            # without switching to the Businesses tab and searching there.
+            qs = qs.filter(owner_id=owner)
         if search:
             # Business's own name/phone/email, or its owner's — so Super
             # Admin can find a business from whichever detail they have on
