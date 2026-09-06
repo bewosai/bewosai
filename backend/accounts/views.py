@@ -10,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from bewosai.email import send_otp_email
+from bewosai.sms import send_otp_sms
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, get_platform, require_feature, require_staff_permission
 from bewosai.utils import get_bid, get_business, mask_email
 from .models import User, Business, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
@@ -33,6 +34,22 @@ def api_response(success, message, status_code, **extra):
     return Response({"success": success, "message": message, **extra}, status=status_code)
 
 
+def _nepal_local_number(identifier):
+    """
+    Sparrow SMS only delivers to bare 10-digit Nepali mobile numbers.
+    Returns that 10-digit string for a +977 (or country-code-less, assumed
+    domestic) number, or None if `identifier` isn't a Nepal number — in
+    which case the caller falls back to emailing the code instead, since no
+    SMS gateway on file can reach it.
+    """
+    digits = identifier.lstrip("+")
+    if digits.startswith("977") and len(digits) == 13:
+        digits = digits[3:]
+    if len(digits) == 10 and digits.isdigit():
+        return digits
+    return None
+
+
 def _first_error(errors):
     """Flatten DRF's {field: [messages]} error dict into one readable string."""
     for field, messages in errors.items():
@@ -54,12 +71,12 @@ class SendOTPView(APIView):
         is_signup = serializer.validated_data["is_signup"]
         is_phone = "@" not in identifier
         via_phone_display = None
+        nepal_local = None
 
         if is_phone:
-            # No SMS provider is wired up yet, so a phone number only ever
-            # works as a lookup key for an *existing* account — the code
-            # still has to go out over email, to whichever address that
-            # account already has on file.
+            # A phone number only ever works as a lookup key for an
+            # *existing* account (signing up needs an email — phone alone
+            # can't create an account since email is the account's identity)
             if is_signup:
                 return api_response(
                     False, "Signing up with a phone number isn't available yet — please use your email.",
@@ -69,7 +86,12 @@ class SendOTPView(APIView):
             if not existing:
                 return api_response(False, "No account found with that phone number.", status.HTTP_404_NOT_FOUND)
             email = existing.email
-            via_phone_display = mask_email(email)
+            # Sparrow SMS (our gateway) only delivers to Nepali numbers — for
+            # anything else the code still has to go out over email, to
+            # whichever address that account already has on file.
+            nepal_local = _nepal_local_number(identifier)
+            if not nepal_local:
+                via_phone_display = mask_email(email)
         else:
             email = identifier
             existing = User.objects.filter(email=email).first()
@@ -97,21 +119,24 @@ class SendOTPView(APIView):
         # log — the client always got "success": true even when no email
         # ever went out, which made real delivery failures undebuggable from
         # the app. The extra second or two of latency is worth the honesty.
-        if not send_otp_email(email, code):
-            logger.error("Failed to send OTP email to %s", email)
-            otp.delete()
-            return api_response(
-                False,
-                "Couldn't send the verification email right now. Please try again in a moment.",
-                status.HTTP_502_BAD_GATEWAY,
-            )
+        if nepal_local:
+            sent = send_otp_sms(nepal_local, code)
+            fail_message = "Couldn't send the verification SMS right now. Please try again in a moment."
+        else:
+            sent = send_otp_email(email, code)
+            fail_message = "Couldn't send the verification email right now. Please try again in a moment."
 
-        logger.info("OTP sent for %s (new_account=%s, via_phone=%s)", email, existing is None, is_phone)
+        if not sent:
+            logger.error("Failed to send OTP via %s to %s", "SMS" if nepal_local else "email", email if not nepal_local else nepal_local)
+            otp.delete()
+            return api_response(False, fail_message, status.HTTP_502_BAD_GATEWAY)
+
+        logger.info("OTP sent for %s (new_account=%s, via_phone=%s, sms=%s)", email, existing is None, is_phone, bool(nepal_local))
 
         message = (
-            f"We don't have SMS set up yet, so we've sent your code to {via_phone_display} instead."
-            if via_phone_display else
-            f"OTP sent to {email}. Valid for 10 minutes."
+            "OTP sent to your phone. Valid for 10 minutes." if nepal_local
+            else f"We've sent your code to {via_phone_display} instead." if via_phone_display
+            else f"OTP sent to {email}. Valid for 10 minutes."
         )
         return api_response(
             True, message, status.HTTP_200_OK,

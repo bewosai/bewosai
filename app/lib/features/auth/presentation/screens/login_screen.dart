@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/country_codes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
@@ -12,8 +13,9 @@ import '../providers/auth_provider.dart';
 ///
 /// Flow (no Navigator.push from this screen):
 /// 1. Step 0 — email or phone → AuthProvider.sendOtp (phone only works for
-///    an existing account, and the code still goes out by email — see
-///    SendOTPView; there's no SMS provider wired up yet)
+///    an existing account — signing up still needs an email. A Nepal
+///    (+977) phone is delivered via Sparrow SMS; any other country code
+///    falls back to emailing the code to that account's address on file.)
 /// 2. Step 1 — 6-digit OTP (+ name if new user) → AuthProvider.verifyOtp
 /// 3. On success AuthProvider sets:
 ///      • AuthStatus.ready         → root shows Dashboard
@@ -29,12 +31,15 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailFormKey = GlobalKey<FormState>();
   final _otpFormKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
   final _nameController = TextEditingController();
   final _otpFocus = FocusNode();
 
   /// 0 = email, 1 = OTP
   int _step = 0;
+  bool _phoneMode = false;
+  String _countryCode = kCountryCodes.first.code;
   bool _remember = true;
   bool _isNewUserFlow = false;
   int _cooldown = 0;
@@ -61,6 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _timer?.cancel();
     _wakingHintTimer?.cancel();
     _emailController.dispose();
+    _phoneController.dispose();
     _otpController.dispose();
     _nameController.dispose();
     _otpFocus.dispose();
@@ -87,7 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final auth = context.read<AuthProvider>();
-    final identifier = _emailController.text.trim();
+    final identifier = _phoneMode
+        ? '$_countryCode${_phoneController.text.trim()}'
+        : _emailController.text.trim();
 
     _startWakingHint();
     final ok = await auth.sendOtp(identifier, isSignup: isSignup);
@@ -238,9 +246,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 6),
                       Text(
                         _step == 0
-                            ? 'Sign in or create an account with your email'
+                            ? (_phoneMode
+                                ? 'Sign in with your phone number'
+                                : 'Sign in or create an account with your email')
                             : (auth.pendingOtpMessage ??
-                                'We sent a 6-digit code to ${_emailController.text.trim()}'),
+                                (_phoneMode
+                                    ? 'We sent a 6-digit code to your phone.'
+                                    : 'We sent a 6-digit code to ${_emailController.text.trim()}')),
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 14,
@@ -280,29 +292,130 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Widget _modeTab(String label, IconData icon, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(11),
+          boxShadow: selected
+              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: selected ? AppColors.orange : AppColors.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: selected ? AppColors.textPrimary : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmailStep(AuthProvider auth) {
     return Form(
       key: _emailFormKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Phone sign-in is disabled for now (see validators.dart) — to
-          // re-enable, restore labelText/autofillHints below and swap the
-          // validator back to Validators.emailOrPhone.
-          TextFormField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.email],
-            decoration: const InputDecoration(
-              labelText: 'Email address',
-              prefixIcon: Icon(Icons.mail_outline),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.navy50,
+              borderRadius: BorderRadius.circular(14),
             ),
-            validator: Validators.email,
-            onFieldSubmitted: (_) {
-              if (!auth.isLoading) _sendOtp();
-            },
+            child: Row(
+              children: [
+                Expanded(child: _modeTab('Email', Icons.mail_outline, !_phoneMode, () => setState(() => _phoneMode = false))),
+                Expanded(child: _modeTab('Phone', Icons.phone_outlined, _phoneMode, () => setState(() => _phoneMode = true))),
+              ],
+            ),
           ),
+          const SizedBox(height: 16),
+          if (_phoneMode) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 56,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.3)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _countryCode,
+                      items: kCountryCodes
+                          .map((c) => DropdownMenuItem(
+                                value: c.code,
+                                child: Text('${c.flag} ${c.code}'),
+                              ))
+                          .toList(),
+                      onChanged: (v) => setState(() => _countryCode = v ?? _countryCode),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.telephoneNumber],
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: 'Phone number',
+                      hintText: '9812345678',
+                    ),
+                    validator: (v) {
+                      final digits = v?.trim() ?? '';
+                      if (digits.length < 7 || digits.length > 15) {
+                        return 'Enter a valid phone number';
+                      }
+                      return null;
+                    },
+                    onFieldSubmitted: (_) {
+                      if (!auth.isLoading) _sendOtp();
+                    },
+                  ),
+                ),
+              ],
+            ),
+            if (_countryCode != '+977') ...[
+              const SizedBox(height: 8),
+              Text(
+                "SMS delivery is only available for Nepal numbers — for other countries we'll email the code to this account's address on file instead.",
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+            ],
+          ] else
+            TextFormField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.email],
+              decoration: const InputDecoration(
+                labelText: 'Email address',
+                prefixIcon: Icon(Icons.mail_outline),
+              ),
+              validator: Validators.email,
+              onFieldSubmitted: (_) {
+                if (!auth.isLoading) _sendOtp();
+              },
+            ),
           const SizedBox(height: 20),
           PrimaryButton(
             label: 'Continue',
@@ -319,13 +432,15 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          Center(
-            child: TextButton(
-              onPressed: auth.isLoading ? null : () => _sendOtp(isSignup: true),
-              child: const Text('New here? Create an account'),
+          if (!_phoneMode) ...[
+            const SizedBox(height: 12),
+            Center(
+              child: TextButton(
+                onPressed: auth.isLoading ? null : () => _sendOtp(isSignup: true),
+                child: const Text('New here? Create an account'),
+              ),
             ),
-          ),
+          ],
           if (auth.googleSignInAvailable) ...[
             const SizedBox(height: 8),
             Row(
@@ -474,7 +589,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               TextButton(
                 onPressed: auth.isLoading ? null : _goBackToEmail,
-                child: const Text('Change email'),
+                child: Text(_phoneMode ? 'Change number' : 'Change email'),
               ),
               TextButton(
                 onPressed: _cooldown > 0 || auth.isLoading

@@ -51,6 +51,13 @@ services:
       # GOOGLE_WEB_CLIENT_ID the Flutter app is built with).
       - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false
+      # Optional — leave blank to have Nepal (+977) phone-login OTPs print to
+      # the Render log instead of sending real SMS. Set from the Sparrow SMS
+      # dashboard (sparrowsms.com).
+      - key: SPARROW_TOKEN
+        sync: false
+      - key: SPARROW_IDENTITY
+        sync: false
 
   # Independent copy of the backend for testing changes against its own
   # database before they reach production — same code, same build/start
@@ -91,4 +98,8 @@ services:
       - key: CLOUDINARY_URL
         sync: false
       - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: SPARROW_TOKEN
+        sync: false
+      - key: SPARROW_IDENTITY
         sync: false

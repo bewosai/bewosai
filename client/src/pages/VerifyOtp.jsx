@@ -12,11 +12,12 @@ export default function VerifyOtpPage() {
   const location = useLocation();
 
   const identifier = location.state?.identifier;
+  const isPhone = identifier ? !identifier.includes("@") : false;
   const initialUserExists = location.state?.userExists ?? false;
   const initialAccountType = location.state?.accountType;
-  // The backend's own message — e.g. "sent to j***@example.com instead"
-  // when the user typed a phone number and it got resolved to whatever
-  // email that account has on file, since there's no SMS provider yet.
+  // The backend's own message — e.g. "OTP sent to your phone" for a Nepal
+  // number via Sparrow SMS, or "sent to j***@example.com instead" when the
+  // phone isn't one Sparrow can reach and it fell back to email.
   const initialMessage = location.state?.message;
 
   const [step, setStep] = useState(2); // 2=otp, 3=profile (new users only)
@@ -161,13 +162,20 @@ export default function VerifyOtpPage() {
                 </button>
 
                 <div className="mb-5 text-center">
-                  <h2 className="text-xl font-bold text-white">Check your email</h2>
+                  <h2 className="text-xl font-bold text-white">
+                    {isPhone ? "Check your phone" : "Check your email"}
+                  </h2>
                   <p className="mt-1.5 text-sm text-navy-400">
-                    {/* Phone sign-in is disabled for now (see Login.jsx) — when
-                        re-enabled, restore the identifier.includes("@") branch
-                        that falls back to the backend's own delivery message
-                        instead of showing a raw phone number here. */}
-                    We sent a 6-digit code to<br /><span className="font-semibold text-white">{identifier}</span>
+                    {isPhone ? (
+                      // Backend's own message covers both cases: delivered by
+                      // SMS ("OTP sent to your phone") or, for a non-Nepal
+                      // number, "sent to j***@example.com instead" — showing
+                      // the raw identifier here would leak the phone number
+                      // right back or contradict an email fallback.
+                      initialMessage || "We sent a 6-digit code to your phone."
+                    ) : (
+                      <>We sent a 6-digit code to<br /><span className="font-semibold text-white">{identifier}</span></>
+                    )}
                   </p>
                 </div>
 

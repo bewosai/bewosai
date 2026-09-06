@@ -259,6 +259,14 @@ EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
 # google_sign_in setup must use a client tied to the same GCP project.
 GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
 
+# Sparrow SMS (sparrowsms.com) — Nepal-only SMS gateway used to deliver OTP
+# codes to +977 phone numbers. SPARROW_TOKEN is the plain v2 API token (from
+# the Sparrow dashboard); leave blank to fall back to console logging (dev).
+# SPARROW_IDENTITY is the approved sender/purchased identity name shown in
+# the dashboard (defaults to "Bewosai" — must match what Sparrow issued you).
+SPARROW_TOKEN = config("SPARROW_TOKEN", default="")
+SPARROW_IDENTITY = config("SPARROW_IDENTITY", default="Bewosai")
+
 # Auto-select backend: SMTP when Gmail credentials present, console otherwise
 EMAIL_BACKEND = (
     "django.core.mail.backends.smtp.EmailBackend"

@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import bewosaiLogo from "../assessts/images/bewosai.png";
-import { Mail, ArrowRight, TrendingUp, Package, Users, BarChart3, Check } from "lucide-react";
+import { Mail, Phone, ArrowRight, TrendingUp, Package, Users, BarChart3, Check } from "lucide-react";
 import { Steps } from "../components/auth/AuthWidgets";
+import { COUNTRY_CODES } from "../constants/countryCodes";
 
 /* ─── Login page — email entry (sign-in, or step 2 of the signup flow) ─── */
 export default function LoginPage() {
@@ -15,6 +16,11 @@ export default function LoginPage() {
   const accountType = location.state?.accountType;
 
   const [identifier, setIdentifier] = useState("");
+  // Phone sign-in — existing accounts only, one Nepal SMS gateway (Sparrow)
+  // backing delivery. Signing up still requires an email (see
+  // accounts/views.py — a phone alone can't create an account).
+  const [mode, setMode] = useState("email"); // "email" | "phone"
+  const [countryCode, setCountryCode] = useState(COUNTRY_CODES[0].code);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -25,28 +31,31 @@ export default function LoginPage() {
   }, [isLoggedIn]);
 
   const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-  // Phone sign-in is built end-to-end (backend resolves either kind of
-  // `identifier` — see accounts/views.py) but disabled here for now until
-  // it's ready to ship. To re-enable: uncomment isValidPhone below plus the
-  // matching bits in handleSendOtp and the input field/labels beneath it.
-  // const isValidPhone = (v) => /^\+?\d{7,15}$/.test(v);
+  const isValidPhone = (v) => /^\d{7,15}$/.test(v);
 
   const handleSendOtp = async (e) => {
     e?.preventDefault();
     setError(""); setInfo("");
     const trimmed = identifier.trim();
-    const normalized = trimmed.toLowerCase();
 
-    // const valid = isSignup ? isValidEmail(normalized) : (isValidEmail(normalized) || isValidPhone(normalized));
-    const valid = isValidEmail(normalized);
-    if (!normalized || !valid) {
-      // setError(isSignup ? "Please enter a valid email address." : "Please enter a valid email address or phone number.");
-      setError("Please enter a valid email address.");
-      return;
+    let toSend;
+    if (mode === "phone") {
+      if (!isValidPhone(trimmed)) {
+        setError("Enter a valid phone number.");
+        return;
+      }
+      toSend = `${countryCode}${trimmed}`;
+    } else {
+      toSend = trimmed.toLowerCase();
+      if (!toSend || !isValidEmail(toSend)) {
+        setError("Please enter a valid email address.");
+        return;
+      }
     }
-    const res = await sendOtp(normalized, isSignup);
+
+    const res = await sendOtp(toSend, isSignup);
     if (res.ok) {
-      navigate("/verify-otp", { state: { identifier: normalized, userExists: res.userExists, accountType, message: res.message } });
+      navigate("/verify-otp", { state: { identifier: toSend, userExists: res.userExists, accountType, message: res.message } });
     } else {
       setError(res.error);
       // If the email already exists and they tried to sign up, hint to switch mode
@@ -108,25 +117,85 @@ export default function LoginPage() {
                 <p className="mt-1.5 text-sm text-navy-400">
                   {isSignup
                     ? "Enter your Gmail or email to get started"
+                    : mode === "phone"
+                    ? "Enter your phone number to receive a sign-in code"
                     : "Enter your email to receive a sign-in code"}
                 </p>
               </div>
 
-              <div className="relative mb-4">
-                <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
-                <input
-                  id="identifier"
-                  name="email"
-                  type="email"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="your@email.com"
-                  autoFocus
-                  autoComplete="email"
-                  inputMode="email"
-                  className="w-full rounded-2xl border border-navy-700 bg-navy-950 py-4 pl-11 pr-4 text-base text-white outline-none transition placeholder:text-navy-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
-                />
-              </div>
+              {!isSignup && (
+                <div className="mb-4 flex rounded-2xl bg-navy-950 p-1">
+                  {[
+                    { key: "email", label: "Email", Icon: Mail },
+                    { key: "phone", label: "Phone", Icon: Phone },
+                  ].map(({ key, label, Icon }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => { setMode(key); setIdentifier(""); setError(""); }}
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition ${
+                        mode === key ? "bg-orange-500 text-white" : "text-navy-400 hover:text-white"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" /> {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {mode === "phone" && !isSignup ? (
+                <div className="mb-4 flex gap-2">
+                  <select
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    aria-label="Country code"
+                    className="rounded-2xl border border-navy-700 bg-navy-950 px-2 text-sm text-white outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                  >
+                    {COUNTRY_CODES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.flag} {c.code}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="relative flex-1">
+                    <Phone className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
+                    <input
+                      id="identifier"
+                      name="phone"
+                      type="tel"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value.replace(/\D/g, ""))}
+                      placeholder="9812345678"
+                      autoFocus
+                      autoComplete="tel-national"
+                      inputMode="numeric"
+                      className="w-full rounded-2xl border border-navy-700 bg-navy-950 py-4 pl-11 pr-4 text-base text-white outline-none transition placeholder:text-navy-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="relative mb-4">
+                  <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
+                  <input
+                    id="identifier"
+                    name="email"
+                    type="email"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="your@email.com"
+                    autoFocus
+                    autoComplete="email"
+                    inputMode="email"
+                    className="w-full rounded-2xl border border-navy-700 bg-navy-950 py-4 pl-11 pr-4 text-base text-white outline-none transition placeholder:text-navy-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                  />
+                </div>
+              )}
+
+              {mode === "phone" && !isSignup && countryCode !== "+977" && (
+                <p className="-mt-2 mb-4 text-xs text-navy-500">
+                  SMS delivery is only available for Nepal numbers — for other countries we'll email the code to this account's address on file instead.
+                </p>
+              )}
 
               <button
                 type="submit"
