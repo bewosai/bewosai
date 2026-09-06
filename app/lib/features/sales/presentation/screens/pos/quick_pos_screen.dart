@@ -64,6 +64,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   final _discountPctController = TextEditingController(text: '0');
   final _taxRateController = TextEditingController(text: '13');
   final _paidController = TextEditingController(text: '0');
+  final _cashAmountController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
 
   Party? _customer;
@@ -136,6 +137,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
           : sale.taxRate.toString();
     }
     _paidController.text = sale.paidAmount.toString();
+    _cashAmountController.text = sale.cashAmount.toString();
     _creditSale = sale.dueAmount > 0;
     _notesController.text = sale.notes;
     _discountPctController.text = sale.subtotal > 0
@@ -174,6 +176,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     _discountPctController.dispose();
     _taxRateController.dispose();
     _paidController.dispose();
+    _cashAmountController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -186,6 +189,8 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   double get _taxAmount => _vatEnabled ? _taxable * _taxRate / 100 : 0;
   double get _total => _taxable + _taxAmount;
   double get _paid => double.tryParse(_paidController.text) ?? 0;
+  double get _cashAmount =>
+      (double.tryParse(_cashAmountController.text) ?? 0).clamp(0, _paid);
   // Not clamped to 0 — matches the backend's due_amount exactly (total - paid),
   // which goes negative on overpayment. Clamping here would hide a genuine
   // advance/credit balance from the user while they're filling out the form.
@@ -469,6 +474,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       dueAmount: _balanceDue,
       paymentMethod: _paymentMethod,
       bankAccount: _paymentMethod != 'CASH' ? _bankAccountId : null,
+      cashAmount: _paymentMethod == 'SPLIT' ? _cashAmount : 0,
       status: status,
       saleType: 'SALE',
       notes: _notesController.text.trim(),
@@ -826,7 +832,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                               decoration: const InputDecoration(
                                 labelText: 'Method',
                               ),
-                              items: AppConstants.paymentMethods
+                              items: AppConstants.paymentMethodsWithSplit
                                   .map(
                                     (m) => DropdownMenuItem(
                                       value: m,
@@ -887,6 +893,22 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                               onChanged: (v) => setState(() => _bankAccountId = v),
                             );
                           },
+                        ),
+                      ],
+                      if (_paymentMethod == 'SPLIT') ...[
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _cashAmountController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Cash Amount',
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Rest goes to the bank account above — ${Formatters.currency((_paid - _cashAmount).clamp(0, _paid))}',
+                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                         ),
                       ],
                       const SizedBox(height: 10),

@@ -7,6 +7,7 @@ export const PAYMENT_METHODS = [
   { value: "MOBILE",       label: "Mobile Banking" },
   { value: "CHEQUE",       label: "Cheque" },
   { value: "CREDIT",       label: "Credit" },
+  { value: "SPLIT",        label: "Split (Cash + Bank)" },
 ];
 
 export const PAYMENT_METHOD_LABELS = Object.fromEntries(

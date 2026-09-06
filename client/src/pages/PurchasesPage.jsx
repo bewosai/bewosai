@@ -31,6 +31,7 @@ const PAYMENT_METHODS = [
   { value: "BANK", label: "Bank" },
   { value: "ESEWA", label: "eSewa" },
   { value: "KHALTI", label: "Khalti" },
+  { value: "SPLIT", label: "Split (Cash + Bank)" },
 ];
 const STATUS_COLORS = {
   CONFIRMED: "bg-green-500/10 text-green-400",
@@ -53,6 +54,7 @@ const EMPTY_FORM = {
   paid_amount: 0,
   payment_method: "CASH",
   bank_account: "",
+  cash_amount: 0,
   notes: "",
   status: "CONFIRMED",
 };
@@ -345,6 +347,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
     paid_amount: editData.paid_amount || 0,
     payment_method: editData.payment_method || "CASH",
     bank_account: editData.bank_account || "",
+    cash_amount: editData.cash_amount || 0,
     notes: editData.notes || "",
     status: editData.status || "CONFIRMED",
   } : { ...EMPTY_FORM, items: [{ ...EMPTY_ITEM }], tax_rate: currentBusiness?.default_tax_rate ?? 0 });
@@ -466,6 +469,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
         due_date: form.due_date || null,
         status: statusOverride || form.status,
         bank_account: form.payment_method === "CASH" ? null : form.bank_account,
+        cash_amount: form.payment_method === "SPLIT" ? (form.cash_amount || 0) : 0,
         discount: discountAmount.toFixed(2),
         tax_rate: taxRate.toFixed(2),
         subtotal: subtotal.toFixed(2),
@@ -805,6 +809,19 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                         ))}
                       </select>
                     )}
+                  </div>
+                )}
+                {form.payment_method === "SPLIT" && (
+                  <div>
+                    <label className="text-xs text-navy-400 block mb-1">Cash Amount</label>
+                    <input type="number" min="0" max={form.paid_amount}
+                      className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none text-sm"
+                      value={form.cash_amount}
+                      onChange={e => setForm(f => ({ ...f, cash_amount: Math.max(0, Math.min(parseFloat(e.target.value) || 0, f.paid_amount)) }))}
+                    />
+                    <p className="mt-1 text-[11px] text-navy-500">
+                      Rest paid from the bank account above — Rs. {Math.max(0, (parseFloat(form.paid_amount) || 0) - (parseFloat(form.cash_amount) || 0)).toFixed(2)}
+                    </p>
                   </div>
                 )}
                 <div className="flex justify-between font-semibold text-orange-400 border-t border-navy-700 pt-2">

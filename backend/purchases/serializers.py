@@ -36,7 +36,7 @@ class PurchaseSerializer(serializers.ModelSerializer):
         fields = ["id", "bill_number", "supplier", "supplier_name", "supplier_phone", "supplier_pan",
                   "supplier_address", "purchase_date", "due_date",
                   "subtotal", "discount", "tax_rate", "tax_amount", "total", "paid_amount", "due_amount",
-                  "payment_method", "bank_account", "status", "notes", "bill_image", "bill_image_url",
+                  "payment_method", "bank_account", "cash_amount", "status", "notes", "bill_image", "bill_image_url",
                   "is_deleted", "items", "created_at"]
         read_only_fields = ["tax_amount", "total", "due_amount", "created_at", "bill_image_url",
                             "supplier_name", "supplier_phone", "supplier_pan", "supplier_address"]
@@ -49,6 +49,13 @@ class PurchaseSerializer(serializers.ModelSerializer):
         bank_account = data.get("bank_account")
         if bank_account is not None and bank_account.business_id != business.id:
             raise serializers.ValidationError({"bank_account": "Invalid account for this business."})
+        if data.get("payment_method") == Purchase.METHOD_SPLIT:
+            if not bank_account:
+                raise serializers.ValidationError({"bank_account": "Select which account the bank portion of a split payment should hit."})
+            cash_amount = data.get("cash_amount") or Decimal("0")
+            paid_amount = data.get("paid_amount") or Decimal("0")
+            if cash_amount < 0 or cash_amount > paid_amount:
+                raise serializers.ValidationError({"cash_amount": "Cash amount must be between 0 and the total amount paid."})
         for item in data.get("items", []):
             product = item.get("product")
             if product is not None and product.business_id != business.id:
@@ -64,11 +71,19 @@ class PurchaseSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def _sync_bank(purchase):
+        # A SPLIT payment only banks the non-cash remainder — the cash
+        # portion (purchase.cash_amount) never touches the bank account.
+        if purchase.payment_method == Purchase.METHOD_SPLIT:
+            bank_amount = purchase.paid_amount - purchase.cash_amount
+        elif purchase.payment_method != "CASH":
+            bank_amount = purchase.paid_amount
+        else:
+            bank_amount = 0
         sync_bank_transaction(
             reference=f"PURCHASE-{purchase.id}",
             bank_account=purchase.bank_account if purchase.payment_method != "CASH" else None,
             transaction_type="DEBIT",
-            amount=purchase.paid_amount,
+            amount=bank_amount,
             date=purchase.purchase_date,
             description=f"Purchase {purchase.bill_number}" + (f" — {purchase.supplier.name}" if purchase.supplier_id else ""),
             created_by=purchase.created_by,

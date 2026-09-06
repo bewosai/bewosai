@@ -17,11 +17,13 @@ class Purchase(models.Model):
     METHOD_BANK   = "BANK"
     METHOD_ESEWA  = "ESEWA"
     METHOD_KHALTI = "KHALTI"
+    METHOD_SPLIT  = "SPLIT"
     METHOD_CHOICES = [
         (METHOD_CASH,   "Cash"),
         (METHOD_BANK,   "Bank"),
         (METHOD_ESEWA,  "eSewa"),
         (METHOD_KHALTI, "Khalti"),
+        (METHOD_SPLIT,  "Split (Cash + Bank)"),
     ]
 
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="purchases")
@@ -40,6 +42,12 @@ class Purchase(models.Model):
         related_name="purchases",
         help_text="Which account paid_amount was paid from when payment_method is non-cash — "
                    "a matching BankTransaction is kept in sync automatically.",
+    )
+    cash_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0,
+        help_text="Cash portion of paid_amount when payment_method is SPLIT — the "
+                   "remainder (paid_amount - cash_amount) is paid from bank_account "
+                   "instead. Unused (0) for every other payment method.",
     )
     reconciled_amount = models.DecimalField(
         max_digits=14, decimal_places=2, default=0,

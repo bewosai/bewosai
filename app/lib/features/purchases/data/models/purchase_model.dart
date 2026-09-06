@@ -68,6 +68,10 @@ class Purchase {
   final double dueAmount;
   final String paymentMethod;
   final int? bankAccount;
+  // Cash portion of paidAmount when paymentMethod is 'SPLIT' — the
+  // remainder (paidAmount - cashAmount) is paid from bankAccount. Unused
+  // (0) for every other payment method.
+  final double cashAmount;
   final String status;
   final String notes;
   final String? billImage;
@@ -94,6 +98,7 @@ class Purchase {
     required this.dueAmount,
     required this.paymentMethod,
     this.bankAccount,
+    this.cashAmount = 0,
     required this.status,
     required this.notes,
     this.billImage,
@@ -121,6 +126,7 @@ class Purchase {
         dueAmount: Formatters.toDouble(json['due_amount']),
         paymentMethod: json['payment_method'] as String? ?? 'CASH',
         bankAccount: json['bank_account'] as int?,
+        cashAmount: Formatters.toDouble(json['cash_amount']),
         status: json['status'] as String? ?? 'CONFIRMED',
         notes: json['notes'] as String? ?? '',
         billImage: json['bill_image'] as String?,
@@ -141,6 +147,7 @@ class Purchase {
         'paid_amount': paidAmount,
         'payment_method': paymentMethod,
         'bank_account': bankAccount,
+        'cash_amount': paymentMethod == 'SPLIT' ? cashAmount : 0,
         'status': status,
         'notes': notes,
         'items': items.map((e) => e.toJson()).toList(),

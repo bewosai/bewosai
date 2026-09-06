@@ -52,13 +52,18 @@ class AppConstants {
 
   static const String defaultCurrency = 'Rs.';
 
-  // Payment methods — sales.Sale / parties.PartyPayment METHOD_CHOICES
+  // Payment methods — sales.Sale / parties.PartyPayment / expenses.Expense
+  // METHOD_CHOICES. SPLIT is sales.Sale / purchases.Purchase only (they're
+  // the only models with a cash_amount field) — use
+  // [paymentMethodsWithSplit] for those two forms, not this list.
   static const List<String> paymentMethods = ['CASH', 'BANK', 'ESEWA', 'KHALTI'];
+  static const List<String> paymentMethodsWithSplit = ['CASH', 'BANK', 'ESEWA', 'KHALTI', 'SPLIT'];
   static const Map<String, String> paymentMethodLabels = {
     'CASH': 'Cash',
     'BANK': 'Bank',
     'ESEWA': 'eSewa',
     'KHALTI': 'Khalti',
+    'SPLIT': 'Split (Cash + Bank)',
   };
 
   // Bank account types — banking.BankAccount TYPE_CHOICES

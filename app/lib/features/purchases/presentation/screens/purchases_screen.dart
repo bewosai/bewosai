@@ -357,6 +357,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
   final _billNumberController = TextEditingController();
   final _taxRateController = TextEditingController(text: '13');
   final _paidController = TextEditingController(text: '0');
+  final _cashAmountController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
   bool _vatEnabled = false;
   Party? _supplier;
@@ -387,6 +388,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
         _paymentMethod = p.paymentMethod;
         _bankAccountId = p.bankAccount;
         _paidController.text = p.paidAmount.toString();
+        _cashAmountController.text = p.cashAmount.toString();
         _creditSale = p.dueAmount > 0;
         _notesController.text = p.notes;
         _billImageUrl = p.billImageUrl;
@@ -438,6 +440,8 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
   double get _taxAmount => _vatEnabled ? _subtotal * _taxRate / 100 : 0;
   double get _total => _subtotal + _taxAmount;
   double get _paid => double.tryParse(_paidController.text) ?? 0;
+  double get _cashAmount =>
+      (double.tryParse(_cashAmountController.text) ?? 0).clamp(0, _paid);
   // Not clamped — matches the backend's due_amount exactly (total - paid),
   // which goes negative on overpayment rather than hiding it as zero.
   double get _balanceDue => _total - _paid;
@@ -746,6 +750,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
       dueAmount: _balanceDue,
       paymentMethod: _paymentMethod,
       bankAccount: _paymentMethod != 'CASH' ? _bankAccountId : null,
+      cashAmount: _paymentMethod == 'SPLIT' ? _cashAmount : 0,
       status: status,
       notes: _notesController.text.trim(),
       items: _items
@@ -1141,7 +1146,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                               decoration: const InputDecoration(
                                 labelText: 'Method',
                               ),
-                              items: AppConstants.paymentMethods
+                              items: AppConstants.paymentMethodsWithSplit
                                   .map(
                                     (m) => DropdownMenuItem(
                                       value: m,
@@ -1192,6 +1197,22 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                               onChanged: (v) => setState(() => _bankAccountId = v),
                             );
                           },
+                        ),
+                      ],
+                      if (_paymentMethod == 'SPLIT') ...[
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _cashAmountController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Cash Amount',
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Rest paid from the account above — ${Formatters.currency((_paid - _cashAmount).clamp(0, _paid))}',
+                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                         ),
                       ],
                       const SizedBox(height: 10),

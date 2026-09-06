@@ -361,7 +361,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                           ),
                           Flexible(
                             child: Text(
-                              s.paymentMethod,
+                              AppConstants.paymentMethodLabels[s.paymentMethod] ?? s.paymentMethod,
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                             ),

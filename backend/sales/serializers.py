@@ -36,7 +36,7 @@ class SaleSerializer(serializers.ModelSerializer):
             "id", "invoice_number", "customer", "customer_name", "party_name", "party_phone",
             "party_pan", "party_address",
             "sale_date", "due_date", "subtotal", "discount", "tax_rate", "tax_amount", "total",
-            "paid_amount", "due_amount", "payment_method", "bank_account", "status", "sale_type",
+            "paid_amount", "due_amount", "payment_method", "bank_account", "cash_amount", "status", "sale_type",
             "reminder_enabled", "reminder_at",
             "notes", "items", "created_at",
         )
@@ -51,6 +51,13 @@ class SaleSerializer(serializers.ModelSerializer):
         bank_account = data.get("bank_account")
         if bank_account is not None and bank_account.business_id != business.id:
             raise serializers.ValidationError({"bank_account": "Invalid account for this business."})
+        if data.get("payment_method") == Sale.METHOD_SPLIT:
+            if not bank_account:
+                raise serializers.ValidationError({"bank_account": "Select which account the bank portion of a split payment should hit."})
+            cash_amount = data.get("cash_amount") or Decimal("0")
+            paid_amount = data.get("paid_amount") or Decimal("0")
+            if cash_amount < 0 or cash_amount > paid_amount:
+                raise serializers.ValidationError({"cash_amount": "Cash amount must be between 0 and the total amount paid."})
         for item in data.get("items", []):
             product = item.get("product")
             if product is not None and product.business_id != business.id:
@@ -66,11 +73,19 @@ class SaleSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def _sync_bank(sale):
+        # A SPLIT payment only banks the non-cash remainder — the cash
+        # portion (sale.cash_amount) never touches the bank account.
+        if sale.payment_method == Sale.METHOD_SPLIT:
+            bank_amount = sale.paid_amount - sale.cash_amount
+        elif sale.payment_method != "CASH":
+            bank_amount = sale.paid_amount
+        else:
+            bank_amount = 0
         sync_bank_transaction(
             reference=f"SALE-{sale.id}",
             bank_account=sale.bank_account if sale.payment_method != "CASH" else None,
             transaction_type="CREDIT",
-            amount=sale.paid_amount,
+            amount=bank_amount,
             date=sale.sale_date,
             description=f"Sale {sale.invoice_number}" + (f" — {sale.customer.name}" if sale.customer_id else ""),
             created_by=sale.created_by,

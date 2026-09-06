@@ -18,11 +18,13 @@ class Sale(models.Model):
     METHOD_BANK   = "BANK"
     METHOD_ESEWA  = "ESEWA"
     METHOD_KHALTI = "KHALTI"
+    METHOD_SPLIT  = "SPLIT"
     METHOD_CHOICES = [
         (METHOD_CASH,   "Cash"),
         (METHOD_BANK,   "Bank"),
         (METHOD_ESEWA,  "eSewa"),
         (METHOD_KHALTI, "Khalti"),
+        (METHOD_SPLIT,  "Split (Cash + Bank)"),
     ]
 
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="sales")
@@ -41,6 +43,12 @@ class Sale(models.Model):
         related_name="sales",
         help_text="Which account received paid_amount when payment_method is non-cash — "
                    "a matching BankTransaction is kept in sync automatically.",
+    )
+    cash_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0,
+        help_text="Cash portion of paid_amount when payment_method is SPLIT — the "
+                   "remainder (paid_amount - cash_amount) is credited to bank_account "
+                   "instead. Unused (0) for every other payment method.",
     )
     reminder_enabled = models.BooleanField(default=False)
     reminder_at = models.DateTimeField(
