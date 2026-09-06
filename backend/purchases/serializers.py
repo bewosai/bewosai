@@ -18,8 +18,8 @@ class PurchaseItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PurchaseItem
-        fields = ["id", "product", "product_name", "product_hs_code", "quantity", "unit_price", "discount_amount", "total"]
-        read_only_fields = ["id", "total"]
+        fields = ["id", "product", "product_name", "product_hs_code", "quantity", "unit_label", "base_quantity", "unit_price", "discount_amount", "total"]
+        read_only_fields = ["id", "total", "base_quantity"]
 
 
 class PurchaseSerializer(serializers.ModelSerializer):
@@ -56,6 +56,13 @@ class PurchaseSerializer(serializers.ModelSerializer):
         return data
 
     @staticmethod
+    def _set_base_quantity(item):
+        if item.product_id and item.product.unit_id:
+            item.base_quantity = item.product.unit.base_quantity_for(item.quantity, item.unit_label)
+        else:
+            item.base_quantity = item.quantity
+
+    @staticmethod
     def _sync_bank(purchase):
         sync_bank_transaction(
             reference=f"PURCHASE-{purchase.id}",
@@ -81,11 +88,12 @@ class PurchaseSerializer(serializers.ModelSerializer):
         subtotal = Decimal("0")
         for item_data in items_data:
             item = PurchaseItem(purchase=purchase, **item_data)
+            self._set_base_quantity(item)
             item.save()                     # computes item.total
             subtotal += item.total
             if item.product_id:
                 Product.objects.filter(pk=item.product_id).update(
-                    stock_quantity=F("stock_quantity") + item.quantity
+                    stock_quantity=F("stock_quantity") + item.base_quantity
                 )
         purchase.subtotal = subtotal
         purchase.save()                     # model.save() recomputes tax_amount, total, due_amount
@@ -95,12 +103,14 @@ class PurchaseSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop("items", None)
 
-        # Reverse old stock increments before replacing items
+        # Reverse old stock increments before replacing items — using the
+        # original base_quantity snapshot, not a fresh conversion.
         if items_data is not None:
             for old_item in instance.items.all():
                 if old_item.product_id:
+                    reverse_qty = old_item.base_quantity if old_item.base_quantity is not None else old_item.quantity
                     Product.objects.filter(pk=old_item.product_id).update(
-                        stock_quantity=Greatest(F("stock_quantity") - old_item.quantity, Decimal("0"))
+                        stock_quantity=Greatest(F("stock_quantity") - reverse_qty, Decimal("0"))
                     )
             instance.items.all().delete()
 
@@ -111,11 +121,12 @@ class PurchaseSerializer(serializers.ModelSerializer):
             subtotal = Decimal("0")
             for item_data in items_data:
                 item = PurchaseItem(purchase=instance, **item_data)
+                self._set_base_quantity(item)
                 item.save()
                 subtotal += item.total
                 if item.product_id:
                     Product.objects.filter(pk=item.product_id).update(
-                        stock_quantity=F("stock_quantity") + item.quantity
+                        stock_quantity=F("stock_quantity") + item.base_quantity
                     )
             instance.subtotal = subtotal
             # model.save() recomputes tax_amount, total, due_amount

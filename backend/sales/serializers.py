@@ -18,8 +18,8 @@ class SaleItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleItem
-        fields = ("id", "product", "product_name", "product_hs_code", "quantity", "unit_price", "unit_cost", "discount_amount", "total")
-        read_only_fields = ("id", "unit_cost", "total")
+        fields = ("id", "product", "product_name", "product_hs_code", "quantity", "unit_label", "base_quantity", "unit_price", "unit_cost", "discount_amount", "total")
+        read_only_fields = ("id", "unit_cost", "total", "base_quantity")
 
 
 class SaleSerializer(serializers.ModelSerializer):
@@ -58,6 +58,13 @@ class SaleSerializer(serializers.ModelSerializer):
         return data
 
     @staticmethod
+    def _set_base_quantity(item):
+        if item.product_id and item.product.unit_id:
+            item.base_quantity = item.product.unit.base_quantity_for(item.quantity, item.unit_label)
+        else:
+            item.base_quantity = item.quantity
+
+    @staticmethod
     def _sync_bank(sale):
         sync_bank_transaction(
             reference=f"SALE-{sale.id}",
@@ -76,15 +83,18 @@ class SaleSerializer(serializers.ModelSerializer):
         subtotal = Decimal("0")
         for item_data in items_data:
             item = SaleItem(sale=sale, **item_data)
+            self._set_base_quantity(item)
             item.save()                     # computes item.total = qty*price - discount
             subtotal += item.total
 
             # Decrement stock for linked products via an atomic F()-expression
             # UPDATE (not read-modify-write) so two concurrent sales of the
             # same product can't race and silently lose one decrement.
+            # base_quantity is the primary-unit equivalent (see
+            # Unit.base_quantity_for) — stock is always tracked in that unit.
             if item.product_id:
                 Product.objects.filter(pk=item.product_id).update(
-                    stock_quantity=Greatest(F("stock_quantity") - item.quantity, Decimal("0"))
+                    stock_quantity=Greatest(F("stock_quantity") - item.base_quantity, Decimal("0"))
                 )
 
         sale.subtotal = subtotal
@@ -96,12 +106,16 @@ class SaleSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop("items", None)
 
-        # Reverse old stock decrements before deleting items
+        # Reverse old stock decrements before deleting items — using the
+        # same base_quantity snapshot that was originally deducted (not a
+        # fresh conversion), so a conversion_factor change on the product
+        # since then can't throw stock off.
         if items_data is not None:
             for old_item in instance.items.all():
                 if old_item.product_id:
+                    reverse_qty = old_item.base_quantity if old_item.base_quantity is not None else old_item.quantity
                     Product.objects.filter(pk=old_item.product_id).update(
-                        stock_quantity=F("stock_quantity") + old_item.quantity
+                        stock_quantity=F("stock_quantity") + reverse_qty
                     )
             instance.items.all().delete()
 
@@ -112,13 +126,14 @@ class SaleSerializer(serializers.ModelSerializer):
             subtotal = Decimal("0")
             for item_data in items_data:
                 item = SaleItem(sale=instance, **item_data)
+                self._set_base_quantity(item)
                 item.save()
                 subtotal += item.total
 
                 # Apply new stock decrements
                 if item.product_id:
                     Product.objects.filter(pk=item.product_id).update(
-                        stock_quantity=Greatest(F("stock_quantity") - item.quantity, Decimal("0"))
+                        stock_quantity=Greatest(F("stock_quantity") - item.base_quantity, Decimal("0"))
                     )
 
             instance.subtotal = subtotal

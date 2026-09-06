@@ -5,6 +5,11 @@ class SaleItem {
   final int? product;
   final String productName;
   final String hsCode;
+  // Which of the product's units this line was billed in (e.g. "Piece" vs
+  // the product's primary "Box") — blank means the primary unit. Purely a
+  // display/billing-basis label; the backend converts it into the primary
+  // unit for stock (see Unit.base_quantity_for).
+  final String unitLabel;
   final double quantity;
   final double unitPrice;
   final double discountAmount;
@@ -15,6 +20,7 @@ class SaleItem {
     this.product,
     required this.productName,
     this.hsCode = '',
+    this.unitLabel = '',
     required this.quantity,
     required this.unitPrice,
     this.discountAmount = 0,
@@ -26,6 +32,7 @@ class SaleItem {
         product: json['product'] as int?,
         productName: json['product_name'] as String? ?? '',
         hsCode: json['product_hs_code'] as String? ?? '',
+        unitLabel: json['unit_label'] as String? ?? '',
         quantity: Formatters.toDouble(json['quantity']),
         unitPrice: Formatters.toDouble(json['unit_price']),
         discountAmount: Formatters.toDouble(json['discount_amount']),
@@ -35,6 +42,7 @@ class SaleItem {
   Map<String, dynamic> toJson() => {
         if (product != null) 'product': product,
         'product_name': productName,
+        'unit_label': unitLabel,
         'quantity': quantity,
         'unit_price': unitPrice,
         'discount_amount': discountAmount,

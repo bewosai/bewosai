@@ -91,6 +91,24 @@ class Unit {
 
   bool get hasSecondary => secondaryUnit.isNotEmpty;
 
+  /// Suggested price for a billing line when its unit is switched between
+  /// this Unit's primary and secondary unit — dividing `basePrice` (the
+  /// product's sale_price/purchase_price, priced per primary unit) by
+  /// conversion_factor gives the per-secondary-unit price. Picking the
+  /// primary unit (or anything else) just returns basePrice unchanged.
+  /// Mirrors the backend's Unit.base_quantity_for — this is the price-side
+  /// counterpart, purely a UI starting point the user can still edit.
+  double priceFor(double basePrice, String unitLabel) {
+    if (unitLabel.isNotEmpty &&
+        secondaryUnit.isNotEmpty &&
+        conversionFactor != null &&
+        conversionFactor! > 0 &&
+        unitLabel.trim().toLowerCase() == secondaryUnit.trim().toLowerCase()) {
+      return ((basePrice / conversionFactor!) * 100).round() / 100;
+    }
+    return basePrice;
+  }
+
   Unit copyWith({
     int? id,
     String? name,
@@ -144,6 +162,10 @@ class Product {
   final String itemType;
   final int? unit;
   final String unitName;
+  /// Full primary/secondary/conversion_factor detail, so billing screens can
+  /// offer a per-line unit picker without a separate Units lookup. Null
+  /// when the product has no unit set.
+  final Unit? unitDetail;
   final String description;
   final double purchasePrice;
   final double salePrice;
@@ -167,6 +189,7 @@ class Product {
     this.itemType = ItemType.product,
     this.unit,
     required this.unitName,
+    this.unitDetail,
     required this.description,
     required this.purchasePrice,
     required this.salePrice,
@@ -195,6 +218,9 @@ class Product {
           type == ItemType.service ? ItemType.service : ItemType.product,
       unit: _toIntOrNull(json['unit']),
       unitName: json['unit_name']?.toString() ?? '',
+      unitDetail: json['unit_detail'] == null
+          ? null
+          : Unit.fromJson(json['unit_detail'] as Map<String, dynamic>),
       description: json['description']?.toString() ?? '',
       purchasePrice: Formatters.toDouble(json['purchase_price']),
       salePrice: Formatters.toDouble(json['sale_price']),
@@ -243,6 +269,18 @@ class Product {
         'item_type': itemType,
         'unit': unit,
         'unit_name': unitName,
+        // Unit.toJson() is a write-payload for the Units API (no id/display)
+        // — reconstructed by hand here so Unit.fromJson round-trips fully.
+        if (unitDetail != null)
+          'unit_detail': {
+            'id': unitDetail!.id,
+            'name': unitDetail!.name,
+            'abbreviation': unitDetail!.abbreviation,
+            'secondary_unit': unitDetail!.secondaryUnit,
+            'secondary_abbreviation': unitDetail!.secondaryAbbreviation,
+            'conversion_factor': unitDetail!.conversionFactor,
+            'display': unitDetail!.display,
+          },
         'description': description,
         'purchase_price': purchasePrice,
         'sale_price': salePrice,
@@ -264,6 +302,7 @@ class Product {
     String? itemType,
     int? unit,
     String? unitName,
+    Unit? unitDetail,
     String? description,
     double? purchasePrice,
     double? salePrice,
@@ -286,6 +325,7 @@ class Product {
       itemType: itemType ?? this.itemType,
       unit: clearUnit ? null : (unit ?? this.unit),
       unitName: unitName ?? this.unitName,
+      unitDetail: clearUnit ? null : (unitDetail ?? this.unitDetail),
       description: description ?? this.description,
       purchasePrice: purchasePrice ?? this.purchasePrice,
       salePrice: salePrice ?? this.salePrice,

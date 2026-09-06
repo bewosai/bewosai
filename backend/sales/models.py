@@ -90,6 +90,18 @@ class SaleItem(models.Model):
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
     product_name = models.CharField(max_length=200)
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    # Which of the product's units this line was billed in — e.g. "Piece"
+    # when the product's primary unit is "Box" with a secondary configured.
+    # Blank means the primary unit (and every row created before this field
+    # existed).
+    unit_label = models.CharField(max_length=50, blank=True, default="")
+    # Snapshot of `quantity` converted into the product's *primary* unit at
+    # the time of sale (via Unit.base_quantity_for) — stock_quantity is
+    # always tracked in primary-unit terms, so this is what actually gets
+    # deducted from stock. Snapshotted (not recomputed) so editing the
+    # product's conversion_factor later can't silently corrupt stock math
+    # when this sale is edited or deleted, mirroring unit_cost below.
+    base_quantity = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
     unit_cost = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True,

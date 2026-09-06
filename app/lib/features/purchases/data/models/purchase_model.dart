@@ -5,6 +5,9 @@ class PurchaseItem {
   final int? product;
   final String productName;
   final String hsCode;
+  // Which of the product's units this line was billed in — see
+  // SaleItem.unitLabel for the full rationale (same backend model on both).
+  final String unitLabel;
   final double quantity;
   final double unitPrice;
   final double discountAmount;
@@ -15,6 +18,7 @@ class PurchaseItem {
     this.product,
     required this.productName,
     this.hsCode = '',
+    this.unitLabel = '',
     required this.quantity,
     required this.unitPrice,
     this.discountAmount = 0,
@@ -26,6 +30,7 @@ class PurchaseItem {
         product: json['product'] as int?,
         productName: json['product_name'] as String? ?? '',
         hsCode: json['product_hs_code'] as String? ?? '',
+        unitLabel: json['unit_label'] as String? ?? '',
         quantity: Formatters.toDouble(json['quantity']),
         unitPrice: Formatters.toDouble(json['unit_price']),
         discountAmount: Formatters.toDouble(json['discount_amount']),
@@ -35,6 +40,7 @@ class PurchaseItem {
   Map<String, dynamic> toJson() => {
         if (product != null) 'product': product,
         'product_name': productName,
+        'unit_label': unitLabel,
         'quantity': quantity,
         'unit_price': unitPrice,
         'discount_amount': discountAmount,

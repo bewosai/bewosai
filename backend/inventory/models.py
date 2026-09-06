@@ -56,6 +56,19 @@ class Unit(models.Model):
             return f"{self.name}/{self.secondary_unit}"
         return self.name
 
+    def base_quantity_for(self, quantity, unit_label):
+        """
+        Converts a quantity billed in `unit_label` into primary-unit terms,
+        for stock tracking (stock_quantity is always kept in the primary
+        unit). Only converts when unit_label matches this Unit's configured
+        secondary unit — anything else (blank, or the primary unit's own
+        name) passes the quantity through unchanged.
+        """
+        if unit_label and self.secondary_unit and self.conversion_factor:
+            if unit_label.strip().lower() == self.secondary_unit.strip().lower():
+                return quantity / self.conversion_factor
+        return quantity
+
 
 class Product(models.Model):
     """

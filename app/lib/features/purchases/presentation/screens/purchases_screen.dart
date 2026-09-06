@@ -334,6 +334,14 @@ class _PurchaseFormScreen extends StatefulWidget {
 
 class _PurchaseItemRow {
   int? product;
+  // Which of the product's units this line is billed in (e.g. "Piece" vs
+  // the product's primary "Box") — see Unit.priceFor/base_quantity_for.
+  String unitLabel = '';
+  Unit? unitDetail;
+  // The product's purchase price in its *primary* unit — see
+  // quick_pos_screen.dart's _LineItem.basePrice for why this is kept
+  // separate from priceController.text.
+  double basePrice = 0;
   final nameController = TextEditingController();
   final qtyController = TextEditingController(text: '1');
   final priceController = TextEditingController(text: '0');
@@ -394,10 +402,17 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
           if (match.isNotEmpty) _supplier = match.first;
         }
         _items.clear();
+        final invProducts = context.read<InventoryProvider>().products;
         for (final it in p.items) {
           final row = _PurchaseItemRow();
           row.product = it.product;
           row.nameController.text = it.productName;
+          row.unitLabel = it.unitLabel;
+          final match = invProducts.where((prod) => prod.id == it.product);
+          if (match.isNotEmpty) {
+            row.unitDetail = match.first.unitDetail;
+            row.basePrice = match.first.purchasePrice;
+          }
           row.qtyController.text = it.quantity.toString();
           row.priceController.text = it.unitPrice.toString();
           row.discountController.text = it.discountAmount.toString();
@@ -583,6 +598,9 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
           setState(() {
             item.product = p.id;
             item.nameController.text = p.name;
+            item.unitDetail = p.unitDetail;
+            item.unitLabel = p.unitDetail?.name ?? '';
+            item.basePrice = p.purchasePrice;
             item.priceController.text = p.purchasePrice.toString();
           });
         },
@@ -679,6 +697,9 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                   setState(() {
                     item.product = created.id;
                     item.nameController.text = created.name;
+                    item.unitDetail = created.unitDetail;
+                    item.unitLabel = created.unitDetail?.name ?? '';
+                    item.basePrice = created.purchasePrice;
                     item.priceController.text = created.purchasePrice
                         .toString();
                   });
@@ -735,6 +756,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
               productName: i.nameController.text.trim().isEmpty
                   ? 'Item'
                   : i.nameController.text.trim(),
+              unitLabel: i.unitLabel,
               quantity: i.qty,
               unitPrice: i.price,
               discountAmount: i.discount,
@@ -900,6 +922,13 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                                   ),
                                 ),
                               ),
+                              if (e.value.unitDetail?.hasSecondary == true) ...[
+                                const SizedBox(width: 4),
+                                _PurchaseUnitToggle(
+                                  item: e.value,
+                                  onChanged: () => setState(() {}),
+                                ),
+                              ],
                               const SizedBox(width: 6),
                               Expanded(
                                 flex: 2,
@@ -1283,6 +1312,53 @@ class _BillImagePicker extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Small tappable chip toggling a purchase line between its product's
+/// primary and secondary unit — see quick_pos_screen.dart's `_UnitToggle`
+/// for the full rationale (identical mechanism, purchase side).
+class _PurchaseUnitToggle extends StatelessWidget {
+  final _PurchaseItemRow item;
+  final VoidCallback onChanged;
+
+  const _PurchaseUnitToggle({required this.item, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final unit = item.unitDetail!;
+    final currentLabel = item.unitLabel.isEmpty ? unit.name : item.unitLabel;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () {
+        final isSecondary =
+            currentLabel.trim().toLowerCase() == unit.secondaryUnit.trim().toLowerCase();
+        final newLabel = isSecondary ? unit.name : unit.secondaryUnit;
+        item.unitLabel = newLabel;
+        item.priceController.text = unit.priceFor(item.basePrice, newLabel).toString();
+        onChanged();
+      },
+      child: Container(
+        width: 44,
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        decoration: BoxDecoration(
+          color: AppColors.orange.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          currentLabel,
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          style: const TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            color: AppColors.orangeDark,
+          ),
+        ),
+      ),
     );
   }
 }

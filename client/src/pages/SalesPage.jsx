@@ -13,6 +13,7 @@ import { amountInWords } from "../utils/amountInWords";
 import { useEscToClose } from "../hooks/useEscToClose";
 import SearchableSelect from "../components/common/SearchableSelect";
 import { getRecentIds, pushRecentId } from "../utils/recentItems";
+import { priceForUnit } from "../utils/calculations";
 import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -37,7 +38,7 @@ const STATUS_COLORS = Object.fromEntries(
   Object.entries(SALE_STATUS).map(([k, v]) => [k, v.cls])
 );
 
-const EMPTY_ITEM = { product_id: "", product_name: "", quantity: 1, unit_price: 0, discount_amount: 0 };
+const EMPTY_ITEM = { product_id: "", product_name: "", quantity: 1, unit_label: "", unit_price: 0, discount_amount: 0 };
 const EMPTY_FORM = {
   customer_id: "",
   customer_name: "",
@@ -391,9 +392,16 @@ function SaleModal({ onClose, onSaved, editData }) {
       const prod = products.find(p => String(p.id) === String(val));
       if (prod) {
         items[i].product_name = prod.name;
+        items[i].unit_label = prod.unit_detail?.name || "";
         items[i].unit_price = parseFloat(prod.selling_price || prod.price || 0);
       }
       setRecentProductIds(pushRecentId(currentBusiness?.id, "products", val));
+    }
+    if (key === "unit_label") {
+      const prod = products.find(p => String(p.id) === String(items[i].product_id));
+      if (prod) {
+        items[i].unit_price = priceForUnit(prod.selling_price || prod.price, prod.unit_detail, val);
+      }
     }
     setForm(f => ({ ...f, items }));
   };
@@ -411,6 +419,7 @@ function SaleModal({ onClose, onSaved, editData }) {
         ...items[quickAddForRow],
         product_id: product.id,
         product_name: product.name,
+        unit_label: product.unit_detail?.name || "",
         unit_price: parseFloat(product.selling_price || 0),
       };
       return { ...f, items };
@@ -478,6 +487,7 @@ function SaleModal({ onClose, onSaved, editData }) {
           product: it.product_id || null,
           product_name: it.product_name,
           quantity: it.quantity,
+          unit_label: it.unit_label || "",
           unit_price: it.unit_price,
           discount_amount: it.discount_amount || 0,
         })),
@@ -599,14 +609,18 @@ function SaleModal({ onClose, onSaved, editData }) {
               <div className="grid grid-cols-12 gap-1 bg-navy-800/60 px-2 py-1.5 text-xs font-semibold text-navy-400">
                 <div className="col-span-1 text-center">S.N.</div>
                 <div className="col-span-3">Product</div>
-                <div className="col-span-2 text-right">Qty</div>
+                <div className="col-span-2">Unit</div>
+                <div className="col-span-1 text-right">Qty</div>
                 <div className="col-span-2 text-right">Price</div>
-                <div className="col-span-2 text-right">Disc.</div>
+                <div className="col-span-1 text-right">Disc.</div>
                 <div className="col-span-1 text-right">Total</div>
                 <div className="col-span-1"></div>
               </div>
               {form.items.map((item, i) => {
                 const rowTotal = (item.quantity * item.unit_price) - (parseFloat(item.discount_amount) || 0);
+                const prod = products.find(p => String(p.id) === String(item.product_id));
+                const unitDetail = prod?.unit_detail;
+                const hasSecondaryUnit = !!(unitDetail?.secondary_unit && unitDetail?.conversion_factor);
                 return (
                   <div key={i} className="grid grid-cols-12 gap-1 px-2 py-2 border-t border-navy-700/50 items-center">
                     <div className="col-span-1 text-center text-xs text-navy-500">{i + 1}</div>
@@ -627,6 +641,20 @@ function SaleModal({ onClose, onSaved, editData }) {
                       />
                     </div>
                     <div className="col-span-2">
+                      {hasSecondaryUnit ? (
+                        <select
+                          className="w-full rounded-md bg-navy-800 border border-navy-700 px-1 py-1.5 text-[11px] text-white focus:border-orange-500 focus:outline-none"
+                          value={item.unit_label || unitDetail.name}
+                          onChange={e => setItem(i, "unit_label", e.target.value)}
+                        >
+                          <option value={unitDetail.name}>{unitDetail.name}</option>
+                          <option value={unitDetail.secondary_unit}>{unitDetail.secondary_unit}</option>
+                        </select>
+                      ) : (
+                        <span className="text-[11px] text-navy-500">{unitDetail?.name || "—"}</span>
+                      )}
+                    </div>
+                    <div className="col-span-1">
                       <input type="number" min="1"
                         className="w-full rounded-md bg-navy-800 border border-navy-700 px-2 py-1.5 text-xs text-white text-right focus:border-orange-500 focus:outline-none"
                         value={item.quantity}
@@ -640,7 +668,7 @@ function SaleModal({ onClose, onSaved, editData }) {
                         onChange={e => setItem(i, "unit_price", parseFloat(e.target.value) || 0)}
                       />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-1">
                       <input type="number" min="0"
                         className="w-full rounded-md bg-navy-800 border border-navy-700 px-2 py-1.5 text-xs text-white text-right focus:border-orange-500 focus:outline-none"
                         value={item.discount_amount}

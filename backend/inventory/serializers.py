@@ -25,6 +25,9 @@ class UnitSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
     unit_name = serializers.CharField(source="unit.name", read_only=True)
+    # Full primary/secondary/conversion_factor detail so billing screens can
+    # offer a unit picker per line item without a separate Units lookup.
+    unit_detail = UnitSerializer(source="unit", read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
     # Alias used by the Flutter app (selling_price → sale_price)
     selling_price = serializers.DecimalField(
@@ -34,7 +37,7 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = (
-            "id", "name", "category", "category_name", "unit", "unit_name",
+            "id", "name", "category", "category_name", "unit", "unit_name", "unit_detail",
             "description", "purchase_price", "sale_price", "selling_price",
             "stock_quantity", "low_stock_threshold", "is_low_stock",
             "barcode", "hs_code", "image", "is_active", "created_at",

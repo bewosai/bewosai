@@ -84,6 +84,11 @@ class PurchaseItem(models.Model):
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
     product_name = models.CharField(max_length=200)
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    # See SaleItem.unit_label / base_quantity — same purpose here: which
+    # unit this line was purchased in, and the primary-unit-equivalent
+    # snapshot used for stock increments.
+    unit_label = models.CharField(max_length=50, blank=True, default="")
+    base_quantity = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2)

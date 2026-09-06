@@ -31,6 +31,16 @@ class QuickPosScreen extends StatefulWidget {
 
 class _LineItem {
   int? product;
+  // Which of the product's units this line is billed in (e.g. "Piece" vs
+  // the product's primary "Box") — see Unit.priceFor/base_quantity_for.
+  // Blank means the primary unit.
+  String unitLabel = '';
+  Unit? unitDetail;
+  // The product's sale price in its *primary* unit — kept separately from
+  // priceController.text (which may already hold a secondary-unit-adjusted
+  // price) so toggling the unit back and forth always recomputes from the
+  // true base price instead of compounding conversions on itself.
+  double basePrice = 0;
   final nameController = TextEditingController();
   final qtyController = TextEditingController(text: '1');
   final priceController = TextEditingController(text: '0');
@@ -136,10 +146,17 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       if (match.isNotEmpty) _customer = match.first;
     }
     _items.clear();
+    final invProducts = context.read<InventoryProvider>().products;
     for (final it in sale.items) {
       final li = _LineItem();
       li.product = it.product;
       li.nameController.text = it.productName;
+      li.unitLabel = it.unitLabel;
+      final match = invProducts.where((p) => p.id == it.product);
+      if (match.isNotEmpty) {
+        li.unitDetail = match.first.unitDetail;
+        li.basePrice = match.first.salePrice;
+      }
       li.qtyController.text = it.quantity.toString();
       li.priceController.text = it.unitPrice.toString();
       li.discountController.text = it.discountAmount.toString();
@@ -190,6 +207,9 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
           setState(() {
             item.product = p.id;
             item.nameController.text = p.name;
+            item.unitDetail = p.unitDetail;
+            item.unitLabel = p.unitDetail?.name ?? '';
+            item.basePrice = p.salePrice;
             item.priceController.text = p.salePrice.toString();
           });
         },
@@ -286,6 +306,9 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                   setState(() {
                     item.product = created.id;
                     item.nameController.text = created.name;
+                    item.unitDetail = created.unitDetail;
+                    item.unitLabel = created.unitDetail?.name ?? '';
+                    item.basePrice = created.salePrice;
                     item.priceController.text = created.salePrice.toString();
                   });
                   Navigator.pop(dialogContext);
@@ -459,6 +482,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
               productName: i.nameController.text.trim().isEmpty
                   ? 'Item'
                   : i.nameController.text.trim(),
+              unitLabel: i.unitLabel,
               quantity: i.qty,
               unitPrice: i.price,
               discountAmount: i.discount,
@@ -1014,6 +1038,10 @@ class _LineItemRow extends StatelessWidget {
               ),
             ),
           ),
+          if (item.unitDetail?.hasSecondary == true) ...[
+            const SizedBox(width: 4),
+            _UnitToggle(item: item, onChanged: onChanged),
+          ],
           const SizedBox(width: 6),
           Expanded(
             flex: 2,
@@ -1070,6 +1098,57 @@ class _LineItemRow extends StatelessWidget {
                 : null,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Small tappable chip that toggles a line item between its product's
+/// primary and secondary unit (e.g. "Box" ↔ "Piece"), recomputing the
+/// suggested price from the product's true base price each time (see
+/// _LineItem.basePrice) so repeated toggling never compounds a conversion
+/// on top of a previous one. Only rendered when the product actually has a
+/// secondary unit configured — otherwise this column simply isn't there,
+/// preserving the single-line layout for the common single-unit case.
+class _UnitToggle extends StatelessWidget {
+  final _LineItem item;
+  final VoidCallback onChanged;
+
+  const _UnitToggle({required this.item, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final unit = item.unitDetail!;
+    final currentLabel = item.unitLabel.isEmpty ? unit.name : item.unitLabel;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () {
+        final isSecondary =
+            currentLabel.trim().toLowerCase() == unit.secondaryUnit.trim().toLowerCase();
+        final newLabel = isSecondary ? unit.name : unit.secondaryUnit;
+        item.unitLabel = newLabel;
+        item.priceController.text = unit.priceFor(item.basePrice, newLabel).toString();
+        onChanged();
+      },
+      child: Container(
+        width: 44,
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        decoration: BoxDecoration(
+          color: AppColors.orange.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          currentLabel,
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          style: const TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            color: AppColors.orangeDark,
+          ),
+        ),
       ),
     );
   }
