@@ -222,6 +222,12 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
+                  _infoStrip(
+                    invoiceNumber: s.invoiceNumber,
+                    dueDate: s.dueDate != null ? Formatters.date(s.dueDate) : '—',
+                    totalDue: Formatters.currency(s.dueAmount),
+                  ),
+                  const SizedBox(height: 16),
                   AppSectionCard(
                     title: 'Items',
                     children: [
@@ -384,6 +390,68 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   const SizedBox(height: 24),
                 ],
               ),
+      ),
+    );
+  }
+
+  /// Three-column highlight band (Invoice # / Due Date / Total Due) shown
+  /// right below the invoice header — puts the facts a business owner
+  /// checks first (which invoice, when it's due, how much is still owed)
+  /// in one glanceable strip instead of scattered through smaller text.
+  Widget _infoStrip({
+    required String invoiceNumber,
+    required String dueDate,
+    required String totalDue,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+      decoration: BoxDecoration(
+        gradient: AppColors.navyGradient,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(child: _infoStripCell('INVOICE #', invoiceNumber)),
+            const VerticalDivider(color: Colors.white24, width: 1, indent: 4, endIndent: 4),
+            Expanded(child: _infoStripCell('DUE DATE', dueDate)),
+            const VerticalDivider(color: Colors.white24, width: 1, indent: 4, endIndent: 4),
+            Expanded(child: _infoStripCell('TOTAL DUE', totalDue)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoStripCell(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: Colors.white70,
+              letterSpacing: 0.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }

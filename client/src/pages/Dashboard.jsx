@@ -231,7 +231,7 @@ function DueRemindersBanner({ language }) {
             {due.slice(0, 3).map((s) => (
               <button
                 key={s.id}
-                onClick={() => navigate(`/invoice/${s.id}`)}
+                onClick={() => navigate(`/sales?view=${s.id}`)}
                 className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-xs text-navy-300 hover:bg-navy-800/60"
               >
                 <span className="truncate">

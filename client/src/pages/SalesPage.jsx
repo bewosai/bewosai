@@ -1056,6 +1056,21 @@ export default function SalesPage() {
     }
   }, [searchParams, setSearchParams]);
 
+  // Deep link to a specific invoice (e.g. from the Dashboard's due-reminders
+  // banner) — fetched directly rather than looked up in saleList, since
+  // that list may not include this sale yet (pagination/filtering) or at
+  // all (page opened fresh via this link).
+  useEffect(() => {
+    const viewId = searchParams.get("view");
+    if (!viewId) return;
+    salesApi.get(viewId)
+      .then((r) => { setEditSale(r.data); setShowModal(true); })
+      .catch(() => {})
+      .finally(() => {
+        setSearchParams((prev) => { prev.delete("view"); return prev; }, { replace: true });
+      });
+  }, [searchParams, setSearchParams]);
+
   const load = () => {
     setLoading(true);
     salesApi.list()
