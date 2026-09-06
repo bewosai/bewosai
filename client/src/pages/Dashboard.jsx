@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { reports as reportsApi } from "../api";
+import { reports as reportsApi, sales as salesApi } from "../api";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useDateFormat } from "../context/AppSettingsContext";
 import {
@@ -188,6 +188,65 @@ function PaymentReminderBanner({ totalReceivable, fmt, language }) {
   );
 }
 
+/**
+ * Surfaces invoices whose "Set Reminder" time (see SalesPage.jsx) has
+ * already passed. The mobile app fires an actual on-device notification
+ * for these (see NotificationService); a browser tab can't reliably do
+ * that in the background, so the web equivalent is showing them clearly
+ * the moment the business owner opens the Dashboard.
+ */
+function DueRemindersBanner({ language }) {
+  const navigate = useNavigate();
+  const [due, setDue] = useState([]);
+
+  useEffect(() => {
+    salesApi.list({ reminder_enabled: true, status: "CONFIRMED", page_size: 50 })
+      .then((r) => {
+        const now = new Date();
+        const results = r.data?.results ?? r.data ?? [];
+        setDue(
+          results.filter((s) =>
+            s.reminder_at && new Date(s.reminder_at) <= now && parseFloat(s.due_amount || 0) > 0
+          )
+        );
+      })
+      .catch(() => setDue([]));
+  }, []);
+
+  if (due.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/15">
+          <Bell className="h-4 w-4 text-blue-400" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-white">
+            {language === "ne"
+              ? `${due.length} फलोअप रिमाइन्डर बाँकी छ`
+              : `${due.length} follow-up reminder${due.length !== 1 ? "s" : ""} due`}
+          </p>
+          <div className="mt-3 space-y-1.5">
+            {due.slice(0, 3).map((s) => (
+              <button
+                key={s.id}
+                onClick={() => navigate(`/invoice/${s.id}`)}
+                className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-xs text-navy-300 hover:bg-navy-800/60"
+              >
+                <span className="truncate">
+                  {s.invoice_number} · {s.customer_name || s.party_name || "Walk-in"}
+                </span>
+                <span className="shrink-0 font-semibold text-blue-300">Rs. {parseFloat(s.due_amount).toFixed(0)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -279,7 +338,10 @@ export default function DashboardPage() {
       </div>
 
       {!loading && (
-        <PaymentReminderBanner totalReceivable={data?.total_receivable} fmt={f} language={language} />
+        <div className="space-y-4">
+          <PaymentReminderBanner totalReceivable={data?.total_receivable} fmt={f} language={language} />
+          <DueRemindersBanner language={language} />
+        </div>
       )}
 
       {/* KPI Cards */}

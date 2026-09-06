@@ -48,7 +48,7 @@ class SaleNextNumberView(_RequirePos, APIView):
 class SaleListCreateView(_RequirePos, generics.ListCreateAPIView):
     serializer_class = SaleSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["status", "payment_method", "customer"]
+    filterset_fields = ["status", "payment_method", "customer", "reminder_enabled"]
     search_fields = ["invoice_number", "customer__name"]
     ordering_fields = ["sale_date", "total", "created_at"]
 

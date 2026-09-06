@@ -17,6 +17,16 @@ import { priceForUnit } from "../utils/calculations";
 import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
 
 const today = () => new Date().toISOString().slice(0, 10);
+// "2026-03-05T14:30:00Z" (API) <-> "2026-03-05T14:30" (datetime-local input)
+// — both in the browser's local time, so a reminder set for "2pm" reads
+// back as "2pm" instead of drifting by the UTC offset.
+function toDatetimeLocal(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function formatDate(dateStr, dateMode, language) {
   if (!dateStr) return "";
@@ -52,6 +62,8 @@ const EMPTY_FORM = {
   payment_method: "CASH",
   bank_account: "",
   cash_amount: 0,
+  reminder_enabled: false,
+  reminder_at: "",
   notes: "",
   status: "CONFIRMED",
 };
@@ -355,6 +367,8 @@ function SaleModal({ onClose, onSaved, editData }) {
     payment_method: editData.payment_method || "CASH",
     bank_account: editData.bank_account || "",
     cash_amount: editData.cash_amount || 0,
+    reminder_enabled: !!editData.reminder_enabled,
+    reminder_at: toDatetimeLocal(editData.reminder_at),
     notes: editData.notes || "",
     status: editData.status || "CONFIRMED",
   } : { ...EMPTY_FORM, items: [{ ...EMPTY_ITEM }], tax_rate: currentBusiness?.default_tax_rate ?? 0 });
@@ -484,6 +498,8 @@ function SaleModal({ onClose, onSaved, editData }) {
         payment_method: form.payment_method,
         bank_account: form.payment_method === "CASH" ? null : form.bank_account,
         cash_amount: form.payment_method === "SPLIT" ? (form.cash_amount || 0) : 0,
+        reminder_enabled: form.reminder_enabled,
+        reminder_at: form.reminder_enabled && form.reminder_at ? form.reminder_at : null,
         notes: form.notes,
         status: statusOverride || form.status,
         items: form.items.map(it => ({
@@ -598,6 +614,35 @@ function SaleModal({ onClose, onSaved, editData }) {
                 onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))}
               />
             </div>
+          </div>
+
+          {/* Payment Reminder — mirrors the mobile app's "Set Reminder" on
+              Quick POS, but the web can't fire a background notification
+              like the phone app does, so it's surfaced instead as a due
+              reminder banner on the Dashboard. */}
+          <div>
+            <label className="flex items-center gap-2 text-xs font-semibold text-navy-400 cursor-pointer select-none">
+              <input type="checkbox" checked={form.reminder_enabled}
+                onChange={e => {
+                  const checked = e.target.checked;
+                  setForm(f => ({
+                    ...f,
+                    reminder_enabled: checked,
+                    reminder_at: checked && !f.reminder_at
+                      ? toDatetimeLocal(new Date(`${f.due_date || f.sale_date}T09:00`))
+                      : f.reminder_at,
+                  }));
+                }}
+              />
+              Set Reminder
+            </label>
+            {form.reminder_enabled && (
+              <input type="datetime-local"
+                className="mt-1.5 w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none text-sm"
+                value={form.reminder_at}
+                onChange={e => setForm(f => ({ ...f, reminder_at: e.target.value }))}
+              />
+            )}
           </div>
 
           {/* Items Table */}
