@@ -269,6 +269,13 @@ export const billing = {
   referral: () => api.get("/billing/referral/"),
 };
 
+// Comments/feedback — any authenticated user can submit one and see their
+// own; Super Admin sees every comment, by user, in the Support Tickets tab.
+export const support = {
+  submit: (d) => api.post("/superadmin/support/", d),
+  myComments: () => api.get("/superadmin/my-tickets/"),
+};
+
 // Effective feature availability for the current business — same endpoint
 // the Flutter app reads, so both platforms always agree (see
 // bewosai/urls.py::EffectiveFeaturesView).

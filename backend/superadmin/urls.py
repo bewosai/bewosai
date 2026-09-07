@@ -36,6 +36,7 @@ urlpatterns = [
     path("tickets/", views.TicketListView.as_view()),
     path("tickets/<int:pk>/", views.TicketDetailView.as_view()),
     path("support/", views.SubmitTicketView.as_view()),
+    path("my-tickets/", views.MyTicketsView.as_view()),
 
     # Feature management (admin only) — public effective-map endpoint lives
     # at /api/features/ (see bewosai/urls.py), not here, since every business

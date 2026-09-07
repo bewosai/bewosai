@@ -1,13 +1,13 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { useTranslation } from "../utils/translations";
 import { useAuth } from "../context/AuthContext";
-import { auth as authApi } from "../api";
+import { auth as authApi, support as supportApi } from "../api";
 import {
   Sun, Moon, Globe, Eye, EyeOff, Calendar, Building2,
   Upload, Save, Bell, Shield, Palette, User, Check, FileText, BarChart3, ChevronRight,
-  FileSpreadsheet, Crown, Archive, Loader, AlertCircle,
+  FileSpreadsheet, Crown, Archive, Loader, AlertCircle, MessageSquare, Send,
 } from "lucide-react";
 import PhoneInput from "../components/common/PhoneInput";
 import ConfirmDialog from "../components/common/ConfirmDialog";
@@ -63,6 +63,105 @@ function SelectRow({ label, value, options, onChange }) {
         ))}
       </div>
     </div>
+  );
+}
+
+const STATUS_META = {
+  OPEN: { label: "Open", color: "text-yellow-400 bg-yellow-500/10" },
+  IN_PROGRESS: { label: "In Progress", color: "text-blue-400 bg-blue-500/10" },
+  CLOSED: { label: "Closed", color: "text-navy-400 bg-navy-800" },
+};
+
+/* ── Comments / feedback — any user can leave one, and see their own reply
+   status; Super Admin sees every comment, by user, in Support Tickets. ── */
+function CommentsCard({ language }) {
+  const [comments, setComments] = useState([]);
+  const [loadingComments, setLoadingComments] = useState(true);
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
+
+  const load = () => {
+    setLoadingComments(true);
+    supportApi.myComments()
+      .then((r) => setComments(r.data?.results ?? r.data ?? []))
+      .catch(() => setComments([]))
+      .finally(() => setLoadingComments(false));
+  };
+
+  useEffect(load, []);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!message.trim()) return;
+    setSending(true);
+    setError("");
+    try {
+      await supportApi.submit({
+        subject: message.trim().slice(0, 60),
+        message: message.trim(),
+      });
+      setMessage("");
+      setSent(true);
+      setTimeout(() => setSent(false), 2500);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || err.response?.data?.detail || "Couldn't send your comment.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <SettingCard title={language === "ne" ? "टिप्पणी / प्रतिक्रिया" : "Comments & Feedback"} icon={MessageSquare}>
+      <form onSubmit={submit} className="space-y-2">
+        <textarea
+          rows={3}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder={language === "ne" ? "तपाईंको प्रश्न वा प्रतिक्रिया लेख्नुहोस्…" : "Ask a question, report an issue, or leave feedback…"}
+          className="w-full resize-none rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
+        />
+        <div className="flex items-center justify-between">
+          {sent ? (
+            <p className="flex items-center gap-1.5 text-xs text-green-400"><Check className="h-3.5 w-3.5" /> Sent — Super Admin will get back to you here.</p>
+          ) : error ? (
+            <p className="text-xs text-red-400">{error}</p>
+          ) : <span />}
+          <button
+            type="submit"
+            disabled={sending || !message.trim()}
+            className="flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-orange-600 disabled:opacity-50"
+          >
+            <Send className="h-3.5 w-3.5" /> {sending ? "Sending…" : "Send"}
+          </button>
+        </div>
+      </form>
+
+      {loadingComments ? (
+        <div className="flex justify-center py-3"><Loader className="h-4 w-4 animate-spin text-orange-500" /></div>
+      ) : comments.length > 0 && (
+        <div className="mt-2 space-y-2 border-t border-navy-800 pt-3">
+          <p className="text-xs font-semibold text-navy-400">{language === "ne" ? "तपाईंका टिप्पणीहरू" : "Your comments"}</p>
+          {comments.map((c) => {
+            const meta = STATUS_META[c.status] || STATUS_META.OPEN;
+            return (
+              <div key={c.id} className="rounded-lg border border-navy-800 bg-navy-950 px-3 py-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs text-navy-300">{c.message}</p>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.color}`}>{meta.label}</span>
+                </div>
+                {c.admin_reply && (
+                  <p className="mt-1.5 text-xs text-green-400">↳ {c.admin_reply}</p>
+                )}
+                <p className="mt-1 text-[10px] text-navy-600">{new Date(c.created_at).toLocaleDateString()}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </SettingCard>
   );
 }
 
@@ -597,6 +696,8 @@ export default function SettingsPage() {
             />
           </div>
         </SettingCard>
+
+        <CommentsCard language={language} />
       </div>
 
       {/* App Info */}

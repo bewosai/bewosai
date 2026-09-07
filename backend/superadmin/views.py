@@ -405,7 +405,7 @@ class TicketDetailView(generics.RetrieveUpdateAPIView):
 
 
 class SubmitTicketView(APIView):
-    """Any authenticated user can submit a support ticket."""
+    """Any authenticated user can submit a support ticket/comment."""
 
     def post(self, request):
         serializer = SupportTicketSerializer(data=request.data)
@@ -413,6 +413,17 @@ class SubmitTicketView(APIView):
             serializer.save(user_email=request.user.email)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MyTicketsView(generics.ListAPIView):
+    """The comment box's "your comments" list — every ticket *this* user has
+    submitted (own email only, not IsPlatformAdmin-gated like TicketListView),
+    so they can see whether Super Admin has replied without needing admin
+    access themselves."""
+    serializer_class = SupportTicketSerializer
+
+    def get_queryset(self):
+        return SupportTicket.objects.filter(user_email=self.request.user.email)
 
 
 # ── User CRUD ──────────────────────────────────────────────────────────────────
