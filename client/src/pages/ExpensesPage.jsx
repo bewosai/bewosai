@@ -245,7 +245,7 @@ export default function ExpensesPage() {
 
   const load = () => {
     setLoading(true);
-    expensesApi.list()
+    expensesApi.list({ page_size: 1000 })
       .then(r => setList(r.data.results ?? r.data))
       .catch(() => setList([]))
       .finally(() => setLoading(false));

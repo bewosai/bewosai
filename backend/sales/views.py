@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 
+from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_bid, require_business
 from .models import Sale, SaleReturn, Quotation
@@ -47,6 +48,12 @@ class SaleNextNumberView(_RequirePos, APIView):
 
 class SaleListCreateView(_RequirePos, generics.ListCreateAPIView):
     serializer_class = SaleSerializer
+    # Reports and the "load once, filter/search client-side" pages (Sales
+    # list, the Topbar reminder bell) all need every matching sale, not just
+    # the newest 50 — same reasoning as Inventory products/Parties, see
+    # LargePageNumberPagination's docstring. Still 50 unless the caller
+    # explicitly asks for more via ?page_size=.
+    pagination_class = LargePageNumberPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["status", "payment_method", "customer", "reminder_enabled"]
     search_fields = ["invoice_number", "customer__name"]

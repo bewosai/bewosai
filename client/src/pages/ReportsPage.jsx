@@ -94,6 +94,7 @@ export default function ReportsPage() {
   // Party Statement tab
   const [partyList, setPartyList] = useState([]);
   const [partyListLoading, setPartyListLoading] = useState(false);
+  const [partyListError, setPartyListError] = useState(false);
   const [partySearch, setPartySearch] = useState("");
   const [selectedParty, setSelectedParty] = useState(null);
   const [partyLedger, setPartyLedger] = useState(null);
@@ -106,6 +107,7 @@ export default function ReportsPage() {
   // Bank Statement tab
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankAccountsLoading, setBankAccountsLoading] = useState(false);
+  const [bankAccountsError, setBankAccountsError] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [bankStatement, setBankStatement] = useState(null);
   const [bankStatementLoading, setBankStatementLoading] = useState(false);
@@ -113,9 +115,15 @@ export default function ReportsPage() {
   useEffect(() => {
     setLoading(true);
     Promise.allSettled([
-      salesApi.list(),
-      expensesApi.list(),
-      purchasesApi.list(),
+      // status: CONFIRMED — draft/cancelled sales & purchases aren't real
+      // revenue/spend and must match the Net Profit card's own filtering
+      // (see backend reports views, which all filter CONFIRMED-only).
+      // page_size: 1000 — the default page size (50) was silently
+      // truncating every KPI/detail tab/export to the 50 most recent
+      // records business-wide, ignoring the date range entirely.
+      salesApi.list({ status: "CONFIRMED", page_size: 1000 }),
+      expensesApi.list({ page_size: 1000 }),
+      purchasesApi.list({ status: "CONFIRMED", page_size: 1000 }),
     ]).then(([sRes, eRes, pRes]) => {
       if (sRes.status === "fulfilled") setSalesList(sRes.value.data.results ?? sRes.value.data);
       if (eRes.status === "fulfilled") setExpenseList(eRes.value.data.results ?? eRes.value.data);
@@ -189,9 +197,10 @@ export default function ReportsPage() {
   useEffect(() => {
     if (activeReport !== "party-statement" || partyList.length || partyListLoading) return;
     setPartyListLoading(true);
+    setPartyListError(false);
     partiesApi.list()
       .then((res) => setPartyList(res.data.results ?? res.data))
-      .catch(() => setPartyList([]))
+      .catch(() => { setPartyList([]); setPartyListError(true); })
       .finally(() => setPartyListLoading(false));
   }, [activeReport, partyList.length, partyListLoading]);
 
@@ -219,9 +228,10 @@ export default function ReportsPage() {
   useEffect(() => {
     if (activeReport !== "bank-statement" || bankAccounts.length || bankAccountsLoading) return;
     setBankAccountsLoading(true);
+    setBankAccountsError(false);
     reportsApi.bankStatement()
       .then((res) => setBankAccounts(res.data.accounts ?? []))
-      .catch(() => setBankAccounts([]))
+      .catch(() => { setBankAccounts([]); setBankAccountsError(true); })
       .finally(() => setBankAccountsLoading(false));
   }, [activeReport, bankAccounts.length, bankAccountsLoading]);
 
@@ -253,16 +263,16 @@ export default function ReportsPage() {
   // which ignored cost of goods sold and showed a different "Net Profit" than P&L.
   const netProfit = profitData ? profitData.net_profit : (totalSales - totalExp);
 
-  // Monthly data (last 6 months)
-  const monthlyData = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(); d.setMonth(d.getMonth() - (5 - i));
-    const key = d.toISOString().slice(0, 7);
-    const sales = salesList.filter(s => (s.sale_date || s.date || "").startsWith(key))
-      .reduce((s, x) => s + parseFloat(x.total_amount || x.total || 0), 0);
-    const exp = expenseList.filter(e => (e.date || "").startsWith(key))
-      .reduce((s, x) => s + parseFloat(x.amount || 0), 0);
-    return { month: MONTHS[d.getMonth()], sales, expenses: exp, profit: sales - exp };
-  });
+  // Monthly data (last 6 months) — sourced from the same backend
+  // COGS-aware figures as the Profit & Loss tab (profitData.monthly),
+  // instead of a client-side sales-minus-expenses recompute that ignored
+  // cost of goods sold and disagreed with the Net Profit card right above it.
+  const monthlyData = (profitData?.monthly || []).map((m) => ({
+    month: MONTHS[m.month - 1] || `M${m.month}`,
+    sales: m.revenue,
+    expenses: m.expenses,
+    profit: m.net_profit,
+  }));
 
   // Top products
   const productMap = {};
@@ -1121,7 +1131,9 @@ export default function ReportsPage() {
                       );
                     })}
                   {partyList.length === 0 && (
-                    <div className="py-10 text-center text-sm text-navy-400">No parties found</div>
+                    <div className={`py-10 text-center text-sm ${partyListError ? "text-red-400" : "text-navy-400"}`}>
+                      {partyListError ? "Couldn't load parties — please try again." : "No parties found"}
+                    </div>
                   )}
                 </>
               )}
@@ -1289,7 +1301,9 @@ export default function ReportsPage() {
               {bankAccountsLoading ? (
                 <div className="py-10 text-center text-sm text-navy-400">Loading…</div>
               ) : bankAccounts.length === 0 ? (
-                <div className="py-10 text-center text-sm text-navy-400">No bank accounts found</div>
+                <div className={`py-10 text-center text-sm ${bankAccountsError ? "text-red-400" : "text-navy-400"}`}>
+                  {bankAccountsError ? "Couldn't load bank accounts — please try again." : "No bank accounts found"}
+                </div>
               ) : (
                 bankAccounts.map(a => (
                   <button key={a.id} onClick={() => setSelectedAccount(a)}

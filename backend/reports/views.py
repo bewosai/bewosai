@@ -245,8 +245,14 @@ class InventoryReportView(_RequireReports, APIView):
             return Response({"error": "Business not found."}, status=404)
 
         products = Product.objects.filter(business=biz, is_active=True, is_deleted=False)
-        low_stock = products.filter(stock_quantity__lte=F("low_stock_threshold"))
-        out_of_stock = products.filter(stock_quantity__lte=0)
+        # Services always carry stock_quantity=0/low_stock_threshold=0 (see
+        # Product.save()), which made every service register as both
+        # low-stock and out-of-stock here — contradicting Product.is_low_stock
+        # (which explicitly excludes services) and the Stock tab's own "All
+        # Products" table below, which already filters item_type=PRODUCT.
+        stockable = products.filter(item_type=Product.PRODUCT)
+        low_stock = stockable.filter(stock_quantity__lte=F("low_stock_threshold"))
+        out_of_stock = stockable.filter(stock_quantity__lte=0)
 
         # stock_value = sum(purchase_price * stock_quantity) — correct field name
         stock_value = products.aggregate(

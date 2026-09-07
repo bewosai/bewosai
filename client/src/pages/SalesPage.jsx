@@ -934,7 +934,7 @@ export default function SalesPage() {
 
   const load = () => {
     setLoading(true);
-    salesApi.list()
+    salesApi.list({ page_size: 1000 })
       .then(r => setSaleList(r.data.results ?? r.data))
       .catch(() => setSaleList([]))
       .finally(() => setLoading(false));

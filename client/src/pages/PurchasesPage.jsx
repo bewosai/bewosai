@@ -849,7 +849,7 @@ export default function PurchasesPage() {
 
   const load = () => {
     setLoading(true);
-    purchasesApi.list()
+    purchasesApi.list({ page_size: 1000 })
       .then(r => setList(r.data.results ?? r.data))
       .catch(() => setList([]))
       .finally(() => setLoading(false));

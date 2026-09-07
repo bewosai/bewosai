@@ -7,6 +7,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
+from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_business
 from .models import Purchase, PurchaseReturn
@@ -40,6 +41,9 @@ class PurchaseNextNumberView(_RequirePurchases, APIView):
 class PurchaseListCreateView(_RequirePurchases, generics.ListCreateAPIView):
     serializer_class = PurchaseSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
+    # See the matching comment on sales.SaleListCreateView — Reports and the
+    # Purchases list both need every matching purchase, not just the newest 50.
+    pagination_class = LargePageNumberPagination
 
     def get_queryset(self):
         biz = get_business(self.request)
@@ -51,6 +55,9 @@ class PurchaseListCreateView(_RequirePurchases, generics.ListCreateAPIView):
         supplier = self.request.query_params.get("supplier")
         if supplier:
             qs = qs.filter(supplier_id=supplier)
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
         date_from = self.request.query_params.get("date_from")
         date_to = self.request.query_params.get("date_to")
         if date_from:

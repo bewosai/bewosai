@@ -2,6 +2,7 @@ from rest_framework import generics, filters, parsers, permissions
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
+from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_bid, require_business
 from .models import ExpenseCategory, Expense
@@ -35,6 +36,9 @@ class ExpenseListCreateView(_RequireExpenses, generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["category", "payment_method"]
     ordering_fields = ["date", "amount", "created_at"]
+    # See the matching comment on sales.SaleListCreateView — Reports and the
+    # Expenses list both need every matching expense, not just the newest 50.
+    pagination_class = LargePageNumberPagination
 
     def get_queryset(self):
         bid = get_bid(self.request)
