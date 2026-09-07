@@ -32,6 +32,32 @@ function exportProductsToExcel(products) {
 /* ── Field style ── */
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500";
 
+// Common unit names offered as suggestions (via <datalist>) in both the
+// primary and secondary unit fields — still a plain text input underneath,
+// so typing anything not on this list just defines a new unit of your own.
+const STANDARD_UNITS = [
+  "Bag", "Bottle", "Box", "Carton", "Centimeter", "Dozen", "Gram", "Gross",
+  "Kilogram", "Liter", "Meter", "Milliliter", "Pack", "Pair", "Piece",
+  "Quintal", "Ream", "Roll", "Set", "Sheet", "Square Feet", "Square Meter", "Ton",
+];
+
+// Well-known primary -> secondary conversions, auto-filled the moment the
+// primary unit name matches one of these (case-insensitively) — the same
+// pairings shown next to each unit in the list below (e.g. "Dozen = 12.0000
+// Piece"). Only fills fields that are still blank, so it never overwrites a
+// conversion the user already typed themselves.
+const STANDARD_CONVERSIONS = {
+  dozen:    { secondary_unit: "Piece",      secondary_abbreviation: "pc", conversion_factor: "12" },
+  gross:    { secondary_unit: "Piece",      secondary_abbreviation: "pc", conversion_factor: "144" },
+  kilogram: { secondary_unit: "Gram",       secondary_abbreviation: "g",  conversion_factor: "1000" },
+  liter:    { secondary_unit: "Milliliter", secondary_abbreviation: "ml", conversion_factor: "1000" },
+  meter:    { secondary_unit: "Centimeter", secondary_abbreviation: "cm", conversion_factor: "100" },
+  pair:     { secondary_unit: "Piece",      secondary_abbreviation: "pc", conversion_factor: "2" },
+  quintal:  { secondary_unit: "Kilogram",   secondary_abbreviation: "kg", conversion_factor: "100" },
+  ream:     { secondary_unit: "Sheet",      secondary_abbreviation: "sh", conversion_factor: "500" },
+  ton:      { secondary_unit: "Kilogram",   secondary_abbreviation: "kg", conversion_factor: "1000" },
+};
+
 /* ── Unit management modal (primary + secondary) ── */
 function UnitModal({ onClose, onSaved, units, initial }) {
   const { t } = useTranslation();
@@ -44,6 +70,20 @@ function UnitModal({ onClose, onSaved, units, initial }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const bid = localStorage.getItem("business_id");
+
+  // Fires once the primary name field loses focus — picking (or typing)
+  // e.g. "Kilogram" auto-fills Secondary = Gram, factor = 1000, without
+  // clobbering anything the user already entered by hand.
+  const applyStandardConversion = () => {
+    const known = STANDARD_CONVERSIONS[form.name.trim().toLowerCase()];
+    if (!known) return;
+    setForm((f) => ({
+      ...f,
+      secondary_unit: f.secondary_unit || known.secondary_unit,
+      secondary_abbreviation: f.secondary_abbreviation || known.secondary_abbreviation,
+      conversion_factor: f.conversion_factor || known.conversion_factor,
+    }));
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -69,11 +109,20 @@ function UnitModal({ onClose, onSaved, units, initial }) {
         {err && <p className="mb-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
 
         <form onSubmit={submit} className="space-y-4">
+          {/* Backs the "Name" fields above — a native dropdown of common
+              units, but still a free-text input underneath, so typing
+              something not on this list just defines your own unit. */}
+          <datalist id="bw-unit-suggestions">
+            {STANDARD_UNITS.map((u) => <option key={u} value={u} />)}
+          </datalist>
+
           {/* Primary unit */}
           <div className="rounded-xl border border-navy-700 bg-navy-950 p-3">
             <p className="mb-2 text-xs font-semibold text-orange-400 uppercase tracking-wide">Primary Unit</p>
             <div className="grid grid-cols-2 gap-2">
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onBlur={applyStandardConversion}
+                list="bw-unit-suggestions"
                 placeholder="Name *  e.g. Box" className={F} />
               <input value={form.abbreviation} onChange={(e) => setForm({ ...form, abbreviation: e.target.value })}
                 placeholder="Short  e.g. bx" className={F} />
@@ -84,10 +133,11 @@ function UnitModal({ onClose, onSaved, units, initial }) {
           <div className="rounded-xl border border-navy-700 bg-navy-950 p-3">
             <p className="mb-2 text-xs font-semibold text-blue-400 uppercase tracking-wide">Secondary Unit (optional)</p>
             <p className="mb-2 text-[10px] text-navy-400">
-              Define a sub-unit, e.g. 1 Box = 12 Pieces
+              Define a sub-unit, e.g. 1 Box = 12 Pieces — picking a standard primary unit (Dozen, Kilogram, Liter…) auto-fills this
             </p>
             <div className="grid grid-cols-2 gap-2">
               <input value={form.secondary_unit} onChange={(e) => setForm({ ...form, secondary_unit: e.target.value })}
+                list="bw-unit-suggestions"
                 placeholder="Name  e.g. Piece" className={F} />
               <input value={form.secondary_abbreviation} onChange={(e) => setForm({ ...form, secondary_abbreviation: e.target.value })}
                 placeholder="Short  e.g. pc" className={F} />
