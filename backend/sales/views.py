@@ -127,7 +127,7 @@ class SaleReturnListCreateView(_RequirePos, generics.ListCreateAPIView):
         serializer.save(business_id=bid, created_by=self.request.user)
 
 
-class QuotationListCreateView(generics.ListCreateAPIView):
+class QuotationListCreateView(_RequirePos, generics.ListCreateAPIView):
     serializer_class = QuotationSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ["status"]
@@ -148,7 +148,7 @@ class QuotationListCreateView(generics.ListCreateAPIView):
         serializer.save(business_id=bid, quotation_number=qnum, created_by=self.request.user)
 
 
-class QuotationDetailView(generics.RetrieveUpdateDestroyAPIView):
+class QuotationDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = QuotationSerializer
 
     def get_queryset(self):
