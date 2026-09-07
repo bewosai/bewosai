@@ -10,6 +10,11 @@ import { useEscToClose } from "../../hooks/useEscToClose";
 // notice they've already seen would sit in the badge count forever.
 const DISMISSED_KEY = "bw_dismissed_announcements";
 
+// A bill still owing money gets flagged here on its own, once it's been
+// outstanding this many days — even if the user never set a manual
+// "Set Reminder" date on it (that's the separate dueReminders list below).
+const OVERDUE_AFTER_DAYS = 5;
+
 function loadDismissed() {
   try {
     const saved = JSON.parse(localStorage.getItem(DISMISSED_KEY));
@@ -34,6 +39,7 @@ export default function ReminderBell() {
   const [totalReceivable, setTotalReceivable] = useState(0);
   const [debtors, setDebtors] = useState(null);
   const [dueReminders, setDueReminders] = useState([]);
+  const [overdueBills, setOverdueBills] = useState([]);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [announcements, setAnnouncements] = useState([]);
   const [dismissed, setDismissed] = useState(loadDismissed);
@@ -59,6 +65,15 @@ export default function ReminderBell() {
         );
       })
       .catch(() => setDueReminders([]));
+
+    const cutoff = new Date(Date.now() - OVERDUE_AFTER_DAYS * 24 * 60 * 60 * 1000);
+    salesApi.list({
+      status: "CONFIRMED", has_due: true,
+      date_to: cutoff.toISOString().slice(0, 10),
+      ordering: "sale_date", page_size: 50,
+    })
+      .then((r) => setOverdueBills(r.data?.results ?? r.data ?? []))
+      .catch(() => setOverdueBills([]));
 
     adminApi.activeAnnouncements()
       .then((r) => setAnnouncements(r.data || []))
@@ -89,9 +104,14 @@ export default function ReminderBell() {
   };
 
   const visibleAnnouncements = announcements.filter((a) => !dismissed.includes(a.id));
+  // A bill with its own manually-set reminder already shows up in
+  // dueReminders — don't also list it here, or it'd count (and appear)
+  // twice just for being both overdue and reminder-enabled.
+  const dueReminderIds = new Set(dueReminders.map((s) => s.id));
+  const unremindedOverdueBills = overdueBills.filter((s) => !dueReminderIds.has(s.id));
   const hasReceivable = totalReceivable > 0;
   const hasLowStock = lowStockCount > 0;
-  const count = dueReminders.length + (hasReceivable ? 1 : 0) + (hasLowStock ? 1 : 0) + visibleAnnouncements.length;
+  const count = dueReminders.length + unremindedOverdueBills.length + (hasReceivable ? 1 : 0) + (hasLowStock ? 1 : 0) + visibleAnnouncements.length;
   const goTo = (path) => { close(); navigate(path); };
 
   return (
@@ -195,7 +215,7 @@ export default function ReminderBell() {
                 )}
 
                 {dueReminders.length > 0 && (
-                  <div className="px-4 py-3">
+                  <div className={`px-4 py-3 ${unremindedOverdueBills.length > 0 ? "border-b border-navy-800" : ""}`}>
                     <p className="text-sm font-semibold text-white">
                       {language === "ne"
                         ? `${dueReminders.length} फलोअप रिमाइन्डर बाँकी छ`
@@ -212,6 +232,33 @@ export default function ReminderBell() {
                             {s.invoice_number} · {s.customer_name || s.party_name || "Walk-in"}
                           </span>
                           <span className="shrink-0 font-semibold text-blue-300">Rs. {parseFloat(s.due_amount).toFixed(0)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {unremindedOverdueBills.length > 0 && (
+                  <div className="px-4 py-3">
+                    <p className="text-sm font-semibold text-white">
+                      {language === "ne"
+                        ? `${unremindedOverdueBills.length} बिल ${OVERDUE_AFTER_DAYS}+ दिनदेखि बाँकी छ`
+                        : `${unremindedOverdueBills.length} bill${unremindedOverdueBills.length !== 1 ? "s" : ""} pending ${OVERDUE_AFTER_DAYS}+ days`}
+                    </p>
+                    <p className="mt-0.5 text-xs text-navy-500">
+                      {language === "ne" ? "भुक्तानी संकलन गर्ने समय भयो" : "Time to collect payment"}
+                    </p>
+                    <div className="mt-2.5 space-y-1.5">
+                      {unremindedOverdueBills.slice(0, 5).map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => goTo(`/sales?view=${s.id}`)}
+                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-xs text-navy-300 hover:bg-navy-800/60"
+                        >
+                          <span className="truncate">
+                            {s.invoice_number} · {s.customer_name || s.party_name || "Walk-in"}
+                          </span>
+                          <span className="shrink-0 font-semibold text-orange-300">Rs. {parseFloat(s.due_amount).toFixed(0)}</span>
                         </button>
                       ))}
                     </div>

@@ -66,6 +66,11 @@ class SaleListCreateView(_RequirePos, generics.ListCreateAPIView):
             qs = qs.filter(sale_date__gte=date_from)
         if date_to:
             qs = qs.filter(sale_date__lte=date_to)
+        # Used by the Topbar notification bell to surface bills with money
+        # still outstanding — separate from reminder_enabled, which is only
+        # ever set when the user explicitly picks a reminder date/time.
+        if self.request.query_params.get("has_due") in ("true", "1"):
+            qs = qs.filter(due_amount__gt=0)
         return qs
 
     def perform_create(self, serializer):
