@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus, Search, Edit2, Trash2, X, AlertCircle, ShoppingCart, Upload, Image, Eye, Printer, Copy,
 } from "lucide-react";
@@ -835,6 +836,16 @@ export default function PurchasesPage() {
   const [deleting, setDeleting] = useState(false);
   const [printItem, setPrintItem] = useState(null);
   const [viewBillImage, setViewBillImage] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Dashboard's "New Purchase" quick action lands here as ?action=add.
+  useEffect(() => {
+    if (searchParams.get("action") === "add") {
+      setEditItem(null);
+      setShowModal(true);
+      setSearchParams((prev) => { prev.delete("action"); return prev; }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const load = () => {
     setLoading(true);

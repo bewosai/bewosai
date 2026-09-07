@@ -212,7 +212,7 @@ export default function DashboardPage() {
             <SlidersHorizontal className="h-4 w-4" />
           </button>
           <button
-            onClick={() => navigate("/sales")}
+            onClick={() => navigate("/sales?action=new")}
             className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 transition"
           >
             <Plus className="h-4 w-4" />{t("newInvoice")}
@@ -348,10 +348,10 @@ export default function DashboardPage() {
             <h2 className="font-semibold text-white mb-3 text-sm">{language === "ne" ? "द्रुत कार्यहरू" : "Quick Actions"}</h2>
             <div className="grid grid-cols-2 gap-2.5">
               {[
-                { label: t("newInvoice"), path: "/sales", icon: ShoppingCart, color: "text-blue-500", bg: "bg-blue-50" },
-                { label: t("newPurchase"), path: "/purchases", icon: Package, color: "text-purple-500", bg: "bg-purple-50" },
-                { label: t("newExpense"), path: "/expenses", icon: Receipt, color: "text-red-500", bg: "bg-red-50" },
-                { label: t("newParty"), path: "/parties", icon: Users, color: "text-green-500", bg: "bg-green-50" },
+                { label: t("newInvoice"), path: "/sales?action=new", icon: ShoppingCart, color: "text-blue-500", bg: "bg-blue-50" },
+                { label: t("newPurchase"), path: "/purchases?action=add", icon: Package, color: "text-purple-500", bg: "bg-purple-50" },
+                { label: t("newExpense"), path: "/expenses?action=add", icon: Receipt, color: "text-red-500", bg: "bg-red-50" },
+                { label: t("newParty"), path: "/parties?action=add", icon: Users, color: "text-green-500", bg: "bg-green-50" },
               ].map(({ label, path, icon: Icon, color, bg }) => (
                 <button
                   key={label}
