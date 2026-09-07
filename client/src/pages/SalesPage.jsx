@@ -564,10 +564,10 @@ function SaleModal({ onClose, onSaved, editData }) {
                       )}
                     </div>
                     <div className="col-span-1">
-                      <input type="number" min="1"
+                      <input type="number" min="0"
                         className="w-full rounded-md bg-navy-800 border border-navy-700 px-2 py-1.5 text-xs text-white text-right focus:border-orange-500 focus:outline-none"
                         value={item.quantity}
-                        onChange={e => setItem(i, "quantity", parseFloat(e.target.value) || 1)}
+                        onChange={e => setItem(i, "quantity", parseFloat(e.target.value) || 0)}
                       />
                     </div>
                     <div className="col-span-2">
