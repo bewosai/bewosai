@@ -8,6 +8,8 @@ import '../../../../shared/widgets/phone_country_field.dart';
 import '../../data/models/business_model.dart';
 import '../providers/auth_provider.dart';
 
+const _planLabels = {'FREE': 'Free', 'PREMIUM': 'Premium', 'PREMIUMPLUS': 'Premium Plus'};
+
 /// Shown when [AuthStatus.needsBusiness].
 /// Tap a business or create one → selectBusiness → ready → Dashboard.
 /// No Navigator to dashboard; root Consumer switches on status.
@@ -128,10 +130,10 @@ class SelectBusinessScreen extends StatelessWidget {
                                     Row(
                                       children: [
                                         StatusBadge(
-                                          label: b.plan,
-                                          color: b.plan == 'PREMIUM'
-                                              ? AppColors.orange
-                                              : AppColors.navy400,
+                                          label: _planLabels[b.effectivePlan] ?? b.effectivePlan,
+                                          color: b.effectivePlan == 'FREE'
+                                              ? AppColors.navy400
+                                              : AppColors.orange,
                                         ),
                                         const SizedBox(width: 6),
                                         StatusBadge(label: b.status),
@@ -190,12 +192,14 @@ class _CreateBusinessSheetState extends State<_CreateBusinessSheet> {
   final _nameController = TextEditingController();
   final _typeController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _referralController = TextEditingController();
 
   @override
   void dispose() {
     _nameController.dispose();
     _typeController.dispose();
     _phoneController.dispose();
+    _referralController.dispose();
     super.dispose();
   }
 
@@ -216,13 +220,14 @@ class _CreateBusinessSheetState extends State<_CreateBusinessSheet> {
       fiscalYearStart: '07-16',
       defaultTaxRate: 13,
       plan: 'FREE',
+      effectivePlan: 'FREE',
       status: 'ACTIVE',
       owner: 0,
       ownerName: '',
       staffCount: 1,
     );
 
-    final ok = await auth.createBusiness(business);
+    final ok = await auth.createBusiness(business, referralCode: _referralController.text);
     if (!mounted) return;
 
     if (ok) {
@@ -262,6 +267,16 @@ class _CreateBusinessSheetState extends State<_CreateBusinessSheet> {
             BusinessTypeField(controller: _typeController),
             const SizedBox(height: 12),
             PhoneCountryField(controller: _phoneController, labelText: 'Phone (optional)'),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _referralController,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Referral Code (optional)',
+                hintText: 'Got a code from a friend?',
+                prefixIcon: Icon(Icons.card_giftcard_outlined),
+              ),
+            ),
             const SizedBox(height: 20),
             PrimaryButton(
               label: 'Create Business',

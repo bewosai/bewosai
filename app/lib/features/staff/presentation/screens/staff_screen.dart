@@ -39,10 +39,15 @@ class _StaffScreenState extends State<StaffScreen> {
     // takes precedence over the plan default when set.
     const freeStaffLimit = 1;
     const premiumStaffLimit = 8;
-    final planLimit = currentBusiness?.plan == 'PREMIUM' ? premiumStaffLimit : freeStaffLimit;
+    // effectivePlan (not plan) — a coupon/referral-granted PremiumPlus is
+    // unlimited, and even plain Premium via that route must still unlock
+    // the higher fixed limit, not just a directly-licensed one.
+    final effectivePlan = currentBusiness?.effectivePlan ?? currentBusiness?.plan;
+    final isUnlimited = currentBusiness?.staffLimitOverride == null && effectivePlan == 'PREMIUMPLUS';
+    final planLimit = effectivePlan == 'FREE' ? freeStaffLimit : premiumStaffLimit;
     final staffLimit = currentBusiness?.staffLimitOverride ?? planLimit;
     final nonOwnerCount = sp.staff.where((s) => s.role != 'OWNER').length;
-    final atStaffLimit = nonOwnerCount >= staffLimit;
+    final atStaffLimit = !isUnlimited && nonOwnerCount >= staffLimit;
 
     final filteredStaff = _search.isEmpty
         ? sp.staff
@@ -99,7 +104,7 @@ class _StaffScreenState extends State<StaffScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                currentBusiness?.plan == 'PREMIUM'
+                                effectivePlan != 'FREE'
                                     ? 'This business is limited to $staffLimit staff member${staffLimit == 1 ? '' : 's'} besides the owner.'
                                     : 'Your Free plan allows up to $staffLimit staff member${staffLimit == 1 ? '' : 's'} besides the owner — upgrade to Premium to invite more.',
                                 style: const TextStyle(

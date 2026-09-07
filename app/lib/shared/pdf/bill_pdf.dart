@@ -159,7 +159,7 @@ Future<pw.Document> buildBillPdf({
                 ),
               ),
 
-              // "Tax Invoice" heading
+              // "Proferma Invoice" heading
               section(
                 child: pw.Center(
                   child: pw.Text(

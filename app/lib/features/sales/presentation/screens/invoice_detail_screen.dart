@@ -88,7 +88,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     final billType = s.paidAmount <= 0 && s.dueAmount > 0 ? 'Credit' : 'Cash';
     showBillPrintDialog(
       context,
-      documentTitle: 'Tax Invoice',
+      documentTitle: 'Proferma Invoice',
       data: BillPdfData(
         businessName: business?.name ?? '',
         businessPhone: business?.phone ?? '',

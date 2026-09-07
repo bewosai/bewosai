@@ -6,6 +6,7 @@ import '../../../../core/features/feature_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../billing/presentation/screens/upgrade_plan_screen.dart';
 import '../../../inventory/presentation/screens/inventory_import_screen.dart';
 import '../../../parties/presentation/screens/party_import_screen.dart';
 import '../../../reports/presentation/screens/reports_hub_screen.dart';
@@ -70,6 +71,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             const _GroupLabel('GENERAL'),
             _MenuGroup(items: [
+              _MenuItem(
+                icon: Icons.workspace_premium_outlined,
+                label: 'Upgrade Plan',
+                subtitle: 'Apply a coupon, or refer a friend to earn free Premium',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const UpgradePlanScreen()),
+                ),
+              ),
               _MenuItem(
                 icon: Icons.bar_chart_outlined,
                 label: 'View Report',

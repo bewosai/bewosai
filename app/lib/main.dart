@@ -11,6 +11,7 @@ import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/billing/presentation/providers/billing_provider.dart';
 import 'features/banking/presentation/providers/banking_provider.dart';
 import 'features/expenses/presentation/providers/expense_provider.dart';
 import 'features/inventory/presentation/providers/inventory_provider.dart';
@@ -94,6 +95,7 @@ class _BewosaiAppState extends State<BewosaiApp> {
         ChangeNotifierProvider.value(value: _bankingProvider),
         ChangeNotifierProvider(create: (_) => ReportProvider()),
         ChangeNotifierProvider(create: (_) => StaffProvider()),
+        ChangeNotifierProvider(create: (_) => BillingProvider()),
         ChangeNotifierProvider(create: (_) => RecycleBinProvider()),
         ChangeNotifierProvider.value(value: _settingsProvider),
         ChangeNotifierProxyProvider<AuthProvider, FeatureProvider>(

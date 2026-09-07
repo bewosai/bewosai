@@ -37,7 +37,8 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<List<Business>> myBusinesses() => _service.myBusinesses();
 
   @override
-  Future<Business> createBusiness(Business business) => _service.createBusiness(business);
+  Future<Business> createBusiness(Business business, {String? referralCode}) =>
+      _service.createBusiness(business, referralCode: referralCode);
 
   @override
   Future<Business> updateBusiness(int id, Map<String, dynamic> fields, {File? logo}) =>

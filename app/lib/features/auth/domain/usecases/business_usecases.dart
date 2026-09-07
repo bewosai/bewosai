@@ -10,7 +10,8 @@ class BusinessUseCases {
 
   Future<List<Business>> listMyBusinesses() => _repository.myBusinesses();
 
-  Future<Business> createBusiness(Business business) => _repository.createBusiness(business);
+  Future<Business> createBusiness(Business business, {String? referralCode}) =>
+      _repository.createBusiness(business, referralCode: referralCode);
 
   Future<Business> updateBusiness(int id, Map<String, dynamic> fields, {File? logo}) =>
       _repository.updateBusiness(id, fields, logo: logo);

@@ -13,7 +13,7 @@ abstract class AuthRepository {
   Future<AppUser> getMe();
   Future<AppUser> updateMe({String? name, String? phone});
   Future<List<Business>> myBusinesses();
-  Future<Business> createBusiness(Business business);
+  Future<Business> createBusiness(Business business, {String? referralCode});
   Future<Business> updateBusiness(int id, Map<String, dynamic> fields, {File? logo});
   Future<void> deleteBusiness(int id);
   Future<Business> closeFiscalYear(int id);

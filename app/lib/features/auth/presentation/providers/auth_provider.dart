@@ -196,8 +196,8 @@ class AuthProvider extends ChangeNotifier {
 
   // ── Business selection / CRUD ─────────────────────────────────────────────
 
-  Future<bool> createBusiness(Business business) => _guard(() async {
-        final created = await _businessUseCases.createBusiness(business);
+  Future<bool> createBusiness(Business business, {String? referralCode}) => _guard(() async {
+        final created = await _businessUseCases.createBusiness(business, referralCode: referralCode);
         businesses = [...businesses, created];
         await _storage.saveBusinesses(
           businesses.map((e) => e.toRawJson()).toList(),
@@ -305,6 +305,7 @@ class AuthProvider extends ChangeNotifier {
                 fiscalYearStart: b.fiscalYearStart,
                 defaultTaxRate: b.defaultTaxRate,
                 plan: b.plan,
+                effectivePlan: b.effectivePlan,
                 status: 'ARCHIVED',
                 owner: b.owner,
                 ownerName: b.ownerName,

@@ -143,9 +143,13 @@ class AuthService {
     }
   }
 
-  Future<Business> createBusiness(Business business) async {
+  Future<Business> createBusiness(Business business, {String? referralCode}) async {
     try {
-      final res = await _dio.post('/auth/businesses/', data: business.toJson());
+      final data = business.toJson();
+      if (referralCode != null && referralCode.trim().isNotEmpty) {
+        data['referral_code'] = referralCode.trim().toUpperCase();
+      }
+      final res = await _dio.post('/auth/businesses/', data: data);
       return Business.fromJson(res.data as Map<String, dynamic>);
     } catch (e) {
       throw ApiClient.toApiException(e);

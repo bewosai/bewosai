@@ -12,6 +12,11 @@ class Business {
   final String fiscalYearStart;
   final double defaultTaxRate;
   final String plan;
+  // The plan actually in force right now — falls back to [plan] when the
+  // API response doesn't carry it (e.g. a cached/older payload), so a
+  // coupon/referral-granted Premium/PremiumPlus (see accounts.Business.
+  // effective_plan on the backend) is never under-reported client-side.
+  final String effectivePlan;
   final String status;
   final int owner;
   final String ownerName;
@@ -36,6 +41,7 @@ class Business {
     required this.fiscalYearStart,
     required this.defaultTaxRate,
     required this.plan,
+    required this.effectivePlan,
     required this.status,
     required this.owner,
     required this.ownerName,
@@ -57,6 +63,7 @@ class Business {
         fiscalYearStart: json['fiscal_year_start'] as String? ?? '07-16',
         defaultTaxRate: double.tryParse('${json['default_tax_rate'] ?? ''}') ?? 13,
         plan: json['plan'] as String? ?? 'FREE',
+        effectivePlan: json['effective_plan'] as String? ?? json['plan'] as String? ?? 'FREE',
         status: json['status'] as String? ?? 'ACTIVE',
         owner: json['owner'] is int ? json['owner'] as int : int.tryParse('${json['owner']}') ?? 0,
         ownerName: json['owner_name'] as String? ?? '',
@@ -91,6 +98,7 @@ class Business {
         'fiscal_year_start': fiscalYearStart,
         'default_tax_rate': defaultTaxRate,
         'plan': plan,
+        'effective_plan': effectivePlan,
         'status': status,
         'owner': owner,
         'owner_name': ownerName,
