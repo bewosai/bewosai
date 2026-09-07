@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  Menu, Bell, Search, LogOut, ChevronDown, Building2,
+  Menu, Search, LogOut, ChevronDown, Building2,
   Sun, Moon, Eye, EyeOff, Globe, WifiOff, RefreshCw,
   Download, CloudUpload,
 } from "lucide-react";
@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { useOfflineSync } from "../../utils/offlineQueue";
 import api from "../../api";
+import ReminderBell from "./ReminderBell";
 
 const PLAN_LABELS = { FREE: "Free", PREMIUM: "Premium", PREMIUMPLUS: "Premium Plus" };
 
@@ -141,9 +142,7 @@ export default function Topbar({ onMenuClick }) {
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
 
-          <button className="relative rounded-xl border border-navy-800 bg-navy-900 p-2 text-navy-300 transition hover:text-orange-400">
-            <Bell className="h-4 w-4" />
-          </button>
+          <ReminderBell />
 
           <div className="hidden rounded-xl border border-navy-800 bg-navy-900 px-3 py-2 sm:block">
             <p className="text-sm font-medium text-white">{user?.name || "User"}</p>

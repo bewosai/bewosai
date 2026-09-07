@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { reports as reportsApi, sales as salesApi } from "../api";
+import { reports as reportsApi } from "../api";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useDateFormat } from "../context/AppSettingsContext";
 import {
@@ -9,7 +9,7 @@ import {
 import {
   TrendingUp, TrendingDown, AlertTriangle, ShoppingCart,
   Package, Plus, Wallet, ArrowUpRight, ArrowDownRight, ArrowDownLeft,
-  Users, Receipt, BarChart3, Loader, Bell, ChevronRight, SlidersHorizontal, X, Check,
+  Users, Receipt, BarChart3, Loader, SlidersHorizontal, X, Check,
 } from "lucide-react";
 
 // Which KPI tiles a viewer wants to see is a personal display preference,
@@ -130,127 +130,6 @@ function KpiCard({ label, value, sub, icon: Icon, iconBg, trend, onClick }) {
   );
 }
 
-/**
- * Proactive reminder about money owed to the business — shown right on the
- * Dashboard (not buried in the dedicated Reports section) since a pending
- * payment is exactly the kind of thing you should see the moment you open
- * the app. Falls back to just the total (already available on every plan)
- * if the per-customer breakdown can't be fetched — e.g. Reports is
- * plan-gated or the request fails — so a Free-plan business still gets a
- * useful reminder, just without the itemized list.
- */
-function PaymentReminderBanner({ totalReceivable, fmt, language }) {
-  const navigate = useNavigate();
-  const [debtors, setDebtors] = useState(null);
-
-  useEffect(() => {
-    if (!totalReceivable || totalReceivable <= 0) return;
-    reportsApi.receivableAging()
-      .then((r) => setDebtors(r.data?.top_debtors || []))
-      .catch(() => setDebtors(null));
-  }, [totalReceivable]);
-
-  if (!totalReceivable || totalReceivable <= 0) return null;
-
-  return (
-    <div className="rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4 sm:p-5">
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-500/15">
-          <Bell className="h-4 w-4 text-orange-400" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-white">
-            {language === "ne" ? "तपाईंले पाउनुपर्ने रकम बाँकी छ" : "You have money pending to receive"}
-            {" — "}
-            <span className="text-orange-400">{fmt(totalReceivable)}</span>
-          </p>
-          {debtors && debtors.length > 0 && (
-            <div className="mt-3 space-y-1.5">
-              {debtors.slice(0, 3).map((d) => (
-                <button
-                  key={d.customer_id ?? d.customer__name}
-                  onClick={() => navigate("/payments")}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-xs text-navy-300 hover:bg-navy-800/60"
-                >
-                  <span className="truncate">
-                    {d.customer__name || "Walk-in"} · {d.invoice_count} invoice{d.invoice_count !== 1 ? "s" : ""}
-                  </span>
-                  <span className="shrink-0 font-semibold text-orange-300">{fmt(d.total_due)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          <button
-            onClick={() => navigate("/payments")}
-            className="mt-3 flex items-center gap-1 text-xs font-semibold text-orange-400 hover:text-orange-300"
-          >
-            {language === "ne" ? "हेर्नुहोस् र संकलन गर्नुहोस्" : "View & Collect"} <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Surfaces invoices whose "Set Reminder" time (see SalesPage.jsx) has
- * already passed. The mobile app fires an actual on-device notification
- * for these (see NotificationService); a browser tab can't reliably do
- * that in the background, so the web equivalent is showing them clearly
- * the moment the business owner opens the Dashboard.
- */
-function DueRemindersBanner({ language }) {
-  const navigate = useNavigate();
-  const [due, setDue] = useState([]);
-
-  useEffect(() => {
-    salesApi.list({ reminder_enabled: true, status: "CONFIRMED", page_size: 50 })
-      .then((r) => {
-        const now = new Date();
-        const results = r.data?.results ?? r.data ?? [];
-        setDue(
-          results.filter((s) =>
-            s.reminder_at && new Date(s.reminder_at) <= now && parseFloat(s.due_amount || 0) > 0
-          )
-        );
-      })
-      .catch(() => setDue([]));
-  }, []);
-
-  if (due.length === 0) return null;
-
-  return (
-    <div className="rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4 sm:p-5">
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/15">
-          <Bell className="h-4 w-4 text-blue-400" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-white">
-            {language === "ne"
-              ? `${due.length} फलोअप रिमाइन्डर बाँकी छ`
-              : `${due.length} follow-up reminder${due.length !== 1 ? "s" : ""} due`}
-          </p>
-          <div className="mt-3 space-y-1.5">
-            {due.slice(0, 3).map((s) => (
-              <button
-                key={s.id}
-                onClick={() => navigate(`/sales?view=${s.id}`)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-xs text-navy-300 hover:bg-navy-800/60"
-              >
-                <span className="truncate">
-                  {s.invoice_number} · {s.customer_name || s.party_name || "Walk-in"}
-                </span>
-                <span className="shrink-0 font-semibold text-blue-300">Rs. {parseFloat(s.due_amount).toFixed(0)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -340,13 +219,6 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
-
-      {!loading && (
-        <div className="space-y-4">
-          <PaymentReminderBanner totalReceivable={data?.total_receivable} fmt={f} language={language} />
-          <DueRemindersBanner language={language} />
-        </div>
-      )}
 
       {/* KPI Cards */}
       {loading ? (
