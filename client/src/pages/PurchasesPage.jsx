@@ -44,7 +44,7 @@ const STATUS_COLORS = {
   CANCELLED: "bg-red-500/10 text-red-400",
 };
 
-const EMPTY_ITEM = { product: "", product_name: "", quantity: 1, unit_label: "", unit_price: 0, discount_amount: 0 };
+const EMPTY_ITEM = { product: "", product_name: "", quantity: 0, unit_label: "", unit_price: 0, discount_amount: 0 };
 const EMPTY_FORM = {
   supplier: "",
   supplier_name: "",

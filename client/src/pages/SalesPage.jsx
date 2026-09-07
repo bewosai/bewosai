@@ -49,7 +49,7 @@ const STATUS_COLORS = Object.fromEntries(
   Object.entries(SALE_STATUS).map(([k, v]) => [k, v.cls])
 );
 
-const EMPTY_ITEM = { product_id: "", product_name: "", quantity: 1, unit_label: "", unit_price: 0, discount_amount: 0 };
+const EMPTY_ITEM = { product_id: "", product_name: "", quantity: 0, unit_label: "", unit_price: 0, discount_amount: 0 };
 const EMPTY_FORM = {
   customer_id: "",
   customer_name: "",
