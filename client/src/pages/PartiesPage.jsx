@@ -324,6 +324,7 @@ export default function PartiesPage() {
   const [editing, setEditing] = useState(null);
   const [ledgerParty, setLedgerParty] = useState(null);
   const [deletingParty, setDeletingParty] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Alt+N (see useKeyboardShortcuts) lands here as ?action=add.
@@ -345,9 +346,14 @@ export default function PartiesPage() {
   useEffect(() => { if (currentBusiness?.id) load(); }, [currentBusiness?.id]);
 
   const handleDelete = async () => {
-    await partiesApi.delete(deletingParty.id);
-    setDeletingParty(null);
-    load();
+    setDeleteError("");
+    try {
+      await partiesApi.delete(deletingParty.id);
+      setDeletingParty(null);
+      load();
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || "Failed to delete party.");
+    }
   };
 
   const filtered = useMemo(() => {
@@ -489,7 +495,7 @@ export default function PartiesPage() {
               key={party.id}
               party={party}
               onEdit={(p) => { setEditing(p); setShowModal(true); }}
-              onDelete={(p) => setDeletingParty(p)}
+              onDelete={(p) => { setDeleteError(""); setDeletingParty(p); }}
               onLedger={(p) => setLedgerParty(p)}
             />
           ))}
@@ -508,9 +514,18 @@ export default function PartiesPage() {
       )}
       {deletingParty && (
         <ConfirmDialog
-          message={`Delete "${deletingParty.name}"? This will remove all associated records.`}
+          message={
+            deleteError ? (
+              <span>
+                <span className="mb-1.5 block text-red-400">{deleteError}</span>
+                Delete "{deletingParty.name}"? This will remove all associated records.
+              </span>
+            ) : (
+              `Delete "${deletingParty.name}"? This will remove all associated records.`
+            )
+          }
           onConfirm={handleDelete}
-          onCancel={() => setDeletingParty(null)}
+          onCancel={() => { setDeletingParty(null); setDeleteError(""); }}
         />
       )}
     </div>
