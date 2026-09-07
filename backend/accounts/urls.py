@@ -13,6 +13,7 @@ urlpatterns = [
     path("businesses/", views.BusinessListCreateView.as_view()),
     path("businesses/<int:pk>/", views.BusinessDetailView.as_view()),
     path("businesses/<int:pk>/close-fiscal-year/", views.CloseFiscalYearView.as_view()),
+    path("businesses/<int:pk>/fiscal-years/", views.FiscalYearListView.as_view()),
     path("businesses/<int:business_id>/staff/", views.StaffListView.as_view()),
     path("businesses/<int:business_id>/staff/<int:pk>/", views.StaffDetailView.as_view()),
     path("businesses/<int:business_id>/staff/<int:pk>/regenerate-link/", views.StaffRegenerateLinkView.as_view()),

@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email as django_validate_email
 from rest_framework import serializers
 from bewosai.utils import suggest_email_typo_fix
-from .models import User, Business, StaffMember
+from .models import User, Business, FiscalYear, StaffMember
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -68,6 +68,15 @@ class BusinessSerializer(serializers.ModelSerializer):
 
     def get_staff_count(self, obj):
         return obj.staff.filter(is_active=True).count()
+
+
+class FiscalYearSerializer(serializers.ModelSerializer):
+    closed_by_name = serializers.CharField(source="closed_by.name", read_only=True, default="")
+
+    class Meta:
+        model = FiscalYear
+        fields = ("id", "start_date", "end_date", "label", "status", "closed_by_name", "closed_at")
+        read_only_fields = fields
 
 
 class StaffMemberSerializer(serializers.ModelSerializer):

@@ -8,14 +8,14 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from datetime import timedelta
+from datetime import date, timedelta
 from bewosai.email import send_otp_email
 from bewosai.sms import send_otp_sms
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, get_platform, require_feature, require_staff_permission
 from bewosai.utils import get_bid, get_business, mask_email
-from .models import User, Business, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
+from .models import User, Business, FiscalYear, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import (
-    UserSerializer, BusinessSerializer, StaffMemberSerializer, InviteStaffSerializer,
+    UserSerializer, BusinessSerializer, FiscalYearSerializer, StaffMemberSerializer, InviteStaffSerializer,
     SendOTPSerializer, VerifyOTPSerializer, GoogleLoginSerializer,
 )
 
@@ -449,67 +449,65 @@ class BusinessDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Business.objects.filter(owner=self.request.user)
 
 
+def _fiscal_year_bounds(business, today=None):
+    """The [start_date, end_date] of the fiscal year covering (or most
+    recently ended relative to) `today`, derived from Business.fiscal_year_start
+    ("MM-DD"). E.g. fiscal_year_start="07-16" and today=2026-03-01 gives
+    (2025-07-16, 2026-07-15) — the year currently in progress."""
+    today = today or timezone.localdate()
+    fy_month, fy_day = (int(p) for p in business.fiscal_year_start.split("-"))
+    this_years_start = date(today.year, fy_month, fy_day)
+    start = this_years_start if today >= this_years_start else date(today.year - 1, fy_month, fy_day)
+    next_start = date(start.year + 1, fy_month, fy_day)
+    end = next_start - timedelta(days=1)
+    return start, end
+
+
 class CloseFiscalYearView(APIView):
     """
-    Archives the given business and creates a fresh profile with the same
-    details, carrying the old business's total cash/bank balance forward as
-    the opening balance of a new "Opening Balance" account on the new profile.
+    Marks the business's current fiscal year (per Business.fiscal_year_start)
+    as closed, in place — no cloning, no archiving. Every Sale/Purchase/
+    Expense/etc. stays exactly where it is; this just records that the
+    period is closed. Phase 1 of the fiscal-year lock system — nothing yet
+    enforces read-only access to records inside a closed period (Phase 2).
     """
 
     def post(self, request, pk):
-        from banking.models import BankAccount
-
-        old_business = Business.objects.filter(id=pk, owner=request.user).first()
-        if not old_business:
+        business = Business.objects.filter(id=pk, owner=request.user).first()
+        if not business:
             return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
-        if old_business.status == Business.STATUS_ARCHIVED:
-            return Response({"error": "This business is already archived."}, status=status.HTTP_400_BAD_REQUEST)
+        if business.status == Business.STATUS_ARCHIVED:
+            return Response({"error": "This business is archived."}, status=status.HTTP_400_BAD_REQUEST)
 
-        with transaction.atomic():
-            carried_balance = sum(
-                (acc.balance for acc in old_business.bank_accounts.filter(is_active=True)),
-                start=0,
-            )
+        start, end = _fiscal_year_bounds(business)
+        if FiscalYear.objects.filter(business=business, start_date=start, end_date=end).exists():
+            return Response({"error": "This fiscal year has already been closed."}, status=status.HTTP_400_BAD_REQUEST)
 
-            old_business.status = Business.STATUS_ARCHIVED
-            old_business.save(update_fields=["status"])
-
-            new_business = Business.objects.create(
-                owner=old_business.owner,
-                name=old_business.name,
-                business_type=old_business.business_type,
-                address=old_business.address,
-                phone=old_business.phone,
-                email=old_business.email,
-                pan_number=old_business.pan_number,
-                vat_number=old_business.vat_number,
-                currency=old_business.currency,
-                fiscal_year_start=old_business.fiscal_year_start,
-                plan=old_business.plan,
-                status=Business.STATUS_ACTIVE,
-            )
-
-            for staff in old_business.staff.filter(is_active=True):
-                StaffMember.objects.create(
-                    user=staff.user, business=new_business, role=staff.role, permissions=staff.permissions,
-                )
-
-            BankAccount.objects.create(
-                business=new_business,
-                account_name="Opening Balance",
-                account_type=BankAccount.TYPE_CASH,
-                opening_balance=carried_balance,
-            )
+        label = f"{start.year}/{str(end.year)[2:]}" if start.year != end.year else str(start.year)
+        fiscal_year = FiscalYear.objects.create(
+            business=business, start_date=start, end_date=end, label=label,
+            status=FiscalYear.STATUS_CLOSED, closed_by=request.user,
+        )
 
         return Response(
             {
                 "success": True,
-                "message": "Fiscal year closed. A new business profile has been created.",
-                "old_business": BusinessSerializer(old_business).data,
-                "new_business": BusinessSerializer(new_business).data,
-                "carried_balance": float(carried_balance),
+                "message": f"Fiscal year {label} closed.",
+                "fiscal_year": FiscalYearSerializer(fiscal_year).data,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class FiscalYearListView(generics.ListAPIView):
+    """Past closed fiscal years for a business — read-only, shown in
+    Settings so a closed year stays visible/searchable, just not editable."""
+    serializer_class = FiscalYearSerializer
+
+    def get_queryset(self):
+        return FiscalYear.objects.filter(
+            business_id=self.kwargs["pk"],
+            business__owner=self.request.user,
         )
 
 

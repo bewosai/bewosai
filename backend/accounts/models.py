@@ -358,6 +358,39 @@ class Business(models.Model):
         return self.has_active_subscription or self.has_active_platform_trial(platform)
 
 
+class FiscalYear(models.Model):
+    """
+    Marks a date range on a business as closed — Phase 1 of the fiscal-year
+    lock system (see the "Fiscal Year Lock + Edit Requests + Audit Log" plan).
+    Replaces the old CloseFiscalYearView behavior of archiving the whole
+    Business and cloning a new one: closing now just records the period here
+    and leaves every Sale/Purchase/Expense/etc. exactly where it is. This
+    phase is informational only — nothing yet actually enforces read-only
+    access to records inside a CLOSED period (that's Phase 2).
+    """
+    STATUS_ACTIVE = "ACTIVE"
+    STATUS_CLOSED = "CLOSED"
+    STATUS_CHOICES = [(STATUS_ACTIVE, "Active"), (STATUS_CLOSED, "Closed")]
+
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="fiscal_years")
+    start_date = models.DateField()
+    end_date = models.DateField()
+    # e.g. "2082/83" — Nepali fiscal years span two Gregorian years, so a
+    # plain year number would be ambiguous; computed once at close time from
+    # the closing date rather than re-derived on every read.
+    label = models.CharField(max_length=20)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_CLOSED)
+    closed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    closed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-start_date"]
+        indexes = [models.Index(fields=["business", "start_date", "end_date"])]
+
+    def __str__(self):
+        return f"{self.business.name} — {self.label} ({self.status})"
+
+
 class StaffMember(models.Model):
     ROLE_OWNER = "OWNER"
     ROLE_MANAGER = "MANAGER"

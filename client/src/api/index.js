@@ -79,6 +79,7 @@ export const auth = {
   removeStaff: (bid, sid) => api.delete(`/auth/businesses/${bid}/staff/${sid}/`),
   regenerateStaffLink: (bid, sid) => api.post(`/auth/businesses/${bid}/staff/${sid}/regenerate-link/`),
   closeFiscalYear: (bid) => api.post(`/auth/businesses/${bid}/close-fiscal-year/`),
+  fiscalYears: (bid) => api.get(`/auth/businesses/${bid}/fiscal-years/`),
   staffLogin: (token) => api.post("/auth/staff-login/", { token }),
 };
 

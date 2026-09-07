@@ -229,7 +229,7 @@ export default function SettingsPage() {
           toggleTheme, toggleLanguage, togglePrivateMode, toggleDateMode,
           setTheme, setLanguage, setDateMode, setCurrency } = useAppSettings();
   const { t } = useTranslation();
-  const { currentBusiness, user, updateBusinessInList, replaceBusiness } = useAuth();
+  const { currentBusiness, user, updateBusinessInList } = useAuth();
   const navigate = useNavigate();
   const [section, setSection] = useState("account");
   const [saved, setSaved] = useState(false);
@@ -238,6 +238,8 @@ export default function SettingsPage() {
   const [showCloseFiscalYear, setShowCloseFiscalYear] = useState(false);
   const [closingFiscalYear, setClosingFiscalYear] = useState(false);
   const [fiscalYearError, setFiscalYearError] = useState("");
+  const [fiscalYears, setFiscalYears] = useState([]);
+  const [fiscalYearsLoading, setFiscalYearsLoading] = useState(true);
   const [profileForm, setProfileForm] = useState({ name: user?.name || "", phone: user?.phone || "" });
   const [invoiceForm, setInvoiceForm] = useState({
     header_color: localStorage.getItem("invoice_header_color") || "#f97316",
@@ -318,14 +320,25 @@ export default function SettingsPage() {
     }
   };
 
+  const loadFiscalYears = () => {
+    if (!currentBusiness?.id) return;
+    setFiscalYearsLoading(true);
+    authApi.fiscalYears(currentBusiness.id)
+      .then((r) => setFiscalYears(r.data?.results ?? r.data ?? []))
+      .catch(() => setFiscalYears([]))
+      .finally(() => setFiscalYearsLoading(false));
+  };
+
+  useEffect(loadFiscalYears, [currentBusiness?.id]);
+
   const handleCloseFiscalYear = async () => {
     if (!currentBusiness?.id) return;
     setClosingFiscalYear(true);
     setFiscalYearError("");
     try {
-      const { data } = await authApi.closeFiscalYear(currentBusiness.id);
-      replaceBusiness?.(currentBusiness.id, data.new_business);
+      await authApi.closeFiscalYear(currentBusiness.id);
       setShowCloseFiscalYear(false);
+      loadFiscalYears();
     } catch (e) {
       setFiscalYearError(e.response?.data?.error || "Couldn't close the fiscal year.");
     } finally {
@@ -586,8 +599,8 @@ export default function SettingsPage() {
             <div>
               <p className="text-sm text-navy-300">
                 {language === "ne"
-                  ? "यो व्यवसाय अभिलेखागारमा राखिनेछ र समान विवरणसहित नयाँ प्रोफाइल सिर्जना हुनेछ। नगद/बैंक मौज्दात नयाँ प्रोफाइलमा सुरुवाती मौज्दातको रूपमा सारिनेछ।"
-                  : "Archives this business and creates a fresh profile with the same details. Your cash/bank balance carries over as the new profile's opening balance."}
+                  ? "हालको आर्थिक वर्ष बन्द गर्नुहोस्। बिक्री, खरिद, खर्च आदि यहीं रहन्छन् — केवल पढ्न मात्र मिल्ने हुन्छन्; तपाईं अझै पनि पुरानो डेटा हेर्न र खोज्न सक्नुहुन्छ।"
+                  : "Closes the current fiscal year. Your sales, purchases, expenses, etc. all stay right here — they just become read-only. You can still view and search old data anytime."}
               </p>
               <p className="mt-1.5 text-xs text-navy-500">
                 {language === "ne" ? "यो पूर्ववत गर्न सकिँदैन।" : "This can't be undone."}
@@ -606,6 +619,29 @@ export default function SettingsPage() {
             <p className="mt-3 flex items-center gap-1.5 text-xs text-red-400">
               <AlertCircle className="h-3.5 w-3.5" /> {fiscalYearError}
             </p>
+          )}
+
+          {fiscalYearsLoading ? (
+            <div className="mt-4 flex justify-center border-t border-navy-800 pt-3">
+              <Loader className="h-4 w-4 animate-spin text-orange-500" />
+            </div>
+          ) : fiscalYears.length > 0 && (
+            <div className="mt-4 space-y-1.5 border-t border-navy-800 pt-3">
+              <p className="text-xs font-semibold text-navy-400">
+                {language === "ne" ? "बन्द भएका आर्थिक वर्षहरू" : "Closed fiscal years"}
+              </p>
+              {fiscalYears.map((fy) => (
+                <div key={fy.id} className="flex items-center justify-between rounded-lg border border-navy-800 bg-navy-950 px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-white">{fy.label}</p>
+                    <p className="text-[11px] text-navy-500">{fy.start_date} — {fy.end_date}</p>
+                  </div>
+                  <span className="rounded-full bg-navy-800 px-2 py-0.5 text-[10px] font-semibold text-navy-400">
+                    {language === "ne" ? "बन्द 🔒" : "Closed 🔒"}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </SettingCard>
         )}
@@ -805,8 +841,8 @@ export default function SettingsPage() {
           message={
             <span>
               {language === "ne"
-                ? `"${currentBusiness?.name}" अभिलेखागारमा राखिनेछ र समान विवरणसहित नयाँ व्यवसाय प्रोफाइल सिर्जना हुनेछ। नगद/बैंक मौज्दात नयाँमा सुरुवाती मौज्दातको रूपमा सारिनेछ। यो पूर्ववत गर्न सकिँदैन।`
-                : <>Archive <strong className="text-white">{currentBusiness?.name}</strong> and start a fresh business profile? Your cash/bank balance will carry over as the new profile's opening balance. This can't be undone.</>}
+                ? `"${currentBusiness?.name}" को हालको आर्थिक वर्ष बन्द गर्ने हो? यसमा भएका सबै रेकर्ड पढ्न मात्र मिल्ने हुनेछन् — डेटा मेटिँदैन। यो पूर्ववत गर्न सकिँदैन।`
+                : <>Close the current fiscal year for <strong className="text-white">{currentBusiness?.name}</strong>? Every record in it becomes read-only — nothing is deleted or moved. This can't be undone.</>}
               {fiscalYearError && (
                 <span className="mt-3 flex items-center gap-1.5 text-xs text-red-400">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {fiscalYearError}
