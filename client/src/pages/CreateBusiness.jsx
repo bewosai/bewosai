@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { auth as authApi } from "../api";
 import bewosaiLogo from "../assessts/images/bewosai.png";
-import { Building2, ArrowRight, ChevronLeft } from "lucide-react";
+import { Building2, ArrowRight, ChevronLeft, Gift } from "lucide-react";
 import PhoneInput from "../components/common/PhoneInput";
 
 const BUSINESS_TYPE_PRESETS = [
@@ -14,7 +14,11 @@ const BUSINESS_TYPE_PRESETS = [
 export default function CreateBusinessPage() {
   const { addBusiness, businesses } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", business_type: "", phone: "" });
+  const [searchParams] = useSearchParams();
+  // A shared referral link (e.g. /create-business?ref=CODE) pre-fills the
+  // code but still leaves it editable — see billing app / UpgradePlanPage
+  // for where a business's own code comes from.
+  const [form, setForm] = useState({ name: "", business_type: "", phone: "", referral_code: searchParams.get("ref") || "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [customType, setCustomType] = useState(false);
@@ -106,6 +110,20 @@ export default function CreateBusinessPage() {
             <div>
               <label className="mb-1.5 block text-sm font-medium text-navy-200">Phone <span className="text-navy-500">(optional)</span></label>
               <PhoneInput value={form.phone} onChange={(phone) => setForm({ ...form, phone })} />
+            </div>
+            <div>
+              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-navy-200">
+                <Gift className="h-3.5 w-3.5 text-orange-400" /> Referral Code <span className="text-navy-500">(optional)</span>
+              </label>
+              <input
+                value={form.referral_code}
+                onChange={(e) => setForm({ ...form, referral_code: e.target.value.toUpperCase() })}
+                placeholder="Got a code from a friend?"
+                className={`${field} font-mono uppercase tracking-widest placeholder:tracking-normal placeholder:font-sans`}
+              />
+              {form.referral_code && (
+                <p className="mt-1.5 text-xs text-navy-500">You and your friend will both get 1 month Premium free.</p>
+              )}
             </div>
             <button type="submit" disabled={saving}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 py-3.5 font-bold text-white transition hover:bg-orange-400 disabled:opacity-60">

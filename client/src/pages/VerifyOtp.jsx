@@ -14,10 +14,10 @@ export default function VerifyOtpPage() {
   const identifier = location.state?.identifier;
   const isPhone = identifier ? !identifier.includes("@") : false;
   const initialUserExists = location.state?.userExists ?? false;
-  const initialAccountType = location.state?.accountType;
   // The backend's own message — e.g. "OTP sent to your phone" for a Nepal
-  // number via Sparrow SMS, or "sent to j***@example.com instead" when the
-  // phone isn't one Sparrow can reach and it fell back to email.
+  // number via Sparrow SMS, or "sent to j***@example.com instead" when an
+  // existing account's phone isn't one Sparrow can reach and it fell back
+  // to that account's email on file.
   const initialMessage = location.state?.message;
 
   const [step, setStep] = useState(2); // 2=otp, 3=profile (new users only)
@@ -29,7 +29,7 @@ export default function VerifyOtpPage() {
     initialMessage || (initialUserExists ? `Welcome back! OTP sent to ${identifier}` : `OTP sent to ${identifier}`)
   );
   const [isNewUser, setIsNewUser] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState(initialAccountType || "");
+  const [selectedProfile, setSelectedProfile] = useState("");
 
   // Reached directly (e.g. page refresh) with no identifier in state — nothing to verify
   useEffect(() => {
@@ -128,15 +128,10 @@ export default function VerifyOtpPage() {
           {/* Card */}
           <div className="rounded-3xl border border-navy-800 bg-navy-900/80 px-6 py-7 shadow-2xl backdrop-blur-sm">
 
-            {initialAccountType ? (
-              // Arrived via the upfront Profile → Email → Verify signup flow
-              <Steps current={3} steps={["Profile", "Email", "Verify"]} />
-            ) : (
-              <Steps
-                current={step}
-                steps={isNewUser ? ["Email", "Verify", "Profile"] : ["Email", "Verify"]}
-              />
-            )}
+            <Steps
+              current={step}
+              steps={isNewUser ? ["Email", "Verify", "Profile"] : ["Email", "Verify"]}
+            />
 
             {/* Messages */}
             {error && (

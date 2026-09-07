@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { sales, parties as partiesApi } from "../api/index";
 import { useTranslation } from "../utils/translations";
-import { useDateFormat, useAppSettings } from "../context/AppSettingsContext";
+import { useDateFormat } from "../context/AppSettingsContext";
 import { useAuth } from "../context/AuthContext";
 import { FileText, Plus, Loader, X, AlertCircle, Edit2, Trash2, ChevronDown, Printer } from "lucide-react";
 import ConfirmDialog from "../components/common/ConfirmDialog";
-import { adToBS, formatBS } from "../utils/nepaliDate";
-import { amountInWords } from "../utils/amountInWords";
+import BillTemplate from "../components/invoice/BillTemplate";
+import PrintPreviewModal from "../components/invoice/PrintPreviewModal";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500 transition";
@@ -18,97 +18,52 @@ const STATUS_STYLES = {
   REJECTED: "bg-red-500/10 text-red-400",
 };
 
-/* ─── Print Modal ─── */
+/* ─── Print Modal — curved accent-colored bill layout, shared with
+     Sales/Purchases via BillTemplate. Quotations have no line items (just a
+     flat subtotal/discount/total entered on the form), so BillTemplate's
+     item table is simply omitted for this document type. ─── */
 function QuotationPrintModal({ quotation, onClose }) {
-  const { language } = useAppSettings();
   const { currentBusiness } = useAuth();
   const businessName = localStorage.getItem("business_name") || "Business Name";
   const businessAddress = localStorage.getItem("business_address") || "";
   const businessPhone = localStorage.getItem("business_phone") || "";
   const businessLogo = localStorage.getItem("business_logo") || null;
   const businessPan = currentBusiness?.pan_number || "";
-  const footerText = localStorage.getItem("invoice_footer_text") || "Thank you for your business!";
+  const businessVat = currentBusiness?.vat_number || "";
+  const accentColor = localStorage.getItem("invoice_header_color") || "#f97316";
+  const termsText = localStorage.getItem("invoice_terms_text") || "";
+  const warrantyText = localStorage.getItem("invoice_warranty_text") || "";
+  const footerText = localStorage.getItem("invoice_footer_text") || "";
 
   const subtotal = parseFloat(quotation.subtotal || 0);
   const discount = parseFloat(quotation.discount || 0);
   const total = parseFloat(quotation.total || 0);
-  const miti = quotation.date ? formatBS(adToBS(new Date(quotation.date))) : "";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#ffffff] text-gray-800 shadow-2xl print:max-h-none print:overflow-visible print:shadow-none print:rounded-none">
-        <div className="flex items-center justify-between border-b p-4 print:hidden">
-          <span className="font-bold text-gray-900">Print Quotation</span>
-          <div className="flex items-center gap-3">
-            <button onClick={() => window.print()} className="rounded-lg bg-orange-500 px-4 py-2 text-sm text-white hover:bg-orange-600">
-              <Printer size={14} className="mr-1 inline" /> Print
-            </button>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
-          </div>
-        </div>
-
-        <div className="p-8 print:p-4 text-gray-800" id="print-area">
-          <div className="mb-5 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">{businessName}</h2>
-              <p className="text-xs text-gray-600 mt-0.5">
-                {businessPhone}{businessPhone && businessAddress ? "• " : ""}{businessAddress}
-              </p>
-              {businessPan && <p className="text-xs text-gray-600">PAN No: {businessPan}</p>}
-            </div>
-            {businessLogo && <img src={businessLogo} alt="logo" className="h-14 w-14 rounded-lg object-cover border" />}
-          </div>
-
-          <h3 className="mb-5 text-center text-xl font-bold uppercase tracking-wide text-gray-900">
-            Quotation
-          </h3>
-
-          <div className="mb-5 grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-gray-500">Customer:</p>
-              <p className="font-semibold text-gray-900">{quotation.customer_name || "—"}</p>
-            </div>
-            <div className="text-right text-xs space-y-0.5">
-              <p className="text-gray-500">Quotation No: <span className="font-semibold text-gray-900">{quotation.quotation_number}</span></p>
-              <p className="text-gray-500">Date: <span className="font-semibold text-gray-900">{quotation.date}</span></p>
-              {miti && <p className="text-gray-500">Miti: <span className="font-semibold text-gray-900">{miti}</span></p>}
-              {quotation.expiry_date && <p className="text-gray-500">Valid Until: <span className="font-semibold text-gray-900">{quotation.expiry_date}</span></p>}
-              <p className="text-gray-500">Status: <span className="font-semibold text-gray-900">{quotation.status}</span></p>
-            </div>
-          </div>
-
-          <div className="mb-2 grid grid-cols-2 gap-6">
-            <div className="text-sm">
-              <p className="font-semibold text-gray-700">Amount in Words</p>
-              <p className="text-gray-600">{amountInWords(total)}</p>
-              <p className="mt-2 text-xs italic text-gray-500">*Proforma Invoice</p>
-            </div>
-            <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">Subtotal:</span><span>Rs. {subtotal.toFixed(2)}</span></div>
-              {discount > 0 && (
-                <div className="flex justify-between text-red-500"><span>Discount:</span><span>- Rs. {discount.toFixed(2)}</span></div>
-              )}
-              <div className="flex justify-between border-t border-gray-300 pt-2 text-lg font-bold"><span>Total</span><span>Rs. {total.toFixed(2)}</span></div>
-            </div>
-          </div>
-
-          {quotation.notes && (
-            <div className="mt-4 text-xs text-gray-500 border-t pt-2">Notes: {quotation.notes}</div>
-          )}
-
-          <div className="mt-10 flex justify-end">
-            <div className="text-center">
-              <div className="h-14 w-40 border-b border-gray-400" />
-              <p className="mt-1 text-xs text-gray-600">Authorized Signature</p>
-            </div>
-          </div>
-
-          {footerText && (
-            <div className="mt-4 border-t pt-3 text-center text-xs text-gray-400 italic">{footerText}</div>
-          )}
-        </div>
-      </div>
-    </div>
+    <PrintPreviewModal title="Print Quotation" onClose={onClose}>
+      <BillTemplate
+        accentColor={accentColor}
+        documentLabel="Quotation"
+        documentNumberLabel="Quotation No."
+        documentNumber={quotation.quotation_number}
+        dateLabel="Date"
+        date={quotation.date}
+        dueLabel="Valid Until"
+        dueDate={quotation.expiry_date}
+        business={{ name: businessName, address: businessAddress, phone: businessPhone, logo: businessLogo, pan: businessPan, vat: businessVat }}
+        billToLabel="Customer"
+        billTo={{ name: quotation.customer_name || "—" }}
+        notes={quotation.notes}
+        totals={{
+          subtotal: subtotal.toFixed(2),
+          discount: discount.toFixed(2),
+          total: total.toFixed(2),
+        }}
+        termsText={termsText}
+        warrantyText={warrantyText}
+        footerNote={footerText}
+      />
+    </PrintPreviewModal>
   );
 }
 

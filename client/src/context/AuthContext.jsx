@@ -37,27 +37,35 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  /** Shared by every "here's a fresh JWT pair + user" success path (OTP
+   * verify, staff login link) — populates both localStorage and this
+   * context's state the same way so nothing downstream (ProtectedRoute,
+   * the axios interceptor, business switching) needs to know which flow
+   * the session came from. */
+  const _storeSession = (data) => {
+    localStorage.setItem("access", data.access);
+    localStorage.setItem("refresh", data.refresh);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    localStorage.setItem("businesses", JSON.stringify(data.businesses));
+
+    setUser(data.user);
+    setBusinesses(data.businesses);
+
+    // Auto-select the one business if available
+    if (data.businesses.length === 1) {
+      const biz = data.businesses[0];
+      localStorage.setItem("current_business", JSON.stringify(biz));
+      localStorage.setItem("business_id", String(biz.id));
+      setCurrentBusiness(biz);
+    }
+  };
+
   /** Step 2: verify OTP — returns is_new_user + needs_profile_setup */
   const verifyOtp = useCallback(async (identifier, code, remember) => {
     setLoading(true);
     try {
       const { data } = await authApi.verifyOtp(identifier, code, remember);
-
-      localStorage.setItem("access", data.access);
-      localStorage.setItem("refresh", data.refresh);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("businesses", JSON.stringify(data.businesses));
-
-      setUser(data.user);
-      setBusinesses(data.businesses);
-
-      // Auto-select the one business if available
-      if (data.businesses.length === 1) {
-        const biz = data.businesses[0];
-        localStorage.setItem("current_business", JSON.stringify(biz));
-        localStorage.setItem("business_id", String(biz.id));
-        setCurrentBusiness(biz);
-      }
+      _storeSession(data);
 
       return {
         ok: true,
@@ -68,6 +76,22 @@ export function AuthProvider({ children }) {
       };
     } catch (err) {
       return { ok: false, error: err.response?.data?.message || err.response?.data?.detail || "OTP verification failed." };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /** Staff "click this link to open the app as this staff member" login —
+   * see accounts.views.StaffLoginView. No OTP/email involved; the link's
+   * token is the sole credential. */
+  const loginWithStaffLink = useCallback(async (token) => {
+    setLoading(true);
+    try {
+      const { data } = await authApi.staffLogin(token);
+      _storeSession(data);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.response?.data?.message || "This login link is invalid or has been revoked." };
     } finally {
       setLoading(false);
     }
@@ -137,6 +161,19 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  /** Fiscal-year close: the old business is archived server-side and a
+   * fresh one is created in its place (see accounts.CloseFiscalYearView) —
+   * swap it in the switcher list rather than just adding the new one, or
+   * the now-archived business would linger there until the next full login. */
+  const replaceBusiness = useCallback((oldId, newBiz) => {
+    setBusinesses((prev) => {
+      const next = [...prev.filter((b) => b.id !== oldId), newBiz];
+      localStorage.setItem("businesses", JSON.stringify(next));
+      return next;
+    });
+    selectBusiness(newBiz);
+  }, [selectBusiness]);
+
   const logout = useCallback(async () => {
     const refresh = localStorage.getItem("refresh");
     try { await authApi.logout(refresh); } catch {}
@@ -151,7 +188,7 @@ export function AuthProvider({ children }) {
       user, businesses, currentBusiness,
       loading, isLoggedIn,
       sendOtp, verifyOtp, setAccountType, logout, selectBusiness,
-      addBusiness, updateBusinessInList,
+      addBusiness, updateBusinessInList, replaceBusiness, loginWithStaffLink,
     }}>
       {children}
     </AuthContext.Provider>

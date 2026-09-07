@@ -14,6 +14,8 @@ import {
   Wifi, WifiOff, RefreshCw,
 } from "lucide-react";
 
+const PLAN_LABELS = { FREE: "Free", PREMIUM: "Premium", PREMIUMPLUS: "Premium Plus" };
+
 function buildNavItems(t, language) {
   return [
     { name: t("dashboard"), path: "/dashboard", icon: LayoutDashboard },
@@ -167,8 +169,8 @@ export default function Sidebar({ open, setOpen }) {
               <p className="truncate text-xs font-semibold text-white">
                 {currentBusiness?.name || "My Business"}
               </p>
-              <p className="text-[10px] text-navy-500 capitalize">
-                {currentBusiness?.plan?.toLowerCase() || "free"} plan
+              <p className="text-[10px] text-navy-500">
+                {PLAN_LABELS[currentBusiness?.effective_plan || currentBusiness?.plan] || "Free"} Plan
               </p>
             </div>
           </div>

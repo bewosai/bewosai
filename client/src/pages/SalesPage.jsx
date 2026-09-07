@@ -9,9 +9,10 @@ import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext"
 import { useAuth } from "../context/AuthContext";
 import { sales as salesApi, parties, inventory, banking as bankingApi } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
-import { amountInWords } from "../utils/amountInWords";
 import { useEscToClose } from "../hooks/useEscToClose";
 import SearchableSelect from "../components/common/SearchableSelect";
+import BillTemplate from "../components/invoice/BillTemplate";
+import PrintPreviewModal from "../components/invoice/PrintPreviewModal";
 import { getRecentIds, pushRecentId } from "../utils/recentItems";
 import { priceForUnit } from "../utils/calculations";
 import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
@@ -68,19 +69,9 @@ const EMPTY_FORM = {
   status: "CONFIRMED",
 };
 
-/* ─── Print field row: "Label : Value" ─── */
-function PrintRow({ label, value, bold, align }) {
-  if (!value) return null;
-  return (
-    <p className={`flex gap-2 ${align === "right" ? "justify-end" : ""}`}>
-      <span className="text-gray-600">{label} :</span>
-      <span className={bold ? "font-semibold text-gray-900" : "text-gray-800"}>{value}</span>
-    </p>
-  );
-}
-
-/* ─── Print Modal — classic ruled Tax Invoice layout, so it reads the way
-     a Nepali business already expects a printed bill to look. ─── */
+/* ─── Print Modal — curved accent-colored bill layout, shared with
+     Purchases/Quotation via BillTemplate so every printed document reads
+     as one consistent design. ─── */
 function PrintModal({ sale, onClose }) {
   const { currentBusiness } = useAuth();
   const businessName = localStorage.getItem("business_name") || "Business Name";
@@ -89,6 +80,9 @@ function PrintModal({ sale, onClose }) {
   const businessLogo = localStorage.getItem("business_logo") || null;
   const businessPan = currentBusiness?.pan_number || "";
   const businessVat = currentBusiness?.vat_number || "";
+  const accentColor = localStorage.getItem("invoice_header_color") || "#f97316";
+  const termsText = localStorage.getItem("invoice_terms_text") || "";
+  const warrantyText = localStorage.getItem("invoice_warranty_text") || "";
   const items = sale.items || [];
 
   const subtotal = parseFloat(sale.subtotal || sale.total_amount || 0);
@@ -99,180 +93,47 @@ function PrintModal({ sale, onClose }) {
   const paid = parseFloat(sale.paid_amount || 0);
   const due = total - paid;
   const isAdvance = due < 0;
-  // Mode of Payment (which channel) and Bill Type (paid now vs owed) are
-  // separate facts — see the Cash/Credit toggle on the form itself.
   const paymentModeLabel = PM_CONSTS.find(m => m.value === sale.payment_method)?.label || sale.payment_method || "Cash";
-  const billType = paid <= 0 && due > 0 ? "Credit" : "Cash";
   const invoiceDate = sale.sale_date || sale.date;
-  const miti = invoiceDate ? formatBS(adToBS(new Date(invoiceDate))) : "";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#ffffff] shadow-2xl print:max-h-none print:overflow-visible print:shadow-none print:rounded-none">
-        <div className="flex items-center justify-between border-b p-4 print:hidden">
-          <span className="font-bold text-gray-900">Print Invoice</span>
-          <div className="flex items-center gap-3">
-            <button onClick={() => window.print()} className="rounded-lg bg-orange-500 px-4 py-2 text-sm text-white hover:bg-orange-600">
-              <Printer size={14} className="mr-1 inline" /> Print
-            </button>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
-          </div>
-        </div>
-
-        {/* A printed bill must always be pure white paper regardless of the
-            app's own theme — plain bg-white would resolve through this app's
-            --color-white token, which the light theme remaps to deep navy.
-            The bracket value bypasses that token entirely. */}
-        <div className="m-4 print:m-0 border-2 border-gray-800 bg-[#ffffff] text-xs text-gray-900" id="print-area">
-          {/* Business header */}
-          <div className="flex items-center gap-4 border-b-2 border-gray-800 p-4">
-            {businessLogo && <img src={businessLogo} alt="logo" className="h-16 w-16 shrink-0 object-contain" />}
-            <div className="flex-1 text-center">
-              <h1 className="text-xl font-bold underline">{businessName}</h1>
-              {businessAddress && <p className="mt-0.5">{businessAddress}</p>}
-              <div className="mt-0.5 flex flex-wrap items-center justify-center gap-x-3 font-semibold">
-                {businessPhone && <span>Ph.No: {businessPhone}</span>}
-                {businessPan && <span>PAN No.: {businessPan}</span>}
-                {businessVat && <span>VAT No.: {businessVat}</span>}
-              </div>
-            </div>
-            {businessLogo && <div className="w-16 shrink-0" />}
-          </div>
-
-          <h2 className="border-b-2 border-gray-800 py-1.5 text-center text-sm font-bold uppercase tracking-widest underline">
-            Tax Invoice
-          </h2>
-
-          {/* Customer + invoice meta */}
-          <div className="grid grid-cols-2 gap-3 border-b-2 border-gray-800 px-4 py-2">
-            <div className="space-y-0.5">
-              <PrintRow label="Customer Name" value={sale.customer_name || sale.party_name || "Walk-in"} bold />
-              <PrintRow label="Pan / Vat No." value={sale.party_pan} />
-              <PrintRow label="Customer Address" value={sale.party_address} />
-              <PrintRow label="Customer Cnt No." value={sale.party_phone} />
-            </div>
-            <div className="space-y-0.5">
-              <PrintRow label="Invoice No." value={sale.invoice_number || sale.id} bold align="right" />
-              <PrintRow label="Date of Transaction" value={invoiceDate} align="right" />
-              <PrintRow label="Miti of Transaction" value={miti} align="right" />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-gray-800 px-4 py-1.5">
-            <span>Mode of Payment : <strong>{paymentModeLabel}</strong></span>
-            <span>Bill Type : <strong>{billType}</strong></span>
-          </div>
-
-          {/* Items */}
-          <div className="overflow-x-auto print:overflow-visible">
-            <table className="w-full min-w-120 border-collapse">
-              <thead>
-                <tr className="border-b-2 border-gray-800 font-semibold">
-                  <th className="w-10 border-r border-gray-400 px-2 py-1.5 text-left">SNo</th>
-                  <th className="w-20 border-r border-gray-400 px-2 py-1.5 text-left">HSCode</th>
-                  <th className="border-r border-gray-400 px-2 py-1.5 text-left">Particular</th>
-                  <th className="w-16 border-r border-gray-400 px-2 py-1.5 text-right">Qty</th>
-                  <th className="w-20 border-r border-gray-400 px-2 py-1.5 text-right">Rate</th>
-                  <th className="w-16 border-r border-gray-400 px-2 py-1.5 text-right">P.Disc</th>
-                  <th className="w-24 px-2 py-1.5 text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, i) => {
-                  const rowTotal = (item.quantity * item.unit_price) - (item.discount_amount || 0);
-                  return (
-                    <tr key={i} className="border-b border-gray-300">
-                      <td className="border-r border-gray-300 px-2 py-1.5">{i + 1}</td>
-                      <td className="border-r border-gray-300 px-2 py-1.5">{item.product_hs_code || ""}</td>
-                      <td className="border-r border-gray-300 px-2 py-1.5 font-medium">{item.product_name || item.name}</td>
-                      <td className="border-r border-gray-300 px-2 py-1.5 text-right">{item.quantity}</td>
-                      <td className="border-r border-gray-300 px-2 py-1.5 text-right">{parseFloat(item.unit_price).toFixed(2)}</td>
-                      <td className="border-r border-gray-300 px-2 py-1.5 text-right">{parseFloat(item.discount_amount || 0).toFixed(2)}</td>
-                      <td className="px-2 py-1.5 text-right font-medium">{rowTotal.toFixed(2)}</td>
-                    </tr>
-                  );
-                })}
-                {/* A short row count still reads like a real invoice book —
-                    a few ruled blank rows instead of the table just stopping. */}
-                {Array.from({ length: Math.max(0, 3 - items.length) }).map((_, i) => (
-                  <tr key={`blank-${i}`} className="border-b border-gray-300">
-                    <td className="border-r border-gray-300 px-2 py-3">&nbsp;</td>
-                    <td className="border-r border-gray-300 px-2 py-3"></td>
-                    <td className="border-r border-gray-300 px-2 py-3"></td>
-                    <td className="border-r border-gray-300 px-2 py-3"></td>
-                    <td className="border-r border-gray-300 px-2 py-3"></td>
-                    <td className="border-r border-gray-300 px-2 py-3"></td>
-                    <td className="px-2 py-3"></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Remarks/words + totals box */}
-          <div className="grid grid-cols-2 border-t-2 border-gray-800">
-            <div className="border-r-2 border-gray-800 p-3">
-              {sale.notes && <p><span className="font-semibold">Remarks :</span> {sale.notes}</p>}
-              <p className={sale.notes ? "mt-2" : ""}>
-                <span className="font-semibold">In Words :</span> Rs. {amountInWords(total)}
-              </p>
-              <p className="mt-2 text-[10px] italic text-gray-500">*Proforma Invoice</p>
-            </div>
-            <table className="border-collapse">
-              <tbody>
-                <tr className="border-b border-gray-300">
-                  <td className="px-3 py-1">Basic Amount</td><td>:</td>
-                  <td className="px-3 py-1 text-right font-semibold">{subtotal.toFixed(2)}</td>
-                </tr>
-                <tr className="border-b border-gray-300">
-                  <td className="px-3 py-1">Discount</td><td>:</td>
-                  <td className="px-3 py-1 text-right">{discount.toFixed(2)}</td>
-                </tr>
-                <tr className="border-b border-gray-300">
-                  <td className="px-3 py-1 font-semibold">Taxable value</td><td>:</td>
-                  <td className="px-3 py-1 text-right font-semibold">{(subtotal - discount).toFixed(2)}</td>
-                </tr>
-                <tr className="border-b border-gray-300">
-                  <td className="px-3 py-1">Vat {taxRate % 1 === 0 ? taxRate.toFixed(0) : taxRate} %</td><td>:</td>
-                  <td className="px-3 py-1 text-right">{taxAmount.toFixed(2)}</td>
-                </tr>
-                <tr className="border-b border-gray-300">
-                  <td className="px-3 py-1 font-bold">Net Amount</td><td>:</td>
-                  <td className="px-3 py-1 text-right font-bold">{total.toFixed(2)}</td>
-                </tr>
-                {paid > 0 && (
-                  <tr className="border-b border-gray-300">
-                    <td className="px-3 py-1">Received Amount</td><td>:</td>
-                    <td className="px-3 py-1 text-right">{paid.toFixed(2)}</td>
-                  </tr>
-                )}
-                <tr>
-                  <td className="px-3 py-1.5 font-bold">{isAdvance ? "Advance (Overpaid)" : "Amount Due"}</td><td>:</td>
-                  <td className="px-3 py-1.5 text-right font-bold">{Math.abs(due).toFixed(2)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* Signatures */}
-          <div className="grid grid-cols-3 border-t-2 border-gray-800 px-6 py-8 text-center">
-            <div>
-              <div className="mx-auto mb-1 w-32 border-t border-gray-500 pt-1">Received By</div>
-            </div>
-            <div>
-              <div className="mx-auto mb-1 w-32 border-t border-gray-500 pt-1">Prepaid By</div>
-            </div>
-            <div>
-              <p className="mb-8 font-semibold">For : {businessName}</p>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-400 px-4 py-1 text-right text-[10px] text-gray-500">
-            Print Date &amp; Time : {new Date().toLocaleDateString("en-GB")} {new Date().toLocaleTimeString()}
-          </div>
-        </div>
-      </div>
-    </div>
+    <PrintPreviewModal title="Print Invoice" onClose={onClose}>
+      <BillTemplate
+        accentColor={accentColor}
+        documentLabel="Invoice"
+        documentNumberLabel="Invoice No."
+        documentNumber={sale.invoice_number || sale.id}
+        dateLabel="Sale Date"
+        date={invoiceDate}
+        dueLabel="Due Date"
+        dueDate={sale.due_date}
+        business={{ name: businessName, address: businessAddress, phone: businessPhone, logo: businessLogo, pan: businessPan, vat: businessVat }}
+        billToLabel="Bill To"
+        billTo={{ name: sale.customer_name || sale.party_name || "Walk-in", address: sale.party_address, phone: sale.party_phone }}
+        items={items.map(item => ({
+          description: item.product_name || item.name,
+          quantity: item.quantity,
+          price: parseFloat(item.unit_price).toFixed(2),
+          discount: parseFloat(item.discount_amount || 0).toFixed(2),
+          taxLabel: taxRate ? `${taxRate}%` : "--",
+          amount: ((item.quantity * item.unit_price) - (item.discount_amount || 0)).toFixed(2),
+        }))}
+        notes={sale.notes}
+        totals={{
+          subtotal: subtotal.toFixed(2),
+          discount: discount.toFixed(2),
+          taxLabel: `Sales tax (${taxRate % 1 === 0 ? taxRate.toFixed(0) : taxRate}%)`,
+          taxAmount: taxAmount.toFixed(2),
+          total: total.toFixed(2),
+          paidAmount: paid.toFixed(2),
+          dueAmount: Math.abs(due).toFixed(2),
+          isAdvance,
+        }}
+        paymentMethodLabel={paymentModeLabel}
+        termsText={termsText}
+        warrantyText={warrantyText}
+      />
+    </PrintPreviewModal>
   );
 }
 

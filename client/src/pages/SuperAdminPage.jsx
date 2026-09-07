@@ -10,8 +10,12 @@ import {
   Trash2, MessageSquare, Bell, Search, RefreshCw, Loader,
   TrendingUp, AlertTriangle, ToggleLeft, ToggleRight, Crown,
   SlidersHorizontal, Monitor, Smartphone, KeyRound, LayoutDashboard, Clock,
+  Ticket, Gift, Activity,
 } from "lucide-react";
 import LicensesTab from "./superadmin/LicensesTab";
+import CouponsTab from "./superadmin/CouponsTab";
+import ReferralsTab from "./superadmin/ReferralsTab";
+import ActivityTab from "./superadmin/ActivityTab";
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
@@ -1569,10 +1573,18 @@ export default function SuperAdminPage() {
       ],
     },
     {
+      heading: "Monitoring",
+      items: [
+        { id: "activity", label: "Activity", icon: Activity },
+      ],
+    },
+    {
       heading: "Access Control",
       items: [
         { id: "features", label: "Feature Management", icon: SlidersHorizontal },
         { id: "licenses", label: "Licenses", icon: KeyRound },
+        { id: "coupons", label: "Coupons", icon: Ticket },
+        { id: "referrals", label: "Referrals", icon: Gift },
       ],
     },
     {
@@ -1639,8 +1651,11 @@ export default function SuperAdminPage() {
             {tab === "overview" && <OverviewTab stats={stats} />}
             {tab === "businesses" && <BusinessesTab onCountChange={setBusinessCount} />}
             {tab === "users" && <UsersTab onCountChange={setUserCount} />}
+            {tab === "activity" && <ActivityTab />}
             {tab === "features" && <FeaturesTab features={featureList} onRefresh={() => load(false)} />}
             {tab === "licenses" && <LicensesTab businesses={businessesFull} />}
+            {tab === "coupons" && <CouponsTab />}
+            {tab === "referrals" && <ReferralsTab />}
             {tab === "announcements" && <AnnouncementsTab announcements={announcements} onRefresh={() => load(false)} />}
             {tab === "tickets" && <TicketsTab tickets={tickets} onRefresh={() => load(false)} />}
           </div>

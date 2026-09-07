@@ -7,9 +7,10 @@ import { auth as authApi } from "../api";
 import {
   Sun, Moon, Globe, Eye, EyeOff, Calendar, Building2,
   Upload, Save, Bell, Shield, Palette, User, Check, FileText, BarChart3, ChevronRight,
-  FileSpreadsheet,
+  FileSpreadsheet, Crown, Archive, Loader, AlertCircle,
 } from "lucide-react";
 import PhoneInput from "../components/common/PhoneInput";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 
 function SettingCard({ title, icon: Icon, children }) {
   return (
@@ -70,16 +71,21 @@ export default function SettingsPage() {
           toggleTheme, toggleLanguage, togglePrivateMode, toggleDateMode,
           setTheme, setLanguage, setDateMode, setCurrency } = useAppSettings();
   const { t } = useTranslation();
-  const { currentBusiness, user, updateBusinessInList } = useAuth();
+  const { currentBusiness, user, updateBusinessInList, replaceBusiness } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [showCloseFiscalYear, setShowCloseFiscalYear] = useState(false);
+  const [closingFiscalYear, setClosingFiscalYear] = useState(false);
+  const [fiscalYearError, setFiscalYearError] = useState("");
   const [profileForm, setProfileForm] = useState({ name: user?.name || "", phone: user?.phone || "" });
   const [invoiceForm, setInvoiceForm] = useState({
     header_color: localStorage.getItem("invoice_header_color") || "#f97316",
     footer_text: localStorage.getItem("invoice_footer_text") || "Thank you for your business!",
     invoice_prefix: localStorage.getItem("invoice_prefix") || "INV-",
+    terms_text: localStorage.getItem("invoice_terms_text") || "",
+    warranty_text: localStorage.getItem("invoice_warranty_text") || "",
   });
   const [logoPreview, setLogoPreview] = useState(currentBusiness?.logo || null);
   const [logoFile, setLogoFile] = useState(null);
@@ -139,6 +145,8 @@ export default function SettingsPage() {
     localStorage.setItem("invoice_header_color", invoiceForm.header_color);
     localStorage.setItem("invoice_footer_text", invoiceForm.footer_text);
     localStorage.setItem("invoice_prefix", invoiceForm.invoice_prefix);
+    localStorage.setItem("invoice_terms_text", invoiceForm.terms_text);
+    localStorage.setItem("invoice_warranty_text", invoiceForm.warranty_text);
     if (businessForm.name) localStorage.setItem("business_name", businessForm.name);
     if (businessForm.address) localStorage.setItem("business_address", businessForm.address);
     if (businessForm.phone) localStorage.setItem("business_phone", businessForm.phone);
@@ -148,6 +156,21 @@ export default function SettingsPage() {
     } else {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    }
+  };
+
+  const handleCloseFiscalYear = async () => {
+    if (!currentBusiness?.id) return;
+    setClosingFiscalYear(true);
+    setFiscalYearError("");
+    try {
+      const { data } = await authApi.closeFiscalYear(currentBusiness.id);
+      replaceBusiness?.(currentBusiness.id, data.new_business);
+      setShowCloseFiscalYear(false);
+    } catch (e) {
+      setFiscalYearError(e.response?.data?.error || "Couldn't close the fiscal year.");
+    } finally {
+      setClosingFiscalYear(false);
     }
   };
 
@@ -179,6 +202,26 @@ export default function SettingsPage() {
       )}
 
       <div className="grid gap-5 lg:grid-cols-2">
+        {/* Upgrade Plan / Refer & Earn */}
+        <SettingCard title={language === "ne" ? "योजना अपग्रेड" : "Upgrade Plan"} icon={Crown}>
+          <button
+            onClick={() => navigate("/settings/upgrade")}
+            className="flex w-full items-center justify-between rounded-xl border border-navy-800 bg-navy-950 px-4 py-3 text-left transition hover:border-orange-500/50"
+          >
+            <div>
+              <p className="text-sm font-medium text-white">
+                {language === "ne" ? "योजना र रेफर एण्ड अर्न" : "Plan & Refer and Earn"}
+              </p>
+              <p className="text-xs text-navy-500 mt-0.5">
+                {language === "ne"
+                  ? "कुपन प्रयोग गर्नुहोस् वा मित्रलाई रेफर गरेर प्रिमियम कमाउनुहोस्"
+                  : "Apply a coupon, or refer a friend to earn free Premium"}
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-navy-500 shrink-0" />
+          </button>
+        </SettingCard>
+
         {/* View Report */}
         <SettingCard title={language === "ne" ? "प्रतिवेदन" : "Reports"} icon={BarChart3}>
           <button
@@ -363,6 +406,35 @@ export default function SettingsPage() {
           </div>
         </SettingCard>
 
+        {/* Fiscal Year */}
+        <SettingCard title={language === "ne" ? "आर्थिक वर्ष" : "Fiscal Year"} icon={Calendar}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-navy-300">
+                {language === "ne"
+                  ? "यो व्यवसाय अभिलेखागारमा राखिनेछ र समान विवरणसहित नयाँ प्रोफाइल सिर्जना हुनेछ। नगद/बैंक मौज्दात नयाँ प्रोफाइलमा सुरुवाती मौज्दातको रूपमा सारिनेछ।"
+                  : "Archives this business and creates a fresh profile with the same details. Your cash/bank balance carries over as the new profile's opening balance."}
+              </p>
+              <p className="mt-1.5 text-xs text-navy-500">
+                {language === "ne" ? "यो पूर्ववत गर्न सकिँदैन।" : "This can't be undone."}
+              </p>
+            </div>
+            <button
+              onClick={() => { setFiscalYearError(""); setShowCloseFiscalYear(true); }}
+              disabled={!currentBusiness?.id}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+            >
+              <Archive className="h-3.5 w-3.5" />
+              {language === "ne" ? "आर्थिक वर्ष बन्द गर्नुहोस्" : "Close Fiscal Year"}
+            </button>
+          </div>
+          {fiscalYearError && !showCloseFiscalYear && (
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-red-400">
+              <AlertCircle className="h-3.5 w-3.5" /> {fiscalYearError}
+            </p>
+          )}
+        </SettingCard>
+
         {/* Invoice Customization */}
         <SettingCard title={language === "ne" ? "बिजक अनुकूलन" : "Invoice Customization"} icon={FileText}>
           <div className="space-y-4">
@@ -407,6 +479,27 @@ export default function SettingsPage() {
                 placeholder="Thank you for your business!"
                 className="w-full resize-none rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-navy-400">Terms & Conditions</label>
+                <input
+                  value={invoiceForm.terms_text}
+                  onChange={e => setInvoiceForm(f => ({ ...f, terms_text: e.target.value }))}
+                  placeholder="Payment must be made within 7 days"
+                  className="w-full rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-navy-400">Warranty</label>
+                <input
+                  value={invoiceForm.warranty_text}
+                  onChange={e => setInvoiceForm(f => ({ ...f, warranty_text: e.target.value }))}
+                  placeholder="e.g. 15 Days Full"
+                  className="w-full rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
+                />
+              </div>
+              <p className="col-span-2 -mt-1 text-xs text-navy-500">Shown on printed invoices/bills when filled in. Leave blank to hide.</p>
             </div>
             <div
               className="rounded-xl border p-4"
@@ -521,6 +614,27 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {showCloseFiscalYear && (
+        <ConfirmDialog
+          message={
+            <span>
+              {language === "ne"
+                ? `"${currentBusiness?.name}" अभिलेखागारमा राखिनेछ र समान विवरणसहित नयाँ व्यवसाय प्रोफाइल सिर्जना हुनेछ। नगद/बैंक मौज्दात नयाँमा सुरुवाती मौज्दातको रूपमा सारिनेछ। यो पूर्ववत गर्न सकिँदैन।`
+                : <>Archive <strong className="text-white">{currentBusiness?.name}</strong> and start a fresh business profile? Your cash/bank balance will carry over as the new profile's opening balance. This can't be undone.</>}
+              {fiscalYearError && (
+                <span className="mt-3 flex items-center gap-1.5 text-xs text-red-400">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {fiscalYearError}
+                </span>
+              )}
+            </span>
+          }
+          confirmLabel={closingFiscalYear ? <Loader className="h-4 w-4 animate-spin" /> : "Close Fiscal Year"}
+          confirmCls="bg-red-500 hover:bg-red-600 text-white disabled:opacity-60"
+          onConfirm={closingFiscalYear ? undefined : handleCloseFiscalYear}
+          onCancel={() => !closingFiscalYear && setShowCloseFiscalYear(false)}
+        />
+      )}
     </div>
   );
 }

@@ -10,6 +10,8 @@ import { useAppSettings } from "../../context/AppSettingsContext";
 import { useOfflineSync } from "../../utils/offlineQueue";
 import api from "../../api";
 
+const PLAN_LABELS = { FREE: "Free", PREMIUM: "Premium", PREMIUMPLUS: "Premium Plus" };
+
 export default function Topbar({ onMenuClick }) {
   const navigate = useNavigate();
   const { user, currentBusiness, logout } = useAuth();
@@ -145,7 +147,7 @@ export default function Topbar({ onMenuClick }) {
 
           <div className="hidden rounded-xl border border-navy-800 bg-navy-900 px-3 py-2 sm:block">
             <p className="text-sm font-medium text-white">{user?.name || "User"}</p>
-            <p className="text-[10px] text-navy-400">{currentBusiness?.plan || "Free"} Plan</p>
+            <p className="text-[10px] text-navy-400">{PLAN_LABELS[currentBusiness?.effective_plan || currentBusiness?.plan] || "Free"} Plan</p>
           </div>
 
           <button

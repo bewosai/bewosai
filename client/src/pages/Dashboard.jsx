@@ -16,6 +16,10 @@ import {
 // not business data — kept in localStorage rather than sent to the server.
 const VISIBLE_KPIS_KEY = "bw_dashboard_visible_kpis";
 const MIN_VISIBLE_KPIS = 3;
+// Shown until a viewer customizes their own set — the handful of numbers
+// that answer "how's the business right now" without crowding the page;
+// everything else is one tap away via the Customize button.
+const DEFAULT_VISIBLE_KPI_KEYS = ["sales_today", "receivable", "payable", "net_profit", "low_stock"];
 
 function loadVisibleKpiKeys(allKeys) {
   try {
@@ -27,9 +31,9 @@ function loadVisibleKpiKeys(allKeys) {
       if (filtered.length >= MIN_VISIBLE_KPIS) return filtered;
     }
   } catch {
-    // fall through to "show everything" below
+    // fall through to the default set below
   }
-  return allKeys;
+  return DEFAULT_VISIBLE_KPI_KEYS.filter((k) => allKeys.includes(k));
 }
 
 function DashboardCustomizeModal({ kpis, visibleKeys, onSave, onClose }) {

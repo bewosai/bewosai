@@ -122,7 +122,7 @@ const plans = [
   },
   {
     name: "Premium",
-    price: "Rs. 499",
+    price: "Rs. 1999",
     period: "per month",
     color: "border-orange-500",
     badge: "Most Popular",
@@ -190,7 +190,8 @@ export default function LandingPage() {
               Log In
             </Link>
             <Link
-              to="/choose-profile"
+              to="/login"
+              state={{ isSignup: true }}
               className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-400"
             >
               Get Started Free
@@ -227,7 +228,8 @@ export default function LandingPage() {
 
           <div className="mt-10 flex flex-wrap justify-center gap-4">
             <Link
-              to="/choose-profile"
+              to="/login"
+              state={{ isSignup: true }}
               className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-8 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400"
             >
               Start Free Today <ArrowRight className="h-5 w-5" />
@@ -364,7 +366,8 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <Link
-                  to="/choose-profile"
+                  to="/login"
+                  state={{ isSignup: true }}
                   className={`mt-8 block rounded-2xl py-3 text-center text-sm font-bold transition ${
                     plan.badge
                       ? "bg-orange-500 text-white hover:bg-orange-400"
@@ -391,7 +394,7 @@ export default function LandingPage() {
               <p className="mt-3 max-w-xs text-sm leading-6 text-navy-400">
                 Simple billing, inventory, and accounting software for Nepal's
                 small shops, traders, and service businesses — no accountant
-                or VAT/PAN setup required to get started.
+                 required to get started and maintain your businesss internally.
               </p>
               {!installed && (
                 <button

@@ -5,8 +5,12 @@ import PageHeader from "../components/shared/PageHeader";
 import SectionCard from "../components/shared/SectionCard";
 import PrimaryButton from "../components/shared/PrimaryButton";
 import { auth as authApi } from "../api";
-import { UserCheck, Plus, Shield, Eye, X, Crown, ChevronDown, ChevronUp, Check, Edit2, Trash2, Search } from "lucide-react";
+import { UserCheck, Plus, Shield, Eye, X, Crown, ChevronDown, ChevronUp, Check, Edit2, Trash2, Search, Link2, Copy, RefreshCw, AlertCircle } from "lucide-react";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+
+function staffLoginUrl(token) {
+  return `${window.location.origin}/staff-login/${token}`;
+}
 
 const ROLE_META = {
   OWNER:   { label: "Owner",   icon: Crown,      color: "text-orange-400 bg-orange-500/10" },
@@ -122,13 +126,68 @@ function PermissionMatrix({ permissions, onChange, readonly }) {
   );
 }
 
+/* ─── Shows a staff member's login link with copy/regenerate — used both
+     right after creating a new staff member and from the staff list for
+     an existing one. ─── */
+function LoginLinkPanel({ token, onRegenerate, regenerating }) {
+  const [copied, setCopied] = useState(false);
+  const url = staffLoginUrl(token);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API can be unavailable (non-HTTPS, permissions) — the
+      // link is still selectable/copyable by hand from the input below.
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5">
+        <Link2 className="h-4 w-4 shrink-0 text-navy-500" />
+        <input
+          readOnly
+          value={url}
+          onFocus={(e) => e.target.select()}
+          className="w-full truncate bg-transparent text-xs text-navy-300 outline-none"
+        />
+        <button
+          type="button"
+          onClick={copy}
+          className="flex shrink-0 items-center gap-1 rounded-lg bg-orange-500 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-orange-400"
+        >
+          <Copy className="h-3 w-3" /> {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
+      <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <p>Anyone with this link can open the app as this staff member — no email or code needed. Share it only with them, and regenerate it if it ever leaks.</p>
+      </div>
+      {onRegenerate && (
+        <button
+          type="button"
+          onClick={onRegenerate}
+          disabled={regenerating}
+          className="flex items-center gap-1.5 text-xs font-medium text-navy-400 transition hover:text-orange-400 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3 w-3 ${regenerating ? "animate-spin" : ""}`} /> {regenerating ? "Regenerating…" : "Regenerate link (invalidates the old one)"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function InviteModal({ businessId, onClose, onSaved }) {
   const { t } = useTranslation();
-  const [form, setForm] = useState({ email: "", name: "", role: "CASHIER", password: "" });
+  const [form, setForm] = useState({ name: "", role: "CASHIER" });
   const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS.CASHIER);
   const [showPerms, setShowPerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [created, setCreated] = useState(null);
 
   const field = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500";
 
@@ -139,16 +198,40 @@ function InviteModal({ businessId, onClose, onSaved }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.email || !form.name || !form.password) { setErr("All fields required."); return; }
+    if (!form.name.trim()) { setErr("Name is required."); return; }
     setSaving(true);
+    setErr("");
     try {
-      await authApi.inviteStaff(businessId, { ...form, permissions });
-      onSaved();
+      const { data } = await authApi.inviteStaff(businessId, { ...form, permissions });
+      setCreated(data);
     } catch (er) {
       const data = er.response?.data;
-      setErr(data?.error || data?.email?.[0] || data?.detail || "Failed to invite staff.");
+      setErr(data?.error || data?.name?.[0] || data?.detail || "Failed to create staff member.");
     } finally { setSaving(false); }
   };
+
+  // Step 2: staff member created — hand over their login link
+  if (created) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div className="w-full max-w-lg rounded-2xl border border-navy-700 bg-navy-900 p-6">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/10 text-green-400">
+              <Check className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-bold text-white">{created.user_name} is ready</h2>
+              <p className="text-xs text-navy-400">Send them this link — clicking it opens the app signed in as them.</p>
+            </div>
+          </div>
+          <LoginLinkPanel token={created.login_token} />
+          <PrimaryButton type="button" className="mt-4 w-full" onClick={() => onSaved()}>
+            {t("done") || "Done"}
+          </PrimaryButton>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -161,27 +244,10 @@ function InviteModal({ businessId, onClose, onSaved }) {
         {err && <p className="mb-4 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
 
         <form onSubmit={submit} className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder={`${t("name")} *`}
-              className={field}
-            />
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder={`${t("email")} *`}
-              className={field}
-            />
-          </div>
-
           <input
-            type="password"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            placeholder="Temporary password *"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder={`${t("name")} *`}
             className={field}
           />
 
@@ -236,15 +302,58 @@ function InviteModal({ businessId, onClose, onSaved }) {
             )}
           </div>
 
-          <p className="text-xs text-navy-500">Staff will log in with this email and password.</p>
+          <p className="text-xs text-navy-500">No email needed — you'll get a login link to hand them after creating.</p>
 
           <div className="flex gap-3 pt-1">
             <PrimaryButton type="submit" className="flex-1" disabled={saving}>
-              {saving ? "Inviting…" : t("inviteStaff")}
+              {saving ? "Creating…" : t("inviteStaff")}
             </PrimaryButton>
             <PrimaryButton type="button" variant="outline" onClick={onClose}>{t("cancel")}</PrimaryButton>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function StaffLinkModal({ businessId, member, onClose, onUpdated }) {
+  const [current, setCurrent] = useState(member);
+  const [regenerating, setRegenerating] = useState(false);
+  const [err, setErr] = useState("");
+
+  const regenerate = async () => {
+    setRegenerating(true);
+    setErr("");
+    try {
+      const { data } = await authApi.regenerateStaffLink(businessId, member.id);
+      setCurrent(data);
+      onUpdated?.(data);
+    } catch (er) {
+      setErr(er.response?.data?.detail || "Failed to regenerate link.");
+    } finally { setRegenerating(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-navy-700 bg-navy-900 p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-white">Login Link</h2>
+            <p className="text-xs text-navy-400 mt-0.5">{current.user_name}</p>
+          </div>
+          <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
+        </div>
+        {err && <p className="mb-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
+        {current.login_token ? (
+          <LoginLinkPanel token={current.login_token} onRegenerate={regenerate} regenerating={regenerating} />
+        ) : (
+          <div className="space-y-3 text-center">
+            <p className="text-sm text-navy-400">This staff member doesn't have a login link yet.</p>
+            <PrimaryButton type="button" onClick={regenerate} disabled={regenerating}>
+              {regenerating ? "Generating…" : "Generate Login Link"}
+            </PrimaryButton>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -284,7 +393,7 @@ function EditRoleModal({ businessId, member, onClose, onSaved }) {
         <div className="mb-5 flex items-center justify-between">
           <div>
             <h2 className="font-bold text-white">Edit Role: {member.user_name}</h2>
-            <p className="text-xs text-navy-400 mt-0.5">{member.user_email}</p>
+            <p className="text-xs text-navy-400 mt-0.5">{member.user_email || "Signs in via login link"}</p>
           </div>
           <button onClick={onClose}><X className="h-5 w-5 text-navy-400" /></button>
         </div>
@@ -375,6 +484,7 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [viewingPerms, setViewingPerms] = useState(null);
+  const [viewingLink, setViewingLink] = useState(null);
   const [editingMember, setEditingMember] = useState(null);
   const [removingMember, setRemovingMember] = useState(null);
   const [search, setSearch] = useState("");
@@ -399,8 +509,13 @@ export default function StaffPage() {
   // only after filling out the whole invite form.
   const FREE_STAFF_LIMIT = 1;
   const nonOwnerCount = staff.filter((m) => m.role !== "OWNER" && m.is_active !== false).length;
-  const isFreePlan = currentBusiness?.plan !== "PREMIUM";
-  const atStaffLimit = isFreePlan && nonOwnerCount >= FREE_STAFF_LIMIT;
+  // effective_plan (not plan) — a coupon/referral-granted PremiumPlus must
+  // read as unlimited here too, or the Invite button stays disabled even
+  // though the backend would actually allow it. See Business.effective_plan.
+  const effectivePlan = currentBusiness?.effective_plan || currentBusiness?.plan;
+  const isFreePlan = effectivePlan !== "PREMIUM" && effectivePlan !== "PREMIUMPLUS";
+  const isUnlimited = effectivePlan === "PREMIUMPLUS";
+  const atStaffLimit = !isUnlimited && isFreePlan && nonOwnerCount >= FREE_STAFF_LIMIT;
 
   const filteredStaff = staff.filter((m) => {
     if (!search.trim()) return true;
@@ -481,7 +596,7 @@ export default function StaffPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-white">{member.user_name}</p>
-                      <p className="text-xs text-navy-400">{member.user_email}</p>
+                      <p className="text-xs text-navy-400">{member.user_email || "Signs in via login link"}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -497,6 +612,11 @@ export default function StaffPage() {
                     </button>
                     {member.role !== "OWNER" && (
                       <>
+                        <button onClick={() => setViewingLink(member)}
+                          className="rounded-lg border border-navy-700 p-1.5 text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400"
+                          title="Login link">
+                          <Link2 className="h-3.5 w-3.5" />
+                        </button>
                         <button onClick={() => setEditingMember(member)}
                           className="rounded-lg border border-navy-700 p-1.5 text-navy-300 transition hover:border-orange-500/50 hover:text-orange-400"
                           title="Edit role">
@@ -533,6 +653,14 @@ export default function StaffPage() {
 
       {viewingPerms && (
         <ViewPermissionsModal member={viewingPerms} onClose={() => setViewingPerms(null)} />
+      )}
+      {viewingLink && (
+        <StaffLinkModal
+          businessId={currentBusiness?.id}
+          member={viewingLink}
+          onClose={() => setViewingLink(null)}
+          onUpdated={(updated) => setStaff((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))}
+        />
       )}
       {editingMember && (
         <EditRoleModal

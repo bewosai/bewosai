@@ -13,12 +13,12 @@ export default function LoginPage() {
   const location = useLocation();
 
   const isSignup = location.state?.isSignup ?? false;
-  const accountType = location.state?.accountType;
 
   const [identifier, setIdentifier] = useState("");
-  // Phone sign-in — existing accounts only, one Nepal SMS gateway (Sparrow)
-  // backing delivery. Signing up still requires an email (see
-  // accounts/views.py — a phone alone can't create an account).
+  // Phone sign-in works for any existing account; phone sign-up only works
+  // for Nepal (+977) numbers since Sparrow (our SMS gateway) is Nepal-only
+  // and a brand-new account has no email yet to fall back to (see
+  // accounts/views.py SendOTPView).
   const [mode, setMode] = useState("email"); // "email" | "phone"
   const [countryCode, setCountryCode] = useState(COUNTRY_CODES[0].code);
   const [error, setError] = useState("");
@@ -44,6 +44,10 @@ export default function LoginPage() {
         setError("Enter a valid phone number.");
         return;
       }
+      if (isSignup && countryCode !== "+977") {
+        setError("Signing up with a phone number is only available for Nepal (+977) numbers right now — please use email instead, or switch the country to Nepal.");
+        return;
+      }
       toSend = `${countryCode}${trimmed}`;
     } else {
       toSend = trimmed.toLowerCase();
@@ -53,9 +57,16 @@ export default function LoginPage() {
       }
     }
 
-    const res = await sendOtp(toSend, isSignup);
+    let res = await sendOtp(toSend, isSignup);
+    if (!res.ok && isSignup && res.userExists) {
+      // Already has an account (e.g. they hit "Get Started" out of habit) —
+      // sign them in instead of dead-ending on a signup-only error. They'll
+      // land straight on their dashboard once the OTP is verified since
+      // needs_profile_setup is only ever true for a brand-new account.
+      res = await sendOtp(toSend, false);
+    }
     if (res.ok) {
-      navigate("/verify-otp", { state: { identifier: toSend, userExists: res.userExists, accountType, message: res.message } });
+      navigate("/verify-otp", { state: { identifier: toSend, userExists: res.userExists, message: res.message } });
     } else {
       setError(res.error);
       // If the email already exists and they tried to sign up, hint to switch mode
@@ -93,8 +104,8 @@ export default function LoginPage() {
           <div className="rounded-3xl border border-navy-800 bg-navy-900/80 px-6 py-7 shadow-2xl backdrop-blur-sm">
 
             <Steps
-              current={isSignup ? 2 : 1}
-              steps={isSignup ? ["Profile", "Email", "Verify"] : ["Email", "Verify"]}
+              current={1}
+              steps={isSignup ? [mode === "phone" ? "Phone" : "Email", "Verify", "Profile"] : ["Email", "Verify"]}
             />
 
             {/* Messages */}
@@ -115,35 +126,35 @@ export default function LoginPage() {
                   {isSignup ? "Create your account" : "Welcome back!"}
                 </h2>
                 <p className="mt-1.5 text-sm text-navy-400">
-                  {isSignup
+                  {mode === "phone"
+                    ? isSignup
+                      ? "Enter your Nepal phone number to get started"
+                      : "Enter your phone number to receive a sign-in code"
+                    : isSignup
                     ? "Enter your Gmail or email to get started"
-                    : mode === "phone"
-                    ? "Enter your phone number to receive a sign-in code"
                     : "Enter your email to receive a sign-in code"}
                 </p>
               </div>
 
-              {!isSignup && (
-                <div className="mb-4 flex rounded-2xl bg-navy-950 p-1">
-                  {[
-                    { key: "email", label: "Email", Icon: Mail },
-                    { key: "phone", label: "Phone", Icon: Phone },
-                  ].map(({ key, label, Icon }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => { setMode(key); setIdentifier(""); setError(""); }}
-                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition ${
-                        mode === key ? "bg-orange-500 text-white" : "text-navy-400 hover:text-white"
-                      }`}
-                    >
-                      <Icon className="h-3.5 w-3.5" /> {label}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="mb-4 flex rounded-2xl bg-navy-950 p-1">
+                {[
+                  { key: "email", label: "Email", Icon: Mail },
+                  { key: "phone", label: "Phone", Icon: Phone },
+                ].map(({ key, label, Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => { setMode(key); setIdentifier(""); setError(""); }}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition ${
+                      mode === key ? "bg-orange-500 text-white" : "text-navy-400 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" /> {label}
+                  </button>
+                ))}
+              </div>
 
-              {mode === "phone" && !isSignup ? (
+              {mode === "phone" ? (
                 <div className="mb-4 flex gap-2">
                   <select
                     value={countryCode}
@@ -191,15 +202,17 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {mode === "phone" && !isSignup && countryCode !== "+977" && (
+              {mode === "phone" && countryCode !== "+977" && (
                 <p className="-mt-2 mb-4 text-xs text-navy-500">
-                  SMS delivery is only available for Nepal numbers — for other countries we'll email the code to this account's address on file instead.
+                  {isSignup
+                    ? "Phone sign-up is only available for Nepal numbers right now — switch the country to Nepal, or use email instead."
+                    : "SMS delivery is only available for Nepal numbers — for other countries we'll email the code to this account's address on file instead."}
                 </p>
               )}
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (isSignup && mode === "phone" && countryCode !== "+977")}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 py-4 text-base font-bold text-white transition hover:bg-orange-400 active:bg-orange-600 disabled:opacity-60"
               >
                 {loading ? (
@@ -226,7 +239,7 @@ export default function LoginPage() {
               {!isSignup && (
                 <button
                   type="button"
-                  onClick={() => navigate("/choose-profile")}
+                  onClick={() => navigate("/login", { state: { isSignup: true } })}
                   className="mt-5 block w-full text-center text-sm font-semibold text-orange-400 hover:text-orange-300 transition"
                 >
                   New to Bewosai? Get Started

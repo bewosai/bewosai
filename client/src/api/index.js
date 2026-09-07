@@ -77,6 +77,9 @@ export const auth = {
   inviteStaff: (bid, d) => api.post(`/auth/businesses/${bid}/staff/`, d),
   updateStaff: (bid, sid, d) => api.patch(`/auth/businesses/${bid}/staff/${sid}/`, d),
   removeStaff: (bid, sid) => api.delete(`/auth/businesses/${bid}/staff/${sid}/`),
+  regenerateStaffLink: (bid, sid) => api.post(`/auth/businesses/${bid}/staff/${sid}/regenerate-link/`),
+  closeFiscalYear: (bid) => api.post(`/auth/businesses/${bid}/close-fiscal-year/`),
+  staffLogin: (token) => api.post("/auth/staff-login/", { token }),
 };
 
 export const inventory = {
@@ -216,6 +219,7 @@ export const superadmin = {
   userLoginActivity: (userId, p) => api.get("/superadmin/login-activity/", { params: { user_id: userId, ...p } }),
   userActivity: (userId, p) => api.get(`/superadmin/users/${userId}/activity/`, { params: p }),
   userSummary: (userId) => api.get(`/superadmin/users/${userId}/summary/`),
+  activityLog: (p) => api.get("/superadmin/activity/", { params: p }),
 
   tickets: (p) => api.get("/superadmin/tickets/", { params: p }),
   updateTicket: (id, d) => api.patch(`/superadmin/tickets/${id}/`, d),
@@ -241,6 +245,22 @@ export const superadmin = {
   businessFeaturePermissions: (businessId) => api.get(`/superadmin/businesses/${businessId}/features/`),
   setBusinessFeaturePermission: (businessId, featureKey, enabled) =>
     api.patch(`/superadmin/businesses/${businessId}/features/`, { feature_key: featureKey, enabled }),
+
+  couponList: (params) => api.get("/superadmin/coupons/", { params }),
+  createCoupon: (d) => api.post("/superadmin/coupons/", d),
+  deactivateCoupon: (id) => api.post(`/superadmin/coupons/${id}/deactivate/`),
+
+  referralList: (params) => api.get("/superadmin/referrals/", { params }),
+  referralStats: () => api.get("/superadmin/referrals/stats/"),
+};
+
+// Billing — Refer & Earn, coupon redemption, and "what plan am I actually
+// on right now" for the current business. Kept separate from `auth.licenses`
+// (a deliberate product decision, not an oversight — see backend/billing).
+export const billing = {
+  subscription: () => api.get("/billing/subscription/"),
+  applyCoupon: (code) => api.post("/billing/apply-coupon/", { code }),
+  referral: () => api.get("/billing/referral/"),
 };
 
 // Effective feature availability for the current business — same endpoint

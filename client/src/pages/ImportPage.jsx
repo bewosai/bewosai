@@ -351,7 +351,9 @@ export default function ImportPage() {
   // Lets Inventory/Parties deep-link straight to the right tab (/import?type=parties)
   // instead of always landing on Products regardless of where the user came from.
   const [activeTab, setActiveTab] = useState(searchParams.get("type") === "parties" ? "parties" : "products");
-  const isPremium = currentBusiness?.plan === "PREMIUM";
+  // effective_plan so a coupon/referral-granted Premium/PremiumPlus counts
+  // too, not just a directly-licensed one — see Business.effective_plan.
+  const isPremium = (currentBusiness?.effective_plan || currentBusiness?.plan) !== "FREE";
 
   const tabs = [
     { key: "products", label: language === "ne" ? "उत्पादनहरू" : "Products", icon: Package },

@@ -7,11 +7,11 @@ import LoadingSpinner from "./components/common/LoadingSpinner";
 // sees first; no code-splitting win for the one screen everyone loads.
 import LoginPage from "./pages/Login";
 import VerifyOtpPage from "./pages/VerifyOtp";
-import ChooseProfilePage from "./pages/ChooseProfile";
 import LandingPage from "./pages/LandingPage";
 import CreateBusinessPage from "./pages/CreateBusiness";
 import SelectBusinessPage from "./pages/SelectBusiness";
 import LicenseRequiredPage from "./pages/LicenseRequired";
+import StaffLoginPage from "./pages/StaffLoginPage";
 
 // Business layout + pages — lazy-loaded so a session only downloads the
 // module(s) it actually opens instead of every page's code up front. This
@@ -31,6 +31,7 @@ const BankingPage = lazy(() => import("./pages/BankingPage"));
 const StaffPage = lazy(() => import("./pages/StaffPage"));
 const SuperAdminPage = lazy(() => import("./pages/SuperAdminPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const UpgradePlanPage = lazy(() => import("./pages/UpgradePlanPage"));
 const RecycleBinPage = lazy(() => import("./pages/RecycleBinPage"));
 const QuotationPage = lazy(() => import("./pages/QuotationPage"));
 const SalesReturnPage = lazy(() => import("./pages/SalesReturnPage"));
@@ -61,8 +62,11 @@ export default function App() {
       {/* Public */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
-      <Route path="/choose-profile" element={<GuestOnly><ChooseProfilePage /></GuestOnly>} />
       <Route path="/verify-otp" element={<VerifyOtpPage />} />
+      {/* Not wrapped in GuestOnly: clicking a staff login link should
+          switch the session on this device even if someone else (or a
+          previous staff member) is already logged in here. */}
+      <Route path="/staff-login/:token" element={<StaffLoginPage />} />
 
       {/* Post-login setup */}
       <Route path="/create-business" element={<RequireAuth><CreateBusinessPage /></RequireAuth>} />
@@ -116,6 +120,7 @@ export default function App() {
         <Route path="/staff" element={<FeatureGate feature="staff_management"><StaffPage /></FeatureGate>} />
         <Route path="/reports" element={<FeatureGate feature="reports"><ReportsPage /></FeatureGate>} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/upgrade" element={<UpgradePlanPage />} />
         <Route path="/recycle-bin" element={<RecycleBinPage />} />
         <Route path="/import" element={<FeatureGate feature="excel_import"><ImportPage /></FeatureGate>} />
         <Route path="/superadmin" element={<SuperAdminPage />} />
