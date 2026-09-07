@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 
 from bewosai.pagination import LargePageNumberPagination
-from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
+from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_bid, require_business
 from .models import Sale, SaleReturn, Quotation
 from .serializers import SaleSerializer, SaleReturnSerializer, QuotationSerializer
@@ -17,7 +17,7 @@ from .serializers import SaleSerializer, SaleReturnSerializer, QuotationSerializ
 class _RequirePos:
     """Gated by the Super Admin 'POS / Sales' feature switch, and by whether
     the current staff member has been granted the 'pos' module."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("pos"), require_staff_permission("sales")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("pos"), require_staff_permission("sales"), FiscalYearLocked]
 
 
 def _next_invoice_number(business_id):
@@ -101,6 +101,8 @@ class SaleListCreateView(_RequirePos, generics.ListCreateAPIView):
 
 class SaleDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = SaleSerializer
+    fiscal_lock_date_field = "sale_date"
+    fiscal_lock_business_field = "business"
 
     def get_queryset(self):
         bid = get_bid(self.request)

@@ -212,3 +212,65 @@ class BusinessNotArchivedForWrites(BasePermission):
         if business and business.status == Business.STATUS_ARCHIVED:
             return False
         return True
+
+
+class FiscalYearLocked(BasePermission):
+    """
+    Blocks edits to a record whose date falls inside one of its business's
+    CLOSED fiscal years (accounts.models.FiscalYear) — the actual read-only
+    enforcement for the fiscal-year-close feature (see accounts.views
+    CloseFiscalYearView, which only records the closed period; this is what
+    makes it mean something). Viewing (GET/HEAD/OPTIONS) always passes, same
+    as BusinessNotArchivedForWrites — only mutations are blocked.
+
+    Hooks has_object_permission, not has_permission: the specific record
+    (and therefore its date) only exists once DRF's get_object() has already
+    fetched it, which is also when check_object_permissions() runs — a plain
+    has_permission check at request-entry has no object to look at yet.
+    Because of that, this never fires for ListCreateView (create/list don't
+    call get_object()) — safe to add to a shared permission_classes list
+    used by both a *ListCreateView and its *DetailView.
+
+    Each protected *DetailView must declare two class attributes — field
+    names/relations differ per model, so this can't be fully generic:
+      fiscal_lock_date_field — the object's own date field, e.g. "sale_date"
+      fiscal_lock_business_field — dotted path to the owning Business, e.g.
+        "business" (direct FK) or "party.business" (indirect, for
+        PartyPayment/BankTransaction). A view missing either attribute is
+        left untouched (returns True) — e.g. QuotationDetailView and
+        master-data views (Party/Product/Category/Unit) are intentionally
+        not dated ledger entries and never opt in.
+    """
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in SAFE_METHODS:
+            return True
+
+        date_field = getattr(view, "fiscal_lock_date_field", None)
+        business_field = getattr(view, "fiscal_lock_business_field", None)
+        if not date_field or not business_field:
+            return True
+
+        record_date = getattr(obj, date_field, None)
+        business = obj
+        for part in business_field.split("."):
+            business = getattr(business, part, None)
+            if business is None:
+                break
+        if not record_date or not business:
+            return True
+
+        from accounts.models import FiscalYear
+
+        closed = FiscalYear.objects.filter(
+            business=business, status=FiscalYear.STATUS_CLOSED,
+            start_date__lte=record_date, end_date__gte=record_date,
+        ).first()
+        if not closed:
+            return True
+
+        self.message = (
+            f"This record falls in a closed fiscal year ({closed.label}). "
+            "Request a correction from Settings if you need to fix it."
+        )
+        return False

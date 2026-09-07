@@ -3,7 +3,7 @@ from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
 from bewosai.pagination import LargePageNumberPagination
-from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
+from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_bid, require_business
 from .models import ExpenseCategory, Expense
 from .serializers import ExpenseCategorySerializer, ExpenseSerializer
@@ -12,7 +12,7 @@ from .serializers import ExpenseCategorySerializer, ExpenseSerializer
 class _RequireExpenses:
     """Gated by the Super Admin 'Expenses' feature switch, and by whether the
     current staff member has been granted the 'expenses' module."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("expenses"), require_staff_permission("expenses")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("expenses"), require_staff_permission("expenses"), FiscalYearLocked]
 
 
 class ExpenseCategoryListCreateView(_RequireExpenses, generics.ListCreateAPIView):
@@ -67,6 +67,8 @@ class ExpenseListCreateView(_RequireExpenses, generics.ListCreateAPIView):
 class ExpenseDetailView(_RequireExpenses, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ExpenseSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
+    fiscal_lock_date_field = "date"
+    fiscal_lock_business_field = "business"
 
     def get_queryset(self):
         bid = get_bid(self.request)

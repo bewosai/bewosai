@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
-from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, IsPremiumBusiness, require_feature, require_staff_permission
+from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, IsPremiumBusiness, require_feature, require_staff_permission
 from bewosai.utils import get_bid, get_business
 from .models import Party, PartyPayment, PaymentAllocation
 from .serializers import PartySerializer, PartyPaymentSerializer
@@ -20,7 +20,7 @@ class _RequireParties:
 class _RequirePayments:
     """Gated by the Super Admin 'Payments' feature switch, and by whether the
     current staff member has been granted the 'payments' module."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("payments"), require_staff_permission("payments")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("payments"), require_staff_permission("payments"), FiscalYearLocked]
 
 
 class PartyListCreateView(_RequireParties, generics.ListCreateAPIView):
@@ -147,6 +147,8 @@ class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
 
 class PartyPaymentDetailView(_RequirePayments, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PartyPaymentSerializer
+    fiscal_lock_date_field = "date"
+    fiscal_lock_business_field = "party.business"
 
     def get_queryset(self):
         bid = get_bid(self.request)

@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from bewosai.pagination import LargePageNumberPagination
-from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
+from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_business
 from .models import Purchase, PurchaseReturn
 from .serializers import PurchaseSerializer, PurchaseReturnSerializer
@@ -17,7 +17,7 @@ from .serializers import PurchaseSerializer, PurchaseReturnSerializer
 class _RequirePurchases:
     """Gated by the Super Admin 'Purchases' feature switch, and by whether
     the current staff member has been granted the 'purchases' module."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("purchases"), require_staff_permission("purchases")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("purchases"), require_staff_permission("purchases"), FiscalYearLocked]
 
 
 def _next_bill_number(business):
@@ -85,6 +85,8 @@ class PurchaseListCreateView(_RequirePurchases, generics.ListCreateAPIView):
 class PurchaseDetailView(_RequirePurchases, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PurchaseSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
+    fiscal_lock_date_field = "purchase_date"
+    fiscal_lock_business_field = "business"
 
     def get_queryset(self):
         biz = get_business(self.request)

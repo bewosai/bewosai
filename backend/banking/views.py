@@ -3,7 +3,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
-from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
+from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_bid, require_business
 from .models import BankAccount, BankTransaction
 from .serializers import BankAccountSerializer, BankTransactionSerializer
@@ -12,7 +12,7 @@ from .serializers import BankAccountSerializer, BankTransactionSerializer
 class _RequireBanking:
     """Gated by the Super Admin 'Banking' feature switch, and by whether the
     current staff member has been granted the 'banking' module."""
-    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("banking"), require_staff_permission("banking")]
+    permission_classes = [permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription, require_feature("banking"), require_staff_permission("banking"), FiscalYearLocked]
 
 
 class BankAccountListCreateView(_RequireBanking, generics.ListCreateAPIView):
@@ -92,6 +92,8 @@ class BankTransactionListCreateView(_RequireBanking, generics.ListCreateAPIView)
 
 class BankTransactionDetailView(_RequireBanking, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BankTransactionSerializer
+    fiscal_lock_date_field = "date"
+    fiscal_lock_business_field = "account.business"
 
     def get_queryset(self):
         bid = get_bid(self.request)
