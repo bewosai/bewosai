@@ -1,10 +1,10 @@
 from decimal import Decimal
-from django.db.models import F
+from django.db.models import F, Sum
 from django.db.models.functions import Greatest
 from rest_framework import serializers
 from bewosai.utils import require_business, sync_bank_transaction
 from inventory.models import Product
-from .models import Purchase, PurchaseItem, PurchaseReturn
+from .models import Purchase, PurchaseItem, PurchaseReturn, PurchaseReturnItem
 
 
 class PurchaseItemSerializer(serializers.ModelSerializer):
@@ -151,15 +151,30 @@ class PurchaseSerializer(serializers.ModelSerializer):
         return instance
 
 
+class PurchaseReturnItemSerializer(serializers.ModelSerializer):
+    purchase_item = serializers.PrimaryKeyRelatedField(
+        queryset=PurchaseItem.objects.all(), required=False, allow_null=True
+    )
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(), required=False, allow_null=True
+    )
+
+    class Meta:
+        model = PurchaseReturnItem
+        fields = ("id", "purchase_item", "product", "product_name", "quantity", "unit_price", "total")
+        read_only_fields = ("id", "total")
+
+
 class PurchaseReturnSerializer(serializers.ModelSerializer):
     original_purchase_number = serializers.CharField(
         source="original_purchase.bill_number", read_only=True
     )
+    items = PurchaseReturnItemSerializer(many=True, required=False)
 
     class Meta:
         model = PurchaseReturn
         fields = ["id", "original_purchase", "original_purchase_number",
-                  "return_date", "reason", "amount", "created_at"]
+                  "return_date", "reason", "amount", "items", "created_at"]
         read_only_fields = ["id", "created_at", "original_purchase_number"]
 
     def validate(self, data):
@@ -167,4 +182,40 @@ class PurchaseReturnSerializer(serializers.ModelSerializer):
         original_purchase = data.get("original_purchase")
         if original_purchase is not None and original_purchase.business_id != business.id:
             raise serializers.ValidationError({"original_purchase": "Invalid purchase for this business."})
+        for item in data.get("items", []):
+            purchase_item = item.get("purchase_item")
+            product = item.get("product")
+            if purchase_item is not None and purchase_item.purchase.business_id != business.id:
+                raise serializers.ValidationError({"items": "Invalid purchase item for this business."})
+            if product is not None and product.business_id != business.id:
+                raise serializers.ValidationError({"items": "Invalid product for this business."})
+            qty = item.get("quantity") or Decimal("0")
+            if purchase_item:
+                already_returned = PurchaseReturnItem.objects.filter(purchase_item=purchase_item).aggregate(
+                    total=Sum("quantity")
+                )["total"] or Decimal("0")
+                remaining = purchase_item.quantity - already_returned
+                if qty > remaining:
+                    raise serializers.ValidationError(
+                        f"Cannot return {qty} of '{purchase_item.product_name}' — only "
+                        f"{remaining} remaining from this bill."
+                    )
         return data
+
+    def create(self, validated_data):
+        items_data = validated_data.pop("items", [])
+        purchase_return = PurchaseReturn.objects.create(**validated_data)
+
+        for item_data in items_data:
+            item = PurchaseReturnItem(purchase_return=purchase_return, **item_data)
+            item.save()                     # computes item.total = qty*price
+
+            # Goods going back to the supplier come out of stock — the
+            # opposite of SaleReturnItem, which restores it. Floored at 0
+            # (Greatest) so a stock discrepancy can't push it negative.
+            if item.product_id:
+                Product.objects.filter(pk=item.product_id).update(
+                    stock_quantity=Greatest(F("stock_quantity") - item.quantity, Decimal("0"))
+                )
+
+        return purchase_return

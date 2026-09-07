@@ -136,6 +136,8 @@ const T = {
     supplierLedger: "Supplier Ledger",
     purchaseReturn: "Purchase Return",
     stockUpdated: "Stock Updated Automatically",
+    allPurchases: "All Purchases",
+    paymentOut: "Payment Out",
 
     // Expenses
     expense: "Expense",
@@ -461,6 +463,8 @@ const T = {
     supplierLedger: "आपूर्तिकर्ता खाता",
     purchaseReturn: "खरिद फिर्ता",
     stockUpdated: "स्टक स्वतः अपडेट भयो",
+    allPurchases: "सबै खरिद",
+    paymentOut: "भुक्तानी बाहिर",
 
     // Expenses
     expense: "खर्च",

@@ -132,6 +132,7 @@ const bid_headers = () => ({ "X-Business-ID": bid() });
 
 export const purchases = {
   list: (params) => api.get("/purchases/", { params, headers: bid_headers() }),
+  get: (id) => api.get(`/purchases/${id}/`, { headers: bid_headers() }),
   nextNumber: () => api.get("/purchases/next-number/", { headers: bid_headers() }),
   create: (data) => {
     const isFormData = data instanceof FormData;
@@ -142,6 +143,8 @@ export const purchases = {
     return api.patch(`/purchases/${id}/`, data, { headers: { ...bid_headers(), ...(isFormData ? { "Content-Type": "multipart/form-data" } : {}) } });
   },
   delete: (id) => api.delete(`/purchases/${id}/`, { headers: bid_headers() }),
+  returns: (params) => api.get("/purchases/returns/", { params, headers: bid_headers() }),
+  createReturn: (data) => api.post("/purchases/returns/", data, { headers: bid_headers() }),
 };
 
 export const recycleBin = {

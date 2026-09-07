@@ -29,7 +29,16 @@ function buildNavItems(t, language) {
         { name: t("salesReturn"), path: "/sales/return" },
       ],
     },
-    { name: t("purchases"), path: "/purchases", icon: Truck, feature: "purchases" },
+    {
+      name: t("purchases"),
+      icon: Truck,
+      feature: "purchases",
+      children: [
+        { name: t("allPurchases"), path: "/purchases" },
+        { name: t("paymentOut"), path: "/payments?action=out" },
+        { name: t("purchaseReturn"), path: "/purchases/return" },
+      ],
+    },
     { name: t("expenses"), path: "/expenses", icon: Receipt, feature: "expenses" },
     {
       name: t("inventory"),

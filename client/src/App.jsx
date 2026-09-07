@@ -35,6 +35,7 @@ const UpgradePlanPage = lazy(() => import("./pages/UpgradePlanPage"));
 const RecycleBinPage = lazy(() => import("./pages/RecycleBinPage"));
 const QuotationPage = lazy(() => import("./pages/QuotationPage"));
 const SalesReturnPage = lazy(() => import("./pages/SalesReturnPage"));
+const PurchaseReturnPage = lazy(() => import("./pages/PurchaseReturnPage"));
 const ImportPage = lazy(() => import("./pages/ImportPage"));
 
 // Personal layout + pages
@@ -109,6 +110,7 @@ export default function App() {
         <Route path="/sales/return" element={<FeatureGate feature="pos"><SalesReturnPage /></FeatureGate>} />
 
         <Route path="/purchases" element={<FeatureGate feature="purchases"><PurchasesPage /></FeatureGate>} />
+        <Route path="/purchases/return" element={<FeatureGate feature="purchases"><PurchaseReturnPage /></FeatureGate>} />
         <Route path="/payments" element={<FeatureGate feature="payments"><PaymentsPage /></FeatureGate>} />
         <Route path="/expenses" element={<FeatureGate feature="expenses"><ExpensesPage /></FeatureGate>} />
 

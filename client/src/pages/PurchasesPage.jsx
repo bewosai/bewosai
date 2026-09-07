@@ -10,6 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { purchases as purchasesApi, parties, inventory, banking as bankingApi } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
 import SearchableSelect from "../components/common/SearchableSelect";
+import DatePicker from "../components/common/DatePicker";
 import { getRecentIds, pushRecentId } from "../utils/recentItems";
 import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
 import { priceForUnit } from "../utils/calculations";
@@ -437,19 +438,11 @@ function PurchaseModal({ onClose, onSaved, editData }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-xs font-semibold text-navy-400">Purchase Date *</label>
-              <input type="date"
-                className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
-                value={form.purchase_date}
-                onChange={e => setForm(f => ({ ...f, purchase_date: e.target.value }))}
-              />
+              <DatePicker value={form.purchase_date} onChange={(d) => setForm(f => ({ ...f, purchase_date: d }))} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-navy-400">Due Date</label>
-              <input type="date"
-                className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
-                value={form.due_date}
-                onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))}
-              />
+              <DatePicker value={form.due_date} onChange={(d) => setForm(f => ({ ...f, due_date: d }))} clearable />
             </div>
           </div>
 

@@ -98,12 +98,13 @@ class PurchaseDetailView(_RequirePurchases, generics.RetrieveUpdateDestroyAPIVie
 
 class PurchaseReturnListCreateView(_RequirePurchases, generics.ListCreateAPIView):
     serializer_class = PurchaseReturnSerializer
+    pagination_class = LargePageNumberPagination
 
     def get_queryset(self):
         biz = get_business(self.request)
         if not biz:
             return PurchaseReturn.objects.none()
-        return PurchaseReturn.objects.filter(business=biz)
+        return PurchaseReturn.objects.filter(business=biz).select_related("original_purchase").prefetch_related("items")
 
     def perform_create(self, serializer):
         biz = get_business(self.request)

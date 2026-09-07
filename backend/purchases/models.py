@@ -117,3 +117,21 @@ class PurchaseReturn(models.Model):
 
     class Meta:
         ordering = ["-return_date"]
+
+
+class PurchaseReturnItem(models.Model):
+    """Line items for a PurchaseReturn — mirrors SaleReturnItem. Goods going
+    back to the supplier reduce stock (the opposite of SaleReturnItem, which
+    restores it), so PurchaseReturnSerializer.create() decrements
+    stock_quantity for each linked product instead of adding to it."""
+    purchase_return = models.ForeignKey(PurchaseReturn, on_delete=models.CASCADE, related_name="items")
+    purchase_item = models.ForeignKey(PurchaseItem, on_delete=models.SET_NULL, null=True, related_name="return_items")
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
+    product_name = models.CharField(max_length=200)
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+
+    def save(self, *args, **kwargs):
+        self.total = self.quantity * self.unit_price
+        super().save(*args, **kwargs)

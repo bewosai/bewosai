@@ -16,6 +16,7 @@ import TabBar from "../components/common/TabBar";
 import SearchBar from "../components/common/SearchBar";
 import StatusBadge from "../components/common/StatusBadge";
 import LoadingSpinner from "../components/common/LoadingSpinner";
+import DatePicker from "../components/common/DatePicker";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500 transition";
@@ -209,11 +210,7 @@ function PaymentModal({ type, onClose, onSaved }) {
         {/* Date */}
         <div>
           <label className="mb-1 block text-xs font-semibold text-navy-400">Date *</label>
-          <input
-            type="date" className={F}
-            value={form.date}
-            onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-          />
+          <DatePicker value={form.date} onChange={(d) => setForm(f => ({ ...f, date: d }))} />
         </div>
 
         {/* Note */}
