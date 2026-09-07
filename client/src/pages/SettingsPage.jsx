@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { auth as authApi, support as supportApi } from "../api";
 import {
   Sun, Moon, Globe, Eye, EyeOff, Calendar, Building2,
-  Upload, Save, Bell, Shield, Palette, User, Check, FileText, BarChart3, ChevronRight,
+  Upload, Save, Bell, Shield, Palette, User, Check, FileText, BarChart3, ChevronRight, ChevronDown,
   FileSpreadsheet, Crown, Archive, Loader, AlertCircle, MessageSquare, Send,
 } from "lucide-react";
 import PhoneInput from "../components/common/PhoneInput";
@@ -165,6 +165,65 @@ function CommentsCard({ language }) {
   );
 }
 
+const SECTIONS = [
+  { key: "account",       icon: User,           label: { en: "Account", ne: "खाता" } },
+  { key: "business",      icon: Building2,      label: { en: "Business", ne: "व्यवसाय" } },
+  { key: "billing",       icon: Crown,          label: { en: "Billing & Plan", ne: "बिलिङ र योजना" } },
+  { key: "appearance",    icon: Palette,        label: { en: "Appearance & Invoices", ne: "रूप र बिजक" } },
+  { key: "data",          icon: FileSpreadsheet, label: { en: "Data & Reports", ne: "डेटा र प्रतिवेदन" } },
+  { key: "notifications", icon: Bell,           label: { en: "Notifications", ne: "सूचना" } },
+  { key: "support",       icon: MessageSquare,  label: { en: "Support", ne: "सहयोग" } },
+];
+
+/* ── Section picker — a dropdown instead of a dozen SettingCards stacked
+   in one long scroll, so a viewer lands on exactly the group they want. ── */
+function SectionDropdown({ section, setSection, language }) {
+  const [open, setOpen] = useState(false);
+  const active = SECTIONS.find((s) => s.key === section) || SECTIONS[0];
+  const ActiveIcon = active.icon;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-navy-700 bg-navy-900 px-4 py-3 text-left transition hover:border-orange-500/40 sm:w-72"
+      >
+        <span className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500/15">
+            <ActiveIcon className="h-4 w-4 text-orange-500" />
+          </span>
+          <span className="text-sm font-semibold text-white">{active.label[language] || active.label.en}</span>
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-navy-500 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-20 mt-1.5 w-full min-w-[16rem] rounded-xl border border-navy-700 bg-navy-900 p-1.5 shadow-2xl">
+            {SECTIONS.map((s) => {
+              const Icon = s.icon;
+              const isActive = s.key === section;
+              return (
+                <button
+                  key={s.key}
+                  onClick={() => { setSection(s.key); setOpen(false); }}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition ${
+                    isActive ? "bg-orange-500/15 font-semibold text-orange-400" : "text-navy-300 hover:bg-navy-800 hover:text-white"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {s.label[language] || s.label.en}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { theme, language, privateMode, dateMode, currency,
           toggleTheme, toggleLanguage, togglePrivateMode, toggleDateMode,
@@ -172,6 +231,7 @@ export default function SettingsPage() {
   const { t } = useTranslation();
   const { currentBusiness, user, updateBusinessInList, replaceBusiness } = useAuth();
   const navigate = useNavigate();
+  const [section, setSection] = useState("account");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -300,8 +360,11 @@ export default function SettingsPage() {
         </div>
       )}
 
+      <SectionDropdown section={section} setSection={setSection} language={language} />
+
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Upgrade Plan / Refer & Earn */}
+        {section === "billing" && (
         <SettingCard title={language === "ne" ? "योजना अपग्रेड" : "Upgrade Plan"} icon={Crown}>
           <button
             onClick={() => navigate("/settings/upgrade")}
@@ -320,8 +383,10 @@ export default function SettingsPage() {
             <ChevronRight className="h-4 w-4 text-navy-500 shrink-0" />
           </button>
         </SettingCard>
+        )}
 
         {/* View Report */}
+        {section === "data" && (
         <SettingCard title={language === "ne" ? "प्रतिवेदन" : "Reports"} icon={BarChart3}>
           <button
             onClick={() => navigate(user?.account_type === "personal" ? "/personal/reports" : "/reports")}
@@ -340,8 +405,10 @@ export default function SettingsPage() {
             <ChevronRight className="h-4 w-4 text-navy-500 shrink-0" />
           </button>
         </SettingCard>
+        )}
 
         {/* Bulk Import */}
+        {section === "data" && (
         <SettingCard title={language === "ne" ? "ब्याच आयात" : "Bulk Import"} icon={FileSpreadsheet}>
           <button
             onClick={() => navigate("/import")}
@@ -360,8 +427,10 @@ export default function SettingsPage() {
             <ChevronRight className="h-4 w-4 text-navy-500 shrink-0" />
           </button>
         </SettingCard>
+        )}
 
         {/* Appearance */}
+        {section === "appearance" && (
         <SettingCard title={language === "ne" ? "रूप र थिम" : "Appearance & Theme"} icon={Palette}>
           <SelectRow
             label={t("theme")}
@@ -411,8 +480,10 @@ export default function SettingsPage() {
             />
           </div>
         </SettingCard>
+        )}
 
         {/* Privacy & Security */}
+        {section === "account" && (
         <SettingCard title={language === "ne" ? "गोपनीयता र सुरक्षा" : "Privacy & Security"} icon={Shield}>
           <ToggleRow
             label={t("privateMode")}
@@ -444,8 +515,10 @@ export default function SettingsPage() {
             </div>
           </div>
         </SettingCard>
+        )}
 
         {/* Business Info */}
+        {section === "business" && (
         <SettingCard title={t("businessInfo")} icon={Building2}>
           <div className="space-y-3">
             {[
@@ -504,8 +577,10 @@ export default function SettingsPage() {
             )}
           </div>
         </SettingCard>
+        )}
 
         {/* Fiscal Year */}
+        {section === "business" && (
         <SettingCard title={language === "ne" ? "आर्थिक वर्ष" : "Fiscal Year"} icon={Calendar}>
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -533,8 +608,10 @@ export default function SettingsPage() {
             </p>
           )}
         </SettingCard>
+        )}
 
         {/* Invoice Customization */}
+        {section === "appearance" && (
         <SettingCard title={language === "ne" ? "बिजक अनुकूलन" : "Invoice Customization"} icon={FileText}>
           <div className="space-y-4">
             <div>
@@ -614,8 +691,10 @@ export default function SettingsPage() {
             </div>
           </div>
         </SettingCard>
+        )}
 
         {/* User Profile */}
+        {section === "account" && (
         <SettingCard title={language === "ne" ? "प्रयोगकर्ता प्रोफाइल" : "User Profile"} icon={User}>
           <div className="flex items-center gap-4 mb-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-orange-500/20 text-xl font-bold text-orange-500">
@@ -649,8 +728,10 @@ export default function SettingsPage() {
             </div>
           </div>
         </SettingCard>
+        )}
 
         {/* Tax Configuration */}
+        {section === "business" && (
         <SettingCard title={language === "ne" ? "कर कन्फिगरेसन" : "Tax Configuration"} icon={Shield}>
           <div className="rounded-xl bg-navy-800 p-4">
             <div className="flex items-start gap-3">
@@ -670,8 +751,10 @@ export default function SettingsPage() {
             </div>
           </div>
         </SettingCard>
+        )}
 
         {/* Notifications */}
+        {section === "notifications" && (
         <SettingCard title={t("notification")} icon={Bell}>
           <ToggleRow
             label={language === "ne" ? "कम स्टक सूचना" : "Low Stock Alerts"}
@@ -696,8 +779,9 @@ export default function SettingsPage() {
             />
           </div>
         </SettingCard>
+        )}
 
-        <CommentsCard language={language} />
+        {section === "support" && <CommentsCard language={language} />}
       </div>
 
       {/* App Info */}
