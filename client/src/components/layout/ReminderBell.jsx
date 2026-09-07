@@ -1,16 +1,30 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, ChevronRight } from "lucide-react";
-import { reports as reportsApi, sales as salesApi } from "../../api";
+import { Bell, ChevronRight, AlertTriangle, Megaphone, X } from "lucide-react";
+import { reports as reportsApi, sales as salesApi, superadmin as adminApi } from "../../api";
 import { useAppSettings, usePrivateAmount } from "../../context/AppSettingsContext";
 import { useEscToClose } from "../../hooks/useEscToClose";
 
+// Announcements have no server-side "read" state (they're a broadcast, not
+// per-user), so a viewer's dismissals are tracked locally — otherwise a
+// notice they've already seen would sit in the badge count forever.
+const DISMISSED_KEY = "bw_dismissed_announcements";
+
+function loadDismissed() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DISMISSED_KEY));
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
- * Topbar's reminder bell — replaces the two banners that used to sit at the
- * top of the Dashboard (receivable-collection nudge + due follow-up
- * reminders). Living in the Topbar means they follow the user to every
- * screen instead of only being visible on Dashboard, and don't push the
- * rest of the page's content down.
+ * The app's one notification center, living in the Topbar so it follows the
+ * user to every screen: payment-collection nudges, due follow-up reminders,
+ * low-stock alerts, and platform announcements — everything that used to be
+ * scattered across Dashboard banners (or, for announcements, not surfaced
+ * to end users at all) now funnels through this single bell.
  */
 export default function ReminderBell() {
   const navigate = useNavigate();
@@ -20,13 +34,19 @@ export default function ReminderBell() {
   const [totalReceivable, setTotalReceivable] = useState(0);
   const [debtors, setDebtors] = useState(null);
   const [dueReminders, setDueReminders] = useState([]);
+  const [lowStockCount, setLowStockCount] = useState(0);
+  const [announcements, setAnnouncements] = useState([]);
+  const [dismissed, setDismissed] = useState(loadDismissed);
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
 
   useEffect(() => {
     reportsApi.dashboard()
-      .then((r) => setTotalReceivable(r.data?.total_receivable || 0))
-      .catch(() => setTotalReceivable(0));
+      .then((r) => {
+        setTotalReceivable(r.data?.total_receivable || 0);
+        setLowStockCount(r.data?.low_stock_count || 0);
+      })
+      .catch(() => {});
 
     salesApi.list({ reminder_enabled: true, status: "CONFIRMED", page_size: 50 })
       .then((r) => {
@@ -39,6 +59,10 @@ export default function ReminderBell() {
         );
       })
       .catch(() => setDueReminders([]));
+
+    adminApi.activeAnnouncements()
+      .then((r) => setAnnouncements(r.data || []))
+      .catch(() => setAnnouncements([]));
   }, []);
 
   useEffect(() => {
@@ -58,14 +82,23 @@ export default function ReminderBell() {
     return () => document.removeEventListener("mousedown", onClick);
   }, [open, close]);
 
+  const dismissAnnouncement = (id) => {
+    const next = [...dismissed, id];
+    setDismissed(next);
+    try { localStorage.setItem(DISMISSED_KEY, JSON.stringify(next)); } catch {}
+  };
+
+  const visibleAnnouncements = announcements.filter((a) => !dismissed.includes(a.id));
   const hasReceivable = totalReceivable > 0;
-  const count = dueReminders.length + (hasReceivable ? 1 : 0);
+  const hasLowStock = lowStockCount > 0;
+  const count = dueReminders.length + (hasReceivable ? 1 : 0) + (hasLowStock ? 1 : 0) + visibleAnnouncements.length;
   const goTo = (path) => { close(); navigate(path); };
 
   return (
     <div className="relative" ref={panelRef}>
       <button
         onClick={() => setOpen((o) => !o)}
+        title={language === "ne" ? "सूचनाहरू" : "Notifications"}
         className="relative rounded-xl border border-navy-800 bg-navy-900 p-2 text-navy-300 transition hover:text-orange-400"
       >
         <Bell className="h-4 w-4" />
@@ -80,17 +113,55 @@ export default function ReminderBell() {
         <div className="absolute right-0 top-full z-40 mt-2 w-80 max-w-[90vw] rounded-2xl border border-navy-800 bg-navy-900 shadow-2xl">
           <div className="border-b border-navy-800 px-4 py-3">
             <p className="text-sm font-semibold text-white">
-              {language === "ne" ? "रिमाइन्डरहरू" : "Reminders"}
+              {language === "ne" ? "सूचनाहरू" : "Notifications"}
             </p>
           </div>
 
           <div className="max-h-96 overflow-y-auto">
             {count === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-navy-500">
-                {language === "ne" ? "अहिलेको लागि कुनै रिमाइन्डर छैन" : "You're all caught up"}
+                {language === "ne" ? "अहिलेको लागि कुनै सूचना छैन" : "You're all caught up"}
               </p>
             ) : (
               <>
+                {visibleAnnouncements.map((a) => (
+                  <div key={a.id} className="border-b border-navy-800 px-4 py-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-500/15">
+                        <Megaphone className="h-3.5 w-3.5 text-purple-400" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-white">{a.title}</p>
+                        {a.body && <p className="mt-0.5 text-xs text-navy-400">{a.body}</p>}
+                      </div>
+                      <button
+                        onClick={() => dismissAnnouncement(a.id)}
+                        title={language === "ne" ? "हटाउनुहोस्" : "Dismiss"}
+                        className="shrink-0 text-navy-600 hover:text-navy-300"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {hasLowStock && (
+                  <button
+                    onClick={() => goTo("/inventory/low-stock")}
+                    className="flex w-full items-start gap-2.5 border-b border-navy-800 px-4 py-3 text-left hover:bg-navy-800/40"
+                  >
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-red-500/15">
+                      <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-white">
+                        {lowStockCount} {language === "ne" ? "वस्तु कम स्टकमा" : "items low on stock"}
+                      </p>
+                      <p className="mt-0.5 text-xs text-navy-500">{language === "ne" ? "स्टक पुनः अर्डर गर्नुहोस्" : "Reorder to avoid stockouts"}</p>
+                    </div>
+                  </button>
+                )}
+
                 {hasReceivable && (
                   <div className="border-b border-navy-800 px-4 py-3">
                     <p className="text-sm font-semibold text-white">

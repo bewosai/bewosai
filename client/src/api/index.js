@@ -228,6 +228,9 @@ export const superadmin = {
   createAnnouncement: (d) => api.post("/superadmin/announcements/", d),
   updateAnnouncement: (id, d) => api.patch(`/superadmin/announcements/${id}/`, d),
   deleteAnnouncement: (id) => api.delete(`/superadmin/announcements/${id}/`),
+  // Public — any authenticated user (not just platform admins) can read
+  // these; used by the Topbar's notification bell, not just Super Admin.
+  activeAnnouncements: () => api.get("/superadmin/announcements/active/"),
 
   features: () => api.get("/superadmin/features/"),
   toggleFeature: (key, d) => api.patch(`/superadmin/features/${key}/toggle/`, d),

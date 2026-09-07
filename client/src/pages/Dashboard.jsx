@@ -7,7 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import {
-  TrendingUp, TrendingDown, AlertTriangle, ShoppingCart,
+  TrendingUp, TrendingDown, ShoppingCart,
   Package, Plus, Wallet, ArrowUpRight, ArrowDownRight, ArrowDownLeft,
   Users, Receipt, BarChart3, Loader, SlidersHorizontal, X, Check,
 } from "lucide-react";
@@ -343,22 +343,6 @@ export default function DashboardPage() {
 
         {/* Quick Actions + Alerts */}
         <div className="space-y-4">
-          {/* Low stock alert */}
-          {(data?.low_stock_count || 0) > 0 && (
-            <button
-              onClick={() => navigate("/inventory/low-stock")}
-              className="w-full flex items-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/5 px-5 py-4 text-left hover:bg-red-500/10 transition"
-            >
-              <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-white">
-                  {data.low_stock_count} {language === "ne" ? "वस्तु कम स्टकमा" : "items low on stock"}
-                </p>
-                <p className="text-xs text-navy-500 mt-0.5">{language === "ne" ? "स्टक पुनः अर्डर गर्नुहोस्" : "Reorder to avoid stockouts"}</p>
-              </div>
-            </button>
-          )}
-
           {/* Quick Actions */}
           <div className="rounded-2xl border border-navy-800 bg-navy-900 p-4">
             <h2 className="font-semibold text-white mb-3 text-sm">{language === "ne" ? "द्रुत कार्यहरू" : "Quick Actions"}</h2>
