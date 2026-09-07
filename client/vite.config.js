@@ -56,6 +56,15 @@ export default defineConfig({
       workbox: {
         // Cache all JS/CSS/HTML assets
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // Without these, a new service worker installs but sits "waiting"
+        // until every open tab of the old one closes — so a fresh deploy
+        // (new Sidebar items, new pages, bug fixes) can silently keep
+        // serving the previous build to an already-open tab for a long
+        // time, even after a plain refresh. skipWaiting activates the new
+        // SW immediately; clientsClaim hands already-open tabs to it right
+        // away instead of only new ones.
+        skipWaiting: true,
+        clientsClaim: true,
         // API calls always go to the network, never the cache. Business
         // data (stock, balances, invoices) must be correct across devices —
         // a NetworkFirst strategy would silently serve a stale cached
