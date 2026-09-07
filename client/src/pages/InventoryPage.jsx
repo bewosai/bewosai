@@ -123,9 +123,9 @@ function UnitModal({ onClose, onSaved, units, initial }) {
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                 onBlur={applyStandardConversion}
                 list="bw-unit-suggestions"
-                placeholder="Name *  e.g. Box" className={F} />
+                placeholder="Name *" className={F} />
               <input value={form.abbreviation} onChange={(e) => setForm({ ...form, abbreviation: e.target.value })}
-                placeholder="Short  e.g. bx" className={F} />
+                placeholder="Short" className={F} />
             </div>
           </div>
 
@@ -133,14 +133,14 @@ function UnitModal({ onClose, onSaved, units, initial }) {
           <div className="rounded-xl border border-navy-700 bg-navy-950 p-3">
             <p className="mb-2 text-xs font-semibold text-blue-400 uppercase tracking-wide">Secondary Unit (optional)</p>
             <p className="mb-2 text-[10px] text-navy-400">
-              Define a sub-unit, e.g. 1 Box = 12 Pieces — picking a standard primary unit (Dozen, Kilogram, Liter…) auto-fills this
+              Define a sub-unit — picking a standard primary unit (Dozen, Kilogram, Liter…) auto-fills this
             </p>
             <div className="grid grid-cols-2 gap-2">
               <input value={form.secondary_unit} onChange={(e) => setForm({ ...form, secondary_unit: e.target.value })}
                 list="bw-unit-suggestions"
-                placeholder="Name  e.g. Piece" className={F} />
+                placeholder="Name" className={F} />
               <input value={form.secondary_abbreviation} onChange={(e) => setForm({ ...form, secondary_abbreviation: e.target.value })}
-                placeholder="Short  e.g. pc" className={F} />
+                placeholder="Short" className={F} />
             </div>
             {form.secondary_unit && (
               <input type="number" min="0" step="0.0001"
