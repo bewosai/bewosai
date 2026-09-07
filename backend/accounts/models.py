@@ -12,11 +12,16 @@ ACCOUNT_TYPE_CHOICES = [(ACCOUNT_PERSONAL, "Personal"), (ACCOUNT_BUSINESS, "Busi
 
 
 class UserManager(BaseUserManager):
-    def create_user(self, email, name="", password=None, **extra_fields):
-        if not email:
-            raise ValueError("Email is required")
-        email = self.normalize_email(email)
-        user = self.model(email=email, name=name, **extra_fields)
+    def create_user(self, email=None, phone=None, name="", password=None, allow_no_identity=False, **extra_fields):
+        # allow_no_identity=True is for staff members created via a login
+        # link (see StaffMember.login_token) — they have no email/phone of
+        # their own and only ever authenticate through that link, so there's
+        # nothing to require here.
+        if not email and not phone and not allow_no_identity:
+            raise ValueError("Email or phone is required")
+        if email:
+            email = self.normalize_email(email)
+        user = self.model(email=email or None, phone=phone or None, name=name, **extra_fields)
         if password:
             user.set_password(password)
         else:
@@ -29,11 +34,15 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_platform_admin", True)
         extra_fields.setdefault("account_type", ACCOUNT_BUSINESS)
-        return self.create_user(email, name, password, **extra_fields)
+        return self.create_user(email=email, name=name, password=password, **extra_fields)
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    email = models.EmailField(unique=True)
+    # null (not just blank) so multiple phone-only accounts with no email on
+    # file don't collide against the unique constraint — same reasoning as
+    # `phone` below. A user can sign up with just a phone number now; email
+    # stays required only for accounts created via the email/Google flows.
+    email = models.EmailField(unique=True, null=True, blank=True)
     name = models.CharField(max_length=150, blank=True)
     # null (not just blank) so multiple accounts with no phone on file don't
     # collide against the unique constraint — only an actually-entered phone
@@ -57,14 +66,19 @@ class User(AbstractBaseUser, PermissionsMixin):
     objects = UserManager()
 
     def __str__(self):
-        return self.email
+        return self.email or self.phone or f"user #{self.pk}"
 
 
 class OTPCode(models.Model):
     MAX_ATTEMPTS = 5
     RESEND_COOLDOWN_SECONDS = 60
 
-    email = models.EmailField()
+    # Whatever the user typed on the login/signup screen — an email address
+    # or a phone number (with country code). Kept as a plain identifier
+    # rather than resolving phone -> account email up front, so a brand-new
+    # phone-only signup (no account, no email yet) still has something to
+    # key the OTP row on.
+    identifier = models.CharField(max_length=254)
     code_hash = models.CharField(max_length=128)
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default=ACCOUNT_BUSINESS)
     expires_at = models.DateTimeField()
@@ -76,19 +90,19 @@ class OTPCode(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.email} – OTP ({'used' if self.is_used else 'active'})"
+        return f"{self.identifier} – OTP ({'used' if self.is_used else 'active'})"
 
     @property
     def is_valid(self):
         return not self.is_used and self.expires_at > timezone.now()
 
     @classmethod
-    def generate(cls, email, account_type):
+    def generate(cls, identifier, account_type):
         """Create a new OTP, invalidating any prior unused ones. Returns (otp, plaintext_code)."""
-        cls.objects.filter(email=email, is_used=False).update(is_used=True)
+        cls.objects.filter(identifier=identifier, is_used=False).update(is_used=True)
         code = str(secrets.SystemRandom().randint(100000, 999999))
         otp = cls.objects.create(
-            email=email,
+            identifier=identifier,
             code_hash=make_password(code),
             account_type=account_type,
             expires_at=timezone.now() + timedelta(minutes=10),
@@ -96,9 +110,9 @@ class OTPCode(models.Model):
         return otp, code
 
     @classmethod
-    def seconds_until_resend(cls, email):
+    def seconds_until_resend(cls, identifier):
         """Seconds the caller must still wait before requesting another OTP, or 0 if allowed now."""
-        last = cls.objects.filter(email=email).order_by("-created_at").first()
+        last = cls.objects.filter(identifier=identifier).order_by("-created_at").first()
         if not last:
             return 0
         elapsed = (timezone.now() - last.created_at).total_seconds()
@@ -106,16 +120,16 @@ class OTPCode(models.Model):
         return max(0, int(remaining))
 
     @classmethod
-    def verify_and_consume(cls, email, code):
+    def verify_and_consume(cls, identifier, code):
         """
-        Validate `code` for `email` and mark it used on success.
+        Validate `code` for `identifier` and mark it used on success.
         Returns (otp_or_None, error_code) where error_code is one of
         None, "invalid", "expired", "too_many_attempts".
         """
         with transaction.atomic():
             otp = (
                 cls.objects.select_for_update()
-                .filter(email=email, is_used=False, expires_at__gt=timezone.now())
+                .filter(identifier=identifier, is_used=False, expires_at__gt=timezone.now())
                 .order_by("-created_at")
                 .first()
             )
@@ -125,7 +139,7 @@ class OTPCode(models.Model):
                 # digits — worth telling apart since the fix differs (request
                 # a new code vs. re-check what you typed). A "Resend" marks
                 # the old row is_used=True, so it won't match here either.
-                had_unused = cls.objects.filter(email=email, is_used=False).exists()
+                had_unused = cls.objects.filter(identifier=identifier, is_used=False).exists()
                 return None, "expired" if had_unused else "invalid"
 
             if otp.attempts >= cls.MAX_ATTEMPTS:
@@ -146,7 +160,12 @@ class OTPCode(models.Model):
 class Business(models.Model):
     PLAN_FREE = "FREE"
     PLAN_PREMIUM = "PREMIUM"
-    PLAN_CHOICES = [(PLAN_FREE, "Free"), (PLAN_PREMIUM, "Premium")]
+    PLAN_PREMIUMPLUS = "PREMIUMPLUS"
+    PLAN_CHOICES = [(PLAN_FREE, "Free"), (PLAN_PREMIUM, "Premium"), (PLAN_PREMIUMPLUS, "Premium Plus")]
+    # Ordering used to compare tiers (effective_plan takes the highest of
+    # several sources rather than just overwriting `plan`) — index, not the
+    # string value, is what makes "PremiumPlus beats Premium beats Free" work.
+    _PLAN_ORDER = [PLAN_FREE, PLAN_PREMIUM, PLAN_PREMIUMPLUS]
 
     STATUS_ACTIVE = "ACTIVE"
     STATUS_SUSPENDED = "SUSPENDED"
@@ -196,6 +215,16 @@ class Business(models.Model):
     mobile_trial_start = models.DateField(null=True, blank=True)
     mobile_trial_end = models.DateField(null=True, blank=True)
 
+    # Refer-and-win — every business gets its own shareable code (see
+    # _new_referral_code below); `referred_by` is set at most once, at
+    # creation time, and never editable afterward so a referral can't be
+    # attached retroactively to game the reward (see billing app for what
+    # granting a referral reward actually does).
+    referral_code = models.CharField(max_length=10, unique=True, null=True, blank=True, db_index=True)
+    referred_by = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="referrals",
+    )
+
     # 120 days for now while the app is new, so people have real room to try
     # it out before needing a license — tighten this once there's an
     # established user base.
@@ -214,6 +243,26 @@ class Business(models.Model):
     class Meta:
         verbose_name_plural = "businesses"
         ordering = ["-created_at"]
+
+    @classmethod
+    def _new_referral_code(cls):
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ2346789"  # no 0/1/I/O — avoids visual confusion, same alphabet superadmin.License uses
+        for _ in range(50):
+            code = "".join(secrets.choice(alphabet) for _ in range(8))
+            if not cls.objects.filter(referral_code=code).exists():
+                return code
+        raise RuntimeError("Could not find an unused referral code after 50 attempts.")
+
+    def save(self, *args, **kwargs):
+        if not self.referral_code:
+            self.referral_code = self._new_referral_code()
+        super().save(*args, **kwargs)
+
+    def referral_count(self):
+        """How many businesses this one has successfully referred — a live
+        count rather than a stored counter, so it can never drift out of
+        sync with the actual `referred_by` rows."""
+        return Business.objects.filter(referred_by=self).count()
 
     @property
     def trial_expiry_date(self):
@@ -243,11 +292,54 @@ class Business(models.Model):
         return created < self.LICENSING_STARTS
 
     @property
+    def _active_subscriptions(self):
+        """Every still-active billing.Subscription row for this business —
+        kept as a local import, same as active_license above, since billing
+        depends on accounts and not the other way around."""
+        from billing.models import Subscription
+
+        return self.subscriptions.filter(status=Subscription.STATUS_ACTIVE, end_date__gte=timezone.localdate())
+
+    @property
+    def active_referral_subscription(self):
+        """The active Subscription row actually responsible for the current
+        effective_plan — i.e. the highest-tier one, tie-broken by furthest
+        expiry. Deliberately NOT just "whichever active row expires
+        latest": a business can hold more than one active Subscription at
+        once (e.g. a longer-running Premium plus a shorter, more recent
+        PremiumPlus reward), and picking by date alone could surface the
+        lower tier and under-report what the business actually has."""
+        active = list(self._active_subscriptions)
+        if not active:
+            return None
+        best_plan = max((s.plan for s in active), key=self._PLAN_ORDER.index)
+        matching = [s for s in active if s.plan == best_plan]
+        return max(matching, key=lambda s: s.end_date)
+
+    @property
+    def effective_plan(self):
+        """The plan actually in force right now — the higher of the
+        License-driven `plan` field (unchanged, still set directly by
+        LicenseActivateView/superadmin) and any still-active coupon/referral
+        Subscription layered on top. A referral reward or admin coupon can
+        only ever raise this, never lower someone who's already paying for
+        Premium/PremiumPlus directly."""
+        candidates = [self.plan]
+        sub = self.active_referral_subscription
+        if sub:
+            candidates.append(sub.plan)
+        return max(candidates, key=self._PLAN_ORDER.index)
+
+    @property
     def has_active_subscription(self):
         """The single source of truth for 'can this business use the app right
-        now' — grandfathered, or trial window, or a currently-active license.
-        Server time only; never trust a client-supplied date."""
-        return self.is_grandfathered or self.is_trial_active or self.active_license is not None
+        now' — grandfathered, trial window, a currently-active license, or a
+        currently-active coupon/referral subscription. Server time only;
+        never trust a client-supplied date."""
+        return (
+            self.is_grandfathered or self.is_trial_active
+            or self.active_license is not None or self.active_referral_subscription is not None
+        )
 
     def has_active_platform_trial(self, platform):
         """Whether Super Admin has granted an active trial for this specific
@@ -284,6 +376,14 @@ class StaffMember(models.Model):
     permissions = models.JSONField(default=dict)
     is_active = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
+    # Passwordless "click this link to open the app as this staff member"
+    # credential (see accounts.views.StaffLoginView) — null until the owner
+    # generates or regenerates one from Staff management. Nothing but the
+    # token itself gates access, so treat it like a bearer password: never
+    # returned to anyone but the business owner/a manager with staff-module
+    # access, and regenerating instantly invalidates whatever link is out
+    # there already.
+    login_token = models.CharField(max_length=64, unique=True, null=True, blank=True, db_index=True)
 
     class Meta:
         unique_together = ("user", "business")
@@ -291,6 +391,14 @@ class StaffMember(models.Model):
 
     def __str__(self):
         return f"{self.user.name} – {self.business.name} ({self.role})"
+
+    @staticmethod
+    def new_login_token():
+        return secrets.token_urlsafe(32)
+
+    def regenerate_login_token(self):
+        self.login_token = self.new_login_token()
+        self.save(update_fields=["login_token"])
 
 
 class LoginActivity(models.Model):

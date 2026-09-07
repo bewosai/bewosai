@@ -143,7 +143,7 @@ class IsPremiumBusiness(BasePermission):
         from accounts.models import Business
 
         business = get_business(request)
-        return bool(business and business.plan == Business.PLAN_PREMIUM)
+        return bool(business and business.effective_plan != Business.PLAN_FREE)
 
 
 class HasActiveSubscription(BasePermission):
@@ -167,6 +167,10 @@ class HasActiveSubscription(BasePermission):
         "SetAccountTypeView", "TokenRefreshView", "MeView",
         "BusinessListCreateView", "BusinessDetailView",
         "LicenseMeView", "LicenseActivateView",
+        # Refer & Earn / Upgrade Plan — a locked-out (trial-expired) business
+        # is exactly who needs to reach these, same reasoning as the License
+        # views above.
+        "SubscriptionCurrentView", "ApplyCouponView", "ReferralMeView",
     }
 
     def has_permission(self, request, view):

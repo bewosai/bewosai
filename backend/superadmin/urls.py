@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from billing import views as billing_views
 
 urlpatterns = [
     # Platform overview (admin only)
@@ -21,6 +22,10 @@ urlpatterns = [
 
     # Login activity (admin only)
     path("login-activity/", views.LoginActivityView.as_view()),
+
+    # Platform-wide "who did what" feed (admin only) — same rows as
+    # users/<pk>/activity/ above, without the per-user scope.
+    path("activity/", views.ActivityLogListView.as_view()),
 
     # Announcements
     path("announcements/", views.AnnouncementListCreateView.as_view()),
@@ -48,4 +53,13 @@ urlpatterns = [
     path("licenses/<int:pk>/revoke/", views.LicenseRevokeView.as_view()),
     path("licenses/<int:pk>/reassign/", views.LicenseReassignView.as_view()),
     path("businesses/<int:pk>/features/", views.BusinessFeaturePermissionsView.as_view()),
+
+    # Coupons (admin only) — see billing app; kept separate from Licensing
+    # above on purpose (a deliberate product decision, not an oversight).
+    path("coupons/", billing_views.CouponListCreateView.as_view()),
+    path("coupons/<int:pk>/deactivate/", billing_views.CouponDeactivateView.as_view()),
+
+    # Referral management (admin only)
+    path("referrals/", billing_views.ReferralAdminListView.as_view()),
+    path("referrals/stats/", billing_views.ReferralStatsView.as_view()),
 ]

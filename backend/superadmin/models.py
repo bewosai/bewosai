@@ -42,7 +42,11 @@ class Feature(models.Model):
         if self.premium_only:
             from accounts.models import Business
 
-            if not business or business.plan != Business.PLAN_PREMIUM:
+            # effective_plan (not the raw `plan` field) so a coupon/referral
+            # -earned Premium or PremiumPlus subscription unlocks
+            # premium-only features exactly like a purchased/licensed one
+            # does — see accounts.models.Business.effective_plan.
+            if not business or business.effective_plan == Business.PLAN_FREE:
                 return False
         return True
 

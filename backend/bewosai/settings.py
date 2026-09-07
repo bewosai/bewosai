@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "banking",
     "reports",
     "superadmin",
+    "billing",
 ]
 
 MIDDLEWARE = [

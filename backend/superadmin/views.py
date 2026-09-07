@@ -332,6 +332,13 @@ class LoginActivityView(APIView):
         user_id = request.query_params.get("user_id")
         if user_id:
             qs = qs.filter(user_id=user_id)
+        search = request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                models.Q(user__name__icontains=search)
+                | models.Q(user__email__icontains=search)
+                | models.Q(user__phone__icontains=search)
+            )
 
         paginator = LargePageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
@@ -339,6 +346,7 @@ class LoginActivityView(APIView):
             {
                 "id": la.id,
                 "user": la.user.email,
+                "user_name": la.user.name,
                 "user_id": la.user_id,
                 "ip": la.ip_address,
                 "user_agent": la.user_agent,
@@ -826,6 +834,44 @@ class LicenseAuditLogListView(generics.ListAPIView):
         business_id = self.request.query_params.get("business")
         if business_id:
             qs = qs.filter(business_id=business_id)
+        return qs
+
+
+class ActivityLogListView(generics.ListAPIView):
+    """
+    Platform-wide "who created/deleted what, anywhere, just now" feed — same
+    ActivityLog rows UserActivityView shows per-user, but without the pk
+    scope, for Super Admin's own Activity tab. Populated by superadmin.signals
+    (see ActivityLog's docstring), not per-view logging.
+    """
+    permission_classes = [IsPlatformAdmin]
+    serializer_class = ActivityLogSerializer
+    pagination_class = LargePageNumberPagination
+
+    def get_queryset(self):
+        qs = ActivityLog.objects.select_related("business", "user").all()
+        params = self.request.query_params
+
+        business_id = params.get("business")
+        if business_id:
+            qs = qs.filter(business_id=business_id)
+        user_id = params.get("user_id")
+        if user_id:
+            qs = qs.filter(user_id=user_id)
+        action = params.get("action")
+        if action:
+            qs = qs.filter(action=action)
+        model_name = params.get("model")
+        if model_name:
+            qs = qs.filter(model_name=model_name)
+        search = params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                models.Q(user__name__icontains=search)
+                | models.Q(user__email__icontains=search)
+                | models.Q(business__name__icontains=search)
+                | models.Q(object_repr__icontains=search)
+            )
         return qs
 
 

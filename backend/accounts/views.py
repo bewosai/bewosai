@@ -72,29 +72,44 @@ class SendOTPView(APIView):
         is_phone = "@" not in identifier
         via_phone_display = None
         nepal_local = None
+        fallback_email = None
 
         if is_phone:
-            # A phone number only ever works as a lookup key for an
-            # *existing* account (signing up needs an email — phone alone
-            # can't create an account since email is the account's identity)
-            if is_signup:
-                return api_response(
-                    False, "Signing up with a phone number isn't available yet — please use your email.",
-                    status.HTTP_400_BAD_REQUEST,
-                )
             existing = User.objects.filter(phone=identifier).first()
-            if not existing:
-                return api_response(False, "No account found with that phone number.", status.HTTP_404_NOT_FOUND)
-            email = existing.email
             # Sparrow SMS (our gateway) only delivers to Nepali numbers — for
-            # anything else the code still has to go out over email, to
-            # whichever address that account already has on file.
+            # anything else the code has to go out over email instead.
             nepal_local = _nepal_local_number(identifier)
-            if not nepal_local:
-                via_phone_display = mask_email(email)
+
+            if is_signup:
+                if existing:
+                    return api_response(
+                        False, "This phone number is already registered. Please sign in instead.",
+                        status.HTTP_400_BAD_REQUEST, user_exists=True,
+                    )
+                if not nepal_local:
+                    # A brand-new account has no email on file yet to fall
+                    # back to, so phone sign-up only works for the one
+                    # gateway we actually have (Nepal numbers via Sparrow).
+                    return api_response(
+                        False,
+                        "Signing up with a phone number is only available for Nepal (+977) numbers right now — please use your email instead.",
+                        status.HTTP_400_BAD_REQUEST,
+                    )
+            else:
+                if not existing:
+                    return api_response(False, "No account found with that phone number.", status.HTTP_404_NOT_FOUND)
+                # Existing account on a non-Nepal number: fall back to
+                # whichever email address it already has on file.
+                if not nepal_local:
+                    if not existing.email:
+                        return api_response(
+                            False, "This account has no email on file to send a code to — SMS delivery isn't available for this number.",
+                            status.HTTP_400_BAD_REQUEST,
+                        )
+                    fallback_email = existing.email
+                    via_phone_display = mask_email(fallback_email)
         else:
-            email = identifier
-            existing = User.objects.filter(email=email).first()
+            existing = User.objects.filter(email=identifier).first()
 
             # Reject explicit sign-up attempts for already-registered emails
             if is_signup and existing:
@@ -103,7 +118,7 @@ class SendOTPView(APIView):
                     status.HTTP_400_BAD_REQUEST, user_exists=True,
                 )
 
-        wait = OTPCode.seconds_until_resend(email)
+        wait = OTPCode.seconds_until_resend(identifier)
         if wait > 0:
             return api_response(
                 False, f"Please wait {wait}s before requesting another code.",
@@ -111,7 +126,7 @@ class SendOTPView(APIView):
             )
 
         account_type = existing.account_type if existing else ACCOUNT_BUSINESS
-        otp, code = OTPCode.generate(email, account_type)
+        otp, code = OTPCode.generate(identifier, account_type)
 
         # Send synchronously and report the real outcome. This used to fire
         # on a background thread so the request returned instantly, but that
@@ -122,21 +137,24 @@ class SendOTPView(APIView):
         if nepal_local:
             sent = send_otp_sms(nepal_local, code)
             fail_message = "Couldn't send the verification SMS right now. Please try again in a moment."
+        elif is_phone:
+            sent = send_otp_email(fallback_email, code)
+            fail_message = "Couldn't send the verification email right now. Please try again in a moment."
         else:
-            sent = send_otp_email(email, code)
+            sent = send_otp_email(identifier, code)
             fail_message = "Couldn't send the verification email right now. Please try again in a moment."
 
         if not sent:
-            logger.error("Failed to send OTP via %s to %s", "SMS" if nepal_local else "email", email if not nepal_local else nepal_local)
+            logger.error("Failed to send OTP via %s to %s", "SMS" if nepal_local else "email", identifier if not nepal_local else nepal_local)
             otp.delete()
             return api_response(False, fail_message, status.HTTP_502_BAD_GATEWAY)
 
-        logger.info("OTP sent for %s (new_account=%s, via_phone=%s, sms=%s)", email, existing is None, is_phone, bool(nepal_local))
+        logger.info("OTP sent for %s (new_account=%s, via_phone=%s, sms=%s)", identifier, existing is None, is_phone, bool(nepal_local))
 
         message = (
             "OTP sent to your phone. Valid for 10 minutes." if nepal_local
             else f"We've sent your code to {via_phone_display} instead." if via_phone_display
-            else f"OTP sent to {email}. Valid for 10 minutes."
+            else f"OTP sent to {identifier}. Valid for 10 minutes."
         )
         return api_response(
             True, message, status.HTTP_200_OK,
@@ -157,44 +175,45 @@ class VerifyOTPView(APIView):
         code = serializer.validated_data["code"]
         remember = serializer.validated_data["remember"]
         name = serializer.validated_data["name"]
+        is_phone = "@" not in identifier
 
-        if "@" in identifier:
-            email = identifier
-        else:
-            # Phone logins never create a new account (SendOTPView already
-            # requires an existing one to resolve a phone to) — a phone
-            # number with no matching user here just falls through to the
-            # normal "incorrect code" response below, since no OTP could
-            # ever have been generated for it.
-            match = User.objects.filter(phone=identifier).first()
-            email = match.email if match else identifier
-
-        otp, error_code = OTPCode.verify_and_consume(email, code)
+        otp, error_code = OTPCode.verify_and_consume(identifier, code)
 
         if error_code == "too_many_attempts":
-            logger.warning("OTP locked out for %s after too many attempts", email)
+            logger.warning("OTP locked out for %s after too many attempts", identifier)
             return api_response(
                 False, "Too many incorrect attempts. Please request a new code.",
                 status.HTTP_429_TOO_MANY_REQUESTS,
             )
         if error_code == "expired":
-            logger.warning("Expired OTP attempt for %s", email)
+            logger.warning("Expired OTP attempt for %s", identifier)
             return api_response(False, "This code has expired. Please request a new one.", status.HTTP_400_BAD_REQUEST)
         if error_code:
-            logger.warning("Invalid OTP attempt for %s", email)
+            logger.warning("Invalid OTP attempt for %s", identifier)
             return api_response(False, "Incorrect code. Please check and try again.", status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            user = User.objects.filter(email=email).first()
+            if is_phone:
+                user = User.objects.filter(phone=identifier).first()
+            else:
+                user = User.objects.filter(email=identifier).first()
             is_new = user is None
             if is_new:
                 # account_type is a placeholder here; the user picks it via set-account-type
-                user = User.objects.create_user(
-                    email=email,
-                    name=name or email.split("@")[0].capitalize(),
-                    account_type=ACCOUNT_BUSINESS,
-                    is_verified=True,
-                )
+                if is_phone:
+                    user = User.objects.create_user(
+                        phone=identifier,
+                        name=name,
+                        account_type=ACCOUNT_BUSINESS,
+                        is_verified=True,
+                    )
+                else:
+                    user = User.objects.create_user(
+                        email=identifier,
+                        name=name or identifier.split("@")[0].capitalize(),
+                        account_type=ACCOUNT_BUSINESS,
+                        is_verified=True,
+                    )
 
             user.last_login_at = timezone.now()
             user.is_verified = True
@@ -206,7 +225,7 @@ class VerifyOTPView(APIView):
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
             )
 
-        logger.info("User %s logged in via OTP (new_user=%s)", email, is_new)
+        logger.info("User %s logged in via OTP (new_user=%s)", identifier, is_new)
 
         return _login_response(user, is_new, remember)
 
@@ -372,12 +391,17 @@ class BusinessListCreateView(generics.ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         owned = Business.objects.filter(owner=request.user)
-        is_premium = owned.filter(plan=Business.PLAN_PREMIUM).exists()
+        # PremiumPlus (from a coupon/referral reward — see billing app) has
+        # no cap at all; Premium (bought/licensed, effective_plan on *any*
+        # owned business) unlocks the higher fixed limit; otherwise Free.
+        effective_plans = {b.effective_plan for b in owned}
+        is_unlimited = Business.PLAN_PREMIUMPLUS in effective_plans
+        is_premium = is_unlimited or Business.PLAN_PREMIUM in effective_plans
         plan_limit = self.PREMIUM_LIMIT if is_premium else self.FREE_LIMIT
         # A platform admin can raise (or lower) this per-user via
         # superadmin.UserActionView's "set_business_limit" action.
         limit = request.user.business_limit_override if request.user.business_limit_override is not None else plan_limit
-        if owned.count() >= limit:
+        if not is_unlimited and owned.count() >= limit:
             plan_name = "Premium" if is_premium else "Free"
             hint = "You've reached the maximum number of business profiles." if is_premium else "Upgrade to Premium to create more."
             return Response(
@@ -393,6 +417,7 @@ class BusinessListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         from inventory.defaults import seed_default_units
+        from billing.services import process_referral
 
         business = serializer.save(owner=self.request.user)
         StaffMember.objects.create(
@@ -402,6 +427,19 @@ class BusinessListCreateView(generics.ListCreateAPIView):
         # pick from before the business has created any of their own — see
         # inventory.defaults for the full list and the conversions used.
         seed_default_units(business)
+
+        # Refer & Earn — an optional code entered at business-creation time.
+        # Silently ignored if blank/invalid rather than blocking signup over
+        # a typo'd code; process_referral runs its own anti-abuse checks
+        # (self-referral, already-claimed, rate limit) and always leaves a
+        # Referral audit row behind either way.
+        referral_code = (self.request.data.get("referral_code") or "").strip().upper()
+        if referral_code:
+            referrer = Business.objects.filter(referral_code=referral_code).exclude(pk=business.pk).first()
+            if referrer:
+                business.referred_by = referrer
+                business.save(update_fields=["referred_by"])
+                process_referral(new_business=business, referrer_business=referrer)
 
 
 class BusinessDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -496,11 +534,11 @@ class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
             business = Business.objects.get(id=bid, owner=request.user)
 
             non_owner_count = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER).count()
-            already_member = business.staff.filter(user__email=data["email"], is_active=True).exists()
-            plan_limit = self.PREMIUM_STAFF_LIMIT if business.plan == Business.PLAN_PREMIUM else self.FREE_STAFF_LIMIT
+            is_unlimited = business.staff_limit_override is None and business.effective_plan == Business.PLAN_PREMIUMPLUS
+            plan_limit = self.PREMIUM_STAFF_LIMIT if business.effective_plan != Business.PLAN_FREE else self.FREE_STAFF_LIMIT
             staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_limit
-            if not already_member and non_owner_count >= staff_limit:
-                plan_name = "Premium" if business.plan == Business.PLAN_PREMIUM else "Free"
+            if not is_unlimited and non_owner_count >= staff_limit:
+                plan_name = "Premium" if business.effective_plan != Business.PLAN_FREE else "Free"
                 return Response(
                     {
                         "error": (
@@ -511,21 +549,20 @@ class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-            # Get or create the invited user (OTP-only, no password)
-            user, created = User.objects.get_or_create(
-                email=data["email"],
-                defaults={"name": data["name"], "account_type": ACCOUNT_BUSINESS},
+            # A link-based staff member has no email/phone of their own — no
+            # existing account to match against, so every invite creates a
+            # brand new placeholder User. They authenticate purely through
+            # the login link (StaffMember.login_token / StaffLoginView),
+            # never via OTP, hence the unusable password + allow_no_identity.
+            user = User.objects.create_user(
+                name=data["name"], account_type=ACCOUNT_BUSINESS, is_verified=True,
+                allow_no_identity=True,
             )
-
-            member, _ = StaffMember.objects.get_or_create(
+            member = StaffMember.objects.create(
                 user=user, business=business,
-                defaults={"role": data["role"], "permissions": data.get("permissions") or {}},
+                role=data["role"], permissions=data.get("permissions") or {},
+                login_token=StaffMember.new_login_token(),
             )
-            if not _:
-                member.role = data["role"]
-                member.permissions = data.get("permissions") or {}
-                member.is_active = True
-                member.save()
 
             return Response(StaffMemberSerializer(member).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -537,6 +574,71 @@ class StaffDetailView(_RequireStaffManagement, generics.RetrieveUpdateDestroyAPI
     def get_queryset(self):
         bid = self.kwargs["business_id"]
         return StaffMember.objects.filter(business_id=bid, business__owner=self.request.user)
+
+
+class StaffRegenerateLinkView(_RequireStaffManagement, APIView):
+    """
+    Issues a fresh login_token for a staff member, instantly invalidating
+    whatever link was out there before — the "I think this link leaked,
+    kill it" button, and also how an owner retroactively creates a link for
+    staff invited before this feature (or before they had one at all).
+    """
+
+    def post(self, request, business_id, pk):
+        member = StaffMember.objects.filter(
+            pk=pk, business_id=business_id, business__owner=request.user,
+        ).first()
+        if not member:
+            return api_response(False, "Staff member not found.", status.HTTP_404_NOT_FOUND)
+        if member.role == StaffMember.ROLE_OWNER:
+            return api_response(False, "The business owner doesn't use a login link.", status.HTTP_400_BAD_REQUEST)
+
+        member.regenerate_login_token()
+        return Response(StaffMemberSerializer(member).data, status=status.HTTP_200_OK)
+
+
+class StaffLoginView(APIView):
+    """
+    Exchanges a staff member's login-link token for a JWT pair — the
+    passwordless "click this link to open the app as this staff member"
+    flow (see StaffMember.login_token). No email/OTP involved: the token
+    itself, generated when the owner created (or last regenerated) the
+    staff member, is the sole credential. Treat it like a bearer password —
+    anyone holding the URL can log in as that staff member until the owner
+    regenerates it from Staff management.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "otp_verify"
+
+    def post(self, request):
+        token = (request.data.get("token") or "").strip()
+        if not token:
+            return api_response(False, "Missing login link.", status.HTTP_400_BAD_REQUEST)
+
+        staff = StaffMember.objects.filter(login_token=token).select_related("user", "business").first()
+        if not staff or not staff.is_active:
+            return api_response(False, "This login link is invalid or has been revoked.", status.HTTP_404_NOT_FOUND)
+        if staff.business.status != Business.STATUS_ACTIVE:
+            return api_response(False, "This business account is no longer active.", status.HTTP_403_FORBIDDEN)
+
+        user = staff.user
+        user.last_login_at = timezone.now()
+        user.is_verified = True
+        user.save(update_fields=["last_login_at", "is_verified"])
+
+        LoginActivity.objects.create(
+            user=user,
+            ip_address=request.META.get("REMOTE_ADDR"),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
+
+        logger.info("Staff member (user %s) logged in via login link", user.id)
+        # remember=True: a link-only account has no OTP/email fallback to
+        # re-authenticate with, so the session needs to actually last —
+        # same long-lived token lifetime the "Keep me signed in" checkbox
+        # gives everyone else.
+        return _login_response(user, is_new=False, remember=True)
 
 
 class StaffActivityView(APIView):
@@ -607,10 +709,11 @@ class BusinessStaffInviteView(_RequireStaffManagement, APIView):
 
         non_owner_count = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER).count()
         already_member = business.staff.filter(user__email=email, is_active=True).exists()
-        plan_limit = self.PREMIUM_STAFF_LIMIT if business.plan == Business.PLAN_PREMIUM else self.FREE_STAFF_LIMIT
+        is_unlimited = business.staff_limit_override is None and business.effective_plan == Business.PLAN_PREMIUMPLUS
+        plan_limit = self.PREMIUM_STAFF_LIMIT if business.effective_plan != Business.PLAN_FREE else self.FREE_STAFF_LIMIT
         staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_limit
-        if not already_member and non_owner_count >= staff_limit:
-            plan_name = "Premium" if business.plan == Business.PLAN_PREMIUM else "Free"
+        if not is_unlimited and not already_member and non_owner_count >= staff_limit:
+            plan_name = "Premium" if business.effective_plan != Business.PLAN_FREE else "Free"
             return Response(
                 {
                     "error": (
