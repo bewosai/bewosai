@@ -154,6 +154,41 @@ class Purchase {
       };
 }
 
+class PurchaseReturnItem {
+  final int? purchaseItem;
+  final int? product;
+  final String productName;
+  final double quantity;
+  final double unitPrice;
+  final double total;
+
+  PurchaseReturnItem({
+    this.purchaseItem,
+    this.product,
+    required this.productName,
+    required this.quantity,
+    required this.unitPrice,
+    this.total = 0,
+  });
+
+  factory PurchaseReturnItem.fromJson(Map<String, dynamic> json) => PurchaseReturnItem(
+        purchaseItem: json['purchase_item'] as int?,
+        product: json['product'] as int?,
+        productName: json['product_name'] as String? ?? '',
+        quantity: Formatters.toDouble(json['quantity']),
+        unitPrice: Formatters.toDouble(json['unit_price']),
+        total: Formatters.toDouble(json['total']),
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (purchaseItem != null) 'purchase_item': purchaseItem,
+        if (product != null) 'product': product,
+        'product_name': productName,
+        'quantity': quantity,
+        'unit_price': unitPrice,
+      };
+}
+
 class PurchaseReturn {
   final int id;
   final int originalPurchase;
@@ -161,6 +196,7 @@ class PurchaseReturn {
   final DateTime? returnDate;
   final String reason;
   final double amount;
+  final List<PurchaseReturnItem> items;
   final DateTime? createdAt;
 
   PurchaseReturn({
@@ -170,6 +206,7 @@ class PurchaseReturn {
     this.returnDate,
     required this.reason,
     required this.amount,
+    this.items = const [],
     this.createdAt,
   });
 
@@ -182,6 +219,9 @@ class PurchaseReturn {
         returnDate: Formatters.parseDate(json['return_date'] as String?),
         reason: json['reason'] as String? ?? '',
         amount: Formatters.toDouble(json['amount']),
+        items: (json['items'] as List? ?? [])
+            .map((e) => PurchaseReturnItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
         createdAt: Formatters.parseDate(json['created_at'] as String?),
       );
 
@@ -190,5 +230,6 @@ class PurchaseReturn {
         'return_date': returnDate != null ? Formatters.apiDate(returnDate!) : null,
         'reason': reason,
         'amount': amount,
+        'items': items.map((e) => e.toJson()).toList(),
       };
 }

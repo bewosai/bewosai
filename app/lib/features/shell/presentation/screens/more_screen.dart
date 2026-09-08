@@ -8,6 +8,7 @@ import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../inventory/presentation/screens/inventory_import_screen.dart';
 import '../../../parties/presentation/screens/party_import_screen.dart';
+import '../../../purchases/presentation/screens/purchase_return_screen.dart';
 
 class _MoreTile {
   final IconData icon;
@@ -29,6 +30,12 @@ class MoreScreen extends StatelessWidget {
 
     final businessTiles = [
       _MoreTile(Icons.point_of_sale_outlined, 'Quick POS', () => context.push('/pos'), feature: 'pos'),
+      _MoreTile(
+        Icons.assignment_return_outlined,
+        'Purchase Return',
+        () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PurchaseReturnScreen())),
+        feature: 'purchases',
+      ),
       _MoreTile(Icons.receipt_outlined, t('expenses'), () => context.push('/expenses'), feature: 'expenses'),
       _MoreTile(Icons.account_balance_outlined, t('banking'), () => context.push('/banking'), feature: 'banking'),
       _MoreTile(Icons.bar_chart_outlined, t('reports'), () => context.push('/reports'), feature: 'reports'),

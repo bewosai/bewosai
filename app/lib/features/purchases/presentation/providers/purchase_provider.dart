@@ -12,7 +12,9 @@ class PurchaseProvider extends ChangeNotifier {
   final _useCases = PurchaseUseCases();
 
   List<Purchase> purchases = [];
+  List<PurchaseReturn> returns = [];
   bool isLoading = false;
+  bool isLoadingReturns = false;
   String? error;
 
   Future<void> load() async {
@@ -29,6 +31,19 @@ class PurchaseProvider extends ChangeNotifier {
   }
 
   Future<String> nextNumber() => _useCases.nextBillNumber();
+
+  /// Full detail (with line items) for one purchase — used by the Purchase
+  /// Return form once a bill is picked, since the list response doesn't
+  /// necessarily carry every item.
+  Future<Purchase?> getPurchase(int id) async {
+    try {
+      return await _useCases.getPurchase(id);
+    } catch (e) {
+      error = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return null;
+    }
+  }
 
   Future<Purchase?> save(Purchase purchase, {int? id, File? billImage}) async {
     isLoading = true;
@@ -95,9 +110,22 @@ class PurchaseProvider extends ChangeNotifier {
         return true;
       });
 
+  Future<void> loadReturns() async {
+    isLoadingReturns = true;
+    error = null;
+    notifyListeners();
+    try {
+      returns = await _useCases.listReturns();
+    } catch (e) {
+      error = e is ApiException ? e.message : e.toString();
+    }
+    isLoadingReturns = false;
+    notifyListeners();
+  }
+
   Future<bool> createReturn(PurchaseReturn purchaseReturn) => _guard(() async {
         await _useCases.createReturn(purchaseReturn);
-        await load();
+        await loadReturns();
         return true;
       });
 

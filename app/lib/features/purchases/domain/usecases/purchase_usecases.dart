@@ -10,6 +10,8 @@ class PurchaseUseCases {
   Future<List<Purchase>> listPurchases({int? supplierId, DateTime? from, DateTime? to}) =>
       _repository.list(supplierId: supplierId, from: from, to: to);
 
+  Future<Purchase> getPurchase(int id) => _repository.get(id);
+
   Future<String> nextBillNumber() => _repository.nextNumber();
 
   Future<Purchase> savePurchase(Purchase purchase, {int? id, File? billImage}) =>
