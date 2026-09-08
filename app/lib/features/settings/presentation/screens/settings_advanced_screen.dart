@@ -3,10 +3,20 @@ import 'package:provider/provider.dart';
 
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/data/models/business_model.dart';
+import '../../../auth/data/models/fiscal_year_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 
-class SettingsAdvancedScreen extends StatelessWidget {
+class SettingsAdvancedScreen extends StatefulWidget {
   const SettingsAdvancedScreen({super.key});
+
+  @override
+  State<SettingsAdvancedScreen> createState() => _SettingsAdvancedScreenState();
+}
+
+class _SettingsAdvancedScreenState extends State<SettingsAdvancedScreen> {
+  // Bumped after a successful fiscal-year close so _ClosedFiscalYearsSection
+  // (keyed on this) remounts and refetches instead of showing a stale list.
+  int _fiscalYearsRefreshToken = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +40,7 @@ class SettingsAdvancedScreen extends StatelessWidget {
                     icon: Icons.event_repeat_outlined,
                     title: 'Close Fiscal Year',
                     description:
-                        'Archive the current business and create a new profile with carried-forward opening balance.',
+                        'Closes the current fiscal year in place — records stay right here, read-only, and stay fully viewable.',
                     onTap: () => _confirmCloseFiscalYear(context, business),
                   ),
                   const Divider(height: 1),
@@ -55,6 +65,8 @@ class SettingsAdvancedScreen extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+            _ClosedFiscalYearsSection(key: ValueKey(_fiscalYearsRefreshToken)),
           ],
         ),
       ),
@@ -126,6 +138,7 @@ class SettingsAdvancedScreen extends StatelessWidget {
 
     if (ok) {
       showAppSnackBar(context, 'Fiscal year closed successfully');
+      setState(() => _fiscalYearsRefreshToken++);
     } else {
       showAppSnackBar(context, auth.error ?? 'Failed to close fiscal year', isError: true);
     }
@@ -228,4 +241,76 @@ class SettingsAdvancedScreen extends StatelessWidget {
       controller.dispose();
     }
   }
+}
+
+/// Past closed fiscal years for the current business — read-only, so a
+/// closed period stays visible/searchable even though it's no longer
+/// editable. See accounts.FiscalYear on the backend.
+class _ClosedFiscalYearsSection extends StatefulWidget {
+  const _ClosedFiscalYearsSection({super.key});
+
+  @override
+  State<_ClosedFiscalYearsSection> createState() => _ClosedFiscalYearsSectionState();
+}
+
+class _ClosedFiscalYearsSectionState extends State<_ClosedFiscalYearsSection> {
+  List<FiscalYear>? _fiscalYears;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    final years = await context.read<AuthProvider>().fiscalYears();
+    if (!mounted) return;
+    setState(() => _fiscalYears = years);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_fiscalYears == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_fiscalYears!.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Closed Fiscal Years', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        Card(
+          margin: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (var i = 0; i < _fiscalYears!.length; i++) ...[
+                if (i > 0) const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.lock_outline, size: 20),
+                  title: Text(_fiscalYears![i].label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(
+                    '${_fmt(_fiscalYears![i].startDate)} — ${_fmt(_fiscalYears![i].endDate)}',
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text('Closed 🔒', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _fmt(DateTime? d) => d == null ? '—' : '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }

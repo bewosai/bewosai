@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../../domain/repositories/auth_repository.dart';
 import '../models/business_model.dart';
+import '../models/fiscal_year_model.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 
@@ -49,4 +50,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<String> closeFiscalYear(int id) => _service.closeFiscalYear(id);
+
+  @override
+  Future<List<FiscalYear>> fiscalYears(int id) => _service.fiscalYears(id);
 }

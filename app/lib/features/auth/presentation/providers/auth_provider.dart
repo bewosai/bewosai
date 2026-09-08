@@ -6,6 +6,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/token_storage.dart';
 import '../../data/models/business_model.dart';
+import '../../data/models/fiscal_year_model.dart';
 import '../../data/models/user_model.dart';
 import '../../data/services/auth_service.dart' show VerifyOtpResult;
 import '../../domain/usecases/auth_usecases.dart';
@@ -293,6 +294,17 @@ class AuthProvider extends ChangeNotifier {
         await _businessUseCases.closeFiscalYear(currentBusiness!.id);
         return true;
       });
+
+  /// Past closed fiscal years for the current business — read-only list
+  /// shown in Settings alongside the Close Fiscal Year action.
+  Future<List<FiscalYear>> fiscalYears() async {
+    if (currentBusiness == null) return [];
+    try {
+      return await _businessUseCases.fiscalYears(currentBusiness!.id);
+    } catch (_) {
+      return [];
+    }
+  }
 
   Future<bool> updateProfile({String? name, String? phone}) => _guard(() async {
         user = await _authUseCases.updateProfile(name: name, phone: phone);

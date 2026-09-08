@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../../data/models/business_model.dart';
+import '../../data/models/fiscal_year_model.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../repositories/auth_repository.dart';
 
@@ -19,4 +20,6 @@ class BusinessUseCases {
   Future<void> deleteBusiness(int id) => _repository.deleteBusiness(id);
 
   Future<String> closeFiscalYear(int id) => _repository.closeFiscalYear(id);
+
+  Future<List<FiscalYear>> fiscalYears(int id) => _repository.fiscalYears(id);
 }

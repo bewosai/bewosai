@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../models/business_model.dart';
+import '../models/fiscal_year_model.dart';
 import '../models/user_model.dart';
 
 class OtpResult {
@@ -191,6 +192,20 @@ class AuthService {
     try {
       final res = await _dio.post('/auth/businesses/$id/close-fiscal-year/');
       return (res.data['fiscal_year']?['label'] as String?) ?? '';
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
+  /// Past closed fiscal years for business [id] — read-only, shown in
+  /// Settings so a closed year stays visible even though it's no longer
+  /// editable.
+  Future<List<FiscalYear>> fiscalYears(int id) async {
+    try {
+      final res = await _dio.get('/auth/businesses/$id/fiscal-years/');
+      final data = res.data;
+      final results = data is Map ? (data['results'] as List? ?? []) : (data as List);
+      return results.map((e) => FiscalYear.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
       throw ApiClient.toApiException(e);
     }
