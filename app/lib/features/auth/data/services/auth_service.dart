@@ -183,12 +183,14 @@ class AuthService {
     }
   }
 
-  /// Archives [id] and returns the freshly created replacement business, with
-  /// the old business's total bank/cash balance carried forward as its opening balance.
-  Future<Business> closeFiscalYear(int id) async {
+  /// Closes business [id]'s current fiscal year in place — the business,
+  /// and every record in it, stays exactly where it is; only that date
+  /// range becomes read-only server-side. Returns the closed period's
+  /// label (e.g. "2082/83") for the confirmation message.
+  Future<String> closeFiscalYear(int id) async {
     try {
       final res = await _dio.post('/auth/businesses/$id/close-fiscal-year/');
-      return Business.fromJson(res.data['new_business'] as Map<String, dynamic>);
+      return (res.data['fiscal_year']?['label'] as String?) ?? '';
     } catch (e) {
       throw ApiClient.toApiException(e);
     }

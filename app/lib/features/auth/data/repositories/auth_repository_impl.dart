@@ -48,5 +48,5 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> deleteBusiness(int id) => _service.deleteBusiness(id);
 
   @override
-  Future<Business> closeFiscalYear(int id) => _service.closeFiscalYear(id);
+  Future<String> closeFiscalYear(int id) => _service.closeFiscalYear(id);
 }

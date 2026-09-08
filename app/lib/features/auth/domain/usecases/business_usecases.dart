@@ -18,5 +18,5 @@ class BusinessUseCases {
 
   Future<void> deleteBusiness(int id) => _repository.deleteBusiness(id);
 
-  Future<Business> closeFiscalYear(int id) => _repository.closeFiscalYear(id);
+  Future<String> closeFiscalYear(int id) => _repository.closeFiscalYear(id);
 }

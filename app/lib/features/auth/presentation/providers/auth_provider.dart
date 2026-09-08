@@ -284,41 +284,13 @@ class AuthProvider extends ChangeNotifier {
         return true;
       });
 
+  /// Closes the current fiscal year in place — the business (and every
+  /// record in it) stays exactly as-is; the server just marks that date
+  /// range read-only. Nothing about `businesses`/`currentBusiness` changes,
+  /// so there's nothing to patch or re-select here.
   Future<bool> closeFiscalYear() => _guard(() async {
         if (currentBusiness == null) return false;
-        final archivedId = currentBusiness!.id;
-        final newBusiness = await _businessUseCases.closeFiscalYear(archivedId);
-        businesses = [
-          for (final b in businesses)
-            if (b.id == archivedId)
-              Business(
-                id: b.id,
-                name: b.name,
-                businessType: b.businessType,
-                address: b.address,
-                phone: b.phone,
-                email: b.email,
-                logo: b.logo,
-                panNumber: b.panNumber,
-                vatNumber: b.vatNumber,
-                currency: b.currency,
-                fiscalYearStart: b.fiscalYearStart,
-                defaultTaxRate: b.defaultTaxRate,
-                plan: b.plan,
-                effectivePlan: b.effectivePlan,
-                status: 'ARCHIVED',
-                owner: b.owner,
-                ownerName: b.ownerName,
-                staffCount: b.staffCount,
-              )
-            else
-              b,
-          newBusiness,
-        ];
-        await _storage.saveBusinesses(
-          businesses.map((e) => e.toRawJson()).toList(),
-        );
-        await selectBusiness(newBusiness);
+        await _businessUseCases.closeFiscalYear(currentBusiness!.id);
         return true;
       });
 

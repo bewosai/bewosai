@@ -105,8 +105,9 @@ class SettingsAdvancedScreen extends StatelessWidget {
         return AlertDialog(
           title: const Text('Close fiscal year?'),
           content: Text(
-            '"${business.name}" will be archived and a new business profile '
-            'will be created with the carried-forward opening balance.',
+            'Closes the current fiscal year for "${business.name}". Sales, '
+            'purchases, expenses, etc. all stay right here — they just '
+            'become read-only. This can\'t be undone.',
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
@@ -124,7 +125,6 @@ class SettingsAdvancedScreen extends StatelessWidget {
     if (!context.mounted) return;
 
     if (ok) {
-      Navigator.of(context).pop();
       showAppSnackBar(context, 'Fiscal year closed successfully');
     } else {
       showAppSnackBar(context, auth.error ?? 'Failed to close fiscal year', isError: true);

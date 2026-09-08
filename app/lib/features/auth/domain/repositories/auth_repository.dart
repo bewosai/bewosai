@@ -16,5 +16,5 @@ abstract class AuthRepository {
   Future<Business> createBusiness(Business business, {String? referralCode});
   Future<Business> updateBusiness(int id, Map<String, dynamic> fields, {File? logo});
   Future<void> deleteBusiness(int id);
-  Future<Business> closeFiscalYear(int id);
+  Future<String> closeFiscalYear(int id);
 }
