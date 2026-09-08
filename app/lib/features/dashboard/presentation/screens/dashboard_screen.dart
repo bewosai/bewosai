@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../shared/widgets/announcement_banner.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/data/models/business_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -92,6 +93,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: EdgeInsets.all(padding),
                   children: [
+                    const AnnouncementBanner(),
                     _StatGrid(dashboard: d, isTablet: isTablet),
                     const SizedBox(height: 20),
                     const _ExploreAppRow(),
