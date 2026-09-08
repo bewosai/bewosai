@@ -343,7 +343,7 @@ class _PurchaseItemRow {
   // separate from priceController.text.
   double basePrice = 0;
   final nameController = TextEditingController();
-  final qtyController = TextEditingController(text: '1');
+  final qtyController = TextEditingController(text: '0');
   final priceController = TextEditingController(text: '0');
   final discountController = TextEditingController(text: '0');
 
