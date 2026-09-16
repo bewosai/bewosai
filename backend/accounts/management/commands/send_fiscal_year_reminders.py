@@ -1,7 +1,8 @@
 """
 Emails business owners whose current fiscal year has ended but is still
 open (see accounts.models.FiscalYear / accounts.views.CloseFiscalYearView).
-Intended to run on a weekly Render cron job — see render.yaml.
+Intended to run on a weekly Render cron job (bewosai-fiscal-year-reminders,
+configured by hand in the Render dashboard).
 """
 from django.core.management.base import BaseCommand
 from django.utils import timezone

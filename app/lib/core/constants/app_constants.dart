@@ -16,7 +16,7 @@ class AppConstants {
   //                  the PC's Django server on port 8000), else 127.0.0.1.
   //   Debug, Android emulator / native run → 10.0.2.2 (maps to host 127.0.0.1)
   static const String _prodUrl = String.fromEnvironment('API_BASE_URL');
-  static const String _renderUrl = 'https://bewosai-backend.onrender.com/api';
+  static const String _renderUrl = 'https://bewosai-backend-0esi.onrender.com/api';
   static const String _webUrl = 'http://127.0.0.1:8000/api';
   static const String _emulatorUrl = 'http://10.0.2.2:8000/api';
 
