@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from rest_framework import permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.db.models import Sum, Count, F, DecimalField
+from django.db.models import Sum, Count, F, DecimalField, Case, When
 from django.db.models.functions import TruncDay, Coalesce
 
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
@@ -30,6 +30,29 @@ _RETURN_UNIT_COST = Coalesce(
     F("sale_item__unit_cost"), F("sale_item__product__purchase_price"), F("product__purchase_price"),
     output_field=DecimalField(),
 )
+# unit_cost is always a per-*primary*-unit cost (SaleItem.save() snapshots
+# product.purchase_price verbatim, never converted) — so COGS must be paired
+# with the primary-unit-equivalent quantity (base_quantity), not the raw
+# billed quantity, or a line billed in a secondary unit (e.g. "Piece" when
+# the product's primary unit is "Box") would multiply a per-Box cost by a
+# Piece count and wildly overstate COGS. Falls back to quantity for rows
+# created before base_quantity existed.
+_COGS_QTY = Coalesce(F("base_quantity"), F("quantity"), output_field=DecimalField())
+# SaleReturnItem has no base_quantity snapshot of its own, so the same
+# primary-unit conversion is reconstructed here from the original sale
+# item's unit_label/product/unit — mirrors Unit.base_quantity_for exactly
+# (only divides by conversion_factor when unit_label matches the
+# configured secondary unit; otherwise the quantity is already primary-unit).
+_RETURN_COGS_QTY = Case(
+    When(
+        sale_item__unit_label__iexact=F("sale_item__product__unit__secondary_unit"),
+        sale_item__product__unit__conversion_factor__isnull=False,
+        sale_item__product__unit__conversion_factor__gt=0,
+        then=F("quantity") / F("sale_item__product__unit__conversion_factor"),
+    ),
+    default=F("quantity"),
+    output_field=DecimalField(),
+)
 
 
 def _sale_returns_total(business, date_from, date_to):
@@ -44,7 +67,7 @@ def _sale_returns_cogs(business, date_from, date_to):
     were restocked, not sold, so their cost must come back out of COGS too."""
     return SaleReturnItem.objects.filter(
         sale_return__business=business, sale_return__return_date__range=[date_from, date_to],
-    ).aggregate(total=Sum(F("quantity") * _RETURN_UNIT_COST))["total"] or 0
+    ).aggregate(total=Sum(_RETURN_COGS_QTY * _RETURN_UNIT_COST))["total"] or 0
 
 
 class DashboardSummaryView(APIView):
@@ -141,7 +164,7 @@ class DashboardSummaryView(APIView):
             sale__is_deleted=False,
             product__isnull=False,
         ).aggregate(
-            total=Sum(F("quantity") * _UNIT_COST)
+            total=Sum(_COGS_QTY * _UNIT_COST)
         )["total"] or 0
 
         today_iso = today.isoformat()
@@ -294,7 +317,7 @@ class ProfitReportView(_RequireReports, APIView):
             sale__is_deleted=False,
             product__isnull=False,
         ).aggregate(
-            total=Sum(F("quantity") * _UNIT_COST)
+            total=Sum(_COGS_QTY * _UNIT_COST)
         )["total"] or 0
 
         # Returned goods were never really "sold" — net them out of both
@@ -329,7 +352,7 @@ class ProfitReportView(_RequireReports, APIView):
             m_cogs_gross = SaleItem.objects.filter(
                 sale__business=biz, sale__sale_date__year=y, sale__sale_date__month=m,
                 sale__status="CONFIRMED", sale__is_deleted=False, product__isnull=False,
-            ).aggregate(t=Sum(F("quantity") * _UNIT_COST))["t"] or 0
+            ).aggregate(t=Sum(_COGS_QTY * _UNIT_COST))["t"] or 0
             m_returns = _sale_returns_total(biz, m_start.isoformat(), m_end.isoformat())
             m_returns_cogs = _sale_returns_cogs(biz, m_start.isoformat(), m_end.isoformat())
             m_rev = float(m_rev_gross) - float(m_returns)
@@ -439,7 +462,7 @@ class MonthlyReportView(_RequireReports, APIView):
                 sale__sale_date__year=year, sale__sale_date__month=month,
                 sale__status="CONFIRMED", product__isnull=False,
             ).aggregate(
-                total=Sum(F("quantity") * _UNIT_COST)
+                total=Sum(_COGS_QTY * _UNIT_COST)
             )["total"] or 0
 
             returns_amount = _sale_returns_total(biz, m_start.isoformat(), m_end.isoformat())

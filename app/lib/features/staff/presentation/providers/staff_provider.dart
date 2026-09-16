@@ -23,9 +23,23 @@ class StaffProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> invite({required String email, String name = '', String role = 'CASHIER'}) => _guard(() async {
-        final created = await _useCases.inviteStaff(email: email, name: name, role: role);
+  // Set on a successful invite so the UI can immediately hand over the new
+  // staff member's login link (they have no email/phone to send it to any
+  // other way) — cleared the next time an invite starts.
+  StaffMember? lastInvited;
+
+  Future<bool> invite({required int businessId, required String name, String role = 'CASHIER'}) => _guard(() async {
+        lastInvited = null;
+        final created = await _useCases.inviteStaff(businessId: businessId, name: name, role: role);
         staff = [...staff, created];
+        lastInvited = created;
+        return true;
+      });
+
+  Future<bool> regenerateLink(int businessId, int staffId) => _guard(() async {
+        final updated = await _useCases.regenerateLink(businessId, staffId);
+        staff = staff.map((s) => s.id == staffId ? updated : s).toList();
+        lastInvited = updated;
         return true;
       });
 

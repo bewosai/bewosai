@@ -15,10 +15,24 @@ class PurchaseItemSerializer(serializers.ModelSerializer):
     # Invoice — sourced from the product since it isn't duplicated onto
     # every PurchaseItem row.
     product_hs_code = serializers.CharField(source="product.hs_code", read_only=True, default="")
+    # The product's unit config, so a saved bill can still show the
+    # primary/secondary unit toggle even though PurchaseItem itself only
+    # stores which one this line was billed in (unit_label) — mirrors
+    # sales/serializers.py's SaleItemSerializer.
+    product_unit_name = serializers.CharField(source="product.unit.name", read_only=True, default="")
+    product_unit_secondary = serializers.CharField(source="product.unit.secondary_unit", read_only=True, default="")
+    product_unit_conversion_factor = serializers.SerializerMethodField()
+
+    def get_product_unit_conversion_factor(self, obj):
+        if obj.product and obj.product.unit:
+            return obj.product.unit.conversion_factor
+        return None
 
     class Meta:
         model = PurchaseItem
-        fields = ["id", "product", "product_name", "product_hs_code", "quantity", "unit_label", "base_quantity", "unit_price", "discount_amount", "total"]
+        fields = ["id", "product", "product_name", "product_hs_code", "product_unit_name", "product_unit_secondary",
+                  "product_unit_conversion_factor", "quantity", "unit_label", "base_quantity", "unit_price",
+                  "discount_amount", "total"]
         read_only_fields = ["id", "total", "base_quantity"]
 
 
@@ -213,9 +227,17 @@ class PurchaseReturnSerializer(serializers.ModelSerializer):
             # Goods going back to the supplier come out of stock — the
             # opposite of SaleReturnItem, which restores it. Floored at 0
             # (Greatest) so a stock discrepancy can't push it negative.
+            # Converted into primary-unit terms the same way the original
+            # purchase was (via Unit.base_quantity_for) — item.quantity is
+            # whatever unit the returned line was originally billed in
+            # (e.g. "Piece"), which isn't necessarily the primary unit
+            # stock_quantity is tracked in (e.g. "Box").
             if item.product_id:
+                product = item.product
+                unit_label = item.purchase_item.unit_label if item.purchase_item_id else ""
+                base_qty = product.unit.base_quantity_for(item.quantity, unit_label) if product.unit_id else item.quantity
                 Product.objects.filter(pk=item.product_id).update(
-                    stock_quantity=Greatest(F("stock_quantity") - item.quantity, Decimal("0"))
+                    stock_quantity=Greatest(F("stock_quantity") - base_qty, Decimal("0"))
                 )
 
         return purchase_return

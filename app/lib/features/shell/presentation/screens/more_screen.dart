@@ -9,6 +9,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../inventory/presentation/screens/inventory_import_screen.dart';
 import '../../../parties/presentation/screens/party_import_screen.dart';
 import '../../../purchases/presentation/screens/purchase_return_screen.dart';
+import 'contact_screen.dart';
 
 class _MoreTile {
   final IconData icon;
@@ -159,6 +160,13 @@ class MoreScreen extends StatelessWidget {
                   Icons.delete_outline,
                   t('recycleBin'),
                   () => context.push('/recycle-bin'),
+                ),
+                _divider(),
+                _tile(
+                  context,
+                  Icons.contact_support_outlined,
+                  'Contact Us',
+                  () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ContactScreen())),
                 ),
               ],
             ),

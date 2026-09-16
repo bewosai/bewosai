@@ -78,7 +78,7 @@ function PlanComparison({ effectivePlan, usage }) {
 
 export default function UpgradePlanPage() {
   const navigate = useNavigate();
-  const { currentBusiness } = useAuth();
+  const { currentBusiness, user } = useAuth();
 
   const [subscription, setSubscription] = useState(null);
   const [referral, setReferral] = useState(null);
@@ -165,7 +165,10 @@ export default function UpgradePlanPage() {
         <ArrowLeft className="h-4 w-4" /> Back to Settings
       </button>
 
-      <PageHeader title="Upgrade Plan" subtitle={`${currentBusiness?.name || "Your business"}'s subscription`} />
+      <PageHeader
+        title="Upgrade Plan"
+        subtitle={`Your account's subscription (${user?.email || user?.phone || "this account"}) — covers every business you own, including ${currentBusiness?.name || "this one"}`}
+      />
 
       {(atBusinessLimit || atStaffLimit) && effectivePlan !== "PREMIUMPLUS" && (
         <div className="mb-5 flex items-start gap-3 rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4">

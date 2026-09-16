@@ -11,6 +11,16 @@ class SaleItem {
   // unit for stock (see Unit.base_quantity_for).
   final String unitLabel;
   final double quantity;
+  // Quantity converted into the product's primary unit (see backend
+  // SaleItem.base_quantity) — falls back to quantity when absent (rows
+  // saved before this field existed).
+  final double? baseQuantity;
+  // Product's unit config, snapshotted via the product FK at read time —
+  // lets a saved bill show the primary <-> secondary unit toggle even
+  // though this line only recorded which one it was billed in.
+  final String productUnitName;
+  final String productUnitSecondary;
+  final double? productUnitConversionFactor;
   final double unitPrice;
   final double discountAmount;
   final double total;
@@ -22,10 +32,17 @@ class SaleItem {
     this.hsCode = '',
     this.unitLabel = '',
     required this.quantity,
+    this.baseQuantity,
+    this.productUnitName = '',
+    this.productUnitSecondary = '',
+    this.productUnitConversionFactor,
     required this.unitPrice,
     this.discountAmount = 0,
     this.total = 0,
   });
+
+  bool get hasSecondaryUnit =>
+      productUnitSecondary.isNotEmpty && productUnitConversionFactor != null && productUnitConversionFactor! > 0;
 
   factory SaleItem.fromJson(Map<String, dynamic> json) => SaleItem(
         id: json['id'] as int?,
@@ -34,6 +51,11 @@ class SaleItem {
         hsCode: json['product_hs_code'] as String? ?? '',
         unitLabel: json['unit_label'] as String? ?? '',
         quantity: Formatters.toDouble(json['quantity']),
+        baseQuantity: json['base_quantity'] == null ? null : Formatters.toDouble(json['base_quantity']),
+        productUnitName: json['product_unit_name'] as String? ?? '',
+        productUnitSecondary: json['product_unit_secondary'] as String? ?? '',
+        productUnitConversionFactor:
+            json['product_unit_conversion_factor'] == null ? null : Formatters.toDouble(json['product_unit_conversion_factor']),
         unitPrice: Formatters.toDouble(json['unit_price']),
         discountAmount: Formatters.toDouble(json['discount_amount']),
         total: Formatters.toDouble(json['total']),

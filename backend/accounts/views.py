@@ -11,7 +11,7 @@ from django.utils import timezone
 from datetime import date, timedelta
 from bewosai.email import send_otp_email
 from bewosai.sms import send_otp_sms
-from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, get_platform, require_feature, require_staff_permission
+from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, get_platform, require_feature, require_staff_permission, staff_can
 from bewosai.utils import get_bid, get_business, mask_email
 from .models import User, Business, FiscalYear, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import (
@@ -511,6 +511,23 @@ class FiscalYearListView(generics.ListAPIView):
         )
 
 
+def _staff_managed_business(request, bid, method):
+    """
+    Business for `bid` if `request.user` may manage its staff for this
+    request's action (owner, or granted the 'staff' module for that
+    specific business) — checked against `bid` from the URL rather than
+    get_business(request)'s "current business", since those can differ for
+    a user who's staff on more than one business. Returns None (caller
+    should 404) if the business doesn't exist or access isn't granted —
+    deliberately not distinguishing the two, so this can't be used to probe
+    which business IDs exist.
+    """
+    business = Business.objects.filter(id=bid).first()
+    if not business or not staff_can(request.user, business, "staff", method):
+        return None
+    return business
+
+
 class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
     serializer_class = StaffMemberSerializer
 
@@ -522,14 +539,18 @@ class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
 
     def get_queryset(self):
         bid = self.kwargs["business_id"]
-        return StaffMember.objects.filter(business_id=bid, business__owner=self.request.user)
+        if not _staff_managed_business(self.request, bid, self.request.method):
+            return StaffMember.objects.none()
+        return StaffMember.objects.filter(business_id=bid)
 
     def post(self, request, *args, **kwargs):
         serializer = InviteStaffSerializer(data=request.data)
         if serializer.is_valid():
             data = serializer.validated_data
             bid = kwargs["business_id"]
-            business = Business.objects.get(id=bid, owner=request.user)
+            business = _staff_managed_business(request, bid, request.method)
+            if not business:
+                return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
 
             non_owner_count = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER).count()
             is_unlimited = business.staff_limit_override is None and business.effective_plan == Business.PLAN_PREMIUMPLUS
@@ -571,7 +592,9 @@ class StaffDetailView(_RequireStaffManagement, generics.RetrieveUpdateDestroyAPI
 
     def get_queryset(self):
         bid = self.kwargs["business_id"]
-        return StaffMember.objects.filter(business_id=bid, business__owner=self.request.user)
+        if not _staff_managed_business(self.request, bid, self.request.method):
+            return StaffMember.objects.none()
+        return StaffMember.objects.filter(business_id=bid)
 
 
 class StaffRegenerateLinkView(_RequireStaffManagement, APIView):
@@ -583,9 +606,9 @@ class StaffRegenerateLinkView(_RequireStaffManagement, APIView):
     """
 
     def post(self, request, business_id, pk):
-        member = StaffMember.objects.filter(
-            pk=pk, business_id=business_id, business__owner=request.user,
-        ).first()
+        if not _staff_managed_business(request, business_id, request.method):
+            return api_response(False, "Staff member not found.", status.HTTP_404_NOT_FOUND)
+        member = StaffMember.objects.filter(pk=pk, business_id=business_id).first()
         if not member:
             return api_response(False, "Staff member not found.", status.HTTP_404_NOT_FOUND)
         if member.role == StaffMember.ROLE_OWNER:

@@ -786,6 +786,26 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     super.dispose();
   }
 
+  /// Live "= Rs. X / Piece" hint shown under a price field once a unit with
+  /// a secondary unit is selected — the field itself is always entered in
+  /// the *primary* unit (matching how Unit.priceFor/base_quantity_for treat
+  /// it elsewhere), so this exists purely to save the shop owner from doing
+  /// the box-to-piece division by hand and getting it wrong.
+  String? _secondaryPriceHint(InventoryProvider inv, String priceText) {
+    Unit? selectedUnit;
+    for (final u in inv.units) {
+      if (u.id == _unit) {
+        selectedUnit = u;
+        break;
+      }
+    }
+    if (selectedUnit == null || !selectedUnit.hasSecondary) return null;
+    final price = double.tryParse(priceText);
+    if (price == null) return null;
+    final secondaryPrice = selectedUnit.priceFor(price, selectedUnit.secondaryUnit);
+    return '= Rs. ${Formatters.amount(secondaryPrice)} / ${selectedUnit.secondaryUnit}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
@@ -853,6 +873,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
               ),
               const SizedBox(height: 12),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: TextFormField(
@@ -860,9 +881,11 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Purchase Price',
+                        helperText: _secondaryPriceHint(inv, _purchasePriceController.text),
                       ),
+                      onChanged: (_) => setState(() {}),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -872,9 +895,11 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Sale Price',
+                        helperText: _secondaryPriceHint(inv, _salePriceController.text),
                       ),
+                      onChanged: (_) => setState(() {}),
                     ),
                   ),
                 ],

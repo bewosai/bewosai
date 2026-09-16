@@ -9,6 +9,12 @@ class PurchaseItem {
   // SaleItem.unitLabel for the full rationale (same backend model on both).
   final String unitLabel;
   final double quantity;
+  // Product's unit config, snapshotted via the product FK at read time —
+  // lets a saved bill show the primary/secondary unit even though this
+  // line only recorded which one it was billed in (mirrors SaleItem).
+  final String productUnitName;
+  final String productUnitSecondary;
+  final double? productUnitConversionFactor;
   final double unitPrice;
   final double discountAmount;
   final double total;
@@ -20,6 +26,9 @@ class PurchaseItem {
     this.hsCode = '',
     this.unitLabel = '',
     required this.quantity,
+    this.productUnitName = '',
+    this.productUnitSecondary = '',
+    this.productUnitConversionFactor,
     required this.unitPrice,
     this.discountAmount = 0,
     this.total = 0,
@@ -32,6 +41,10 @@ class PurchaseItem {
         hsCode: json['product_hs_code'] as String? ?? '',
         unitLabel: json['unit_label'] as String? ?? '',
         quantity: Formatters.toDouble(json['quantity']),
+        productUnitName: json['product_unit_name'] as String? ?? '',
+        productUnitSecondary: json['product_unit_secondary'] as String? ?? '',
+        productUnitConversionFactor:
+            json['product_unit_conversion_factor'] == null ? null : Formatters.toDouble(json['product_unit_conversion_factor']),
         unitPrice: Formatters.toDouble(json['unit_price']),
         discountAmount: Formatters.toDouble(json['discount_amount']),
         total: Formatters.toDouble(json['total']),

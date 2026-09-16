@@ -293,12 +293,24 @@ class Business(models.Model):
 
     @property
     def _active_subscriptions(self):
-        """Every still-active billing.Subscription row for this business —
-        kept as a local import, same as active_license above, since billing
+        """Every still-active billing.Subscription row for this business's
+        *owner* — deliberately account-wide (keyed by user, not business),
+        so redeeming a coupon on one business benefits every business that
+        same person owns, matching how someone thinks of "my plan" rather
+        than "this one business's plan." Subscription.user is always the
+        redeeming account (see billing.services.apply_coupon /
+        _extend_and_grant), so this is safe regardless of which of the
+        owner's businesses the entitlement was originally applied under
+        (Coupon.used_for_business still records that, for display/audit —
+        this just no longer limits who benefits from it).
+
+        Kept as a local import, same as active_license above, since billing
         depends on accounts and not the other way around."""
         from billing.models import Subscription
 
-        return self.subscriptions.filter(status=Subscription.STATUS_ACTIVE, end_date__gte=timezone.localdate())
+        return Subscription.objects.filter(
+            user_id=self.owner_id, status=Subscription.STATUS_ACTIVE, end_date__gte=timezone.localdate(),
+        )
 
     @property
     def active_referral_subscription(self):

@@ -8,6 +8,7 @@ import {
   Sun, Moon, Globe, Eye, EyeOff, Calendar, Building2,
   Upload, Save, Bell, Shield, Palette, User, Check, FileText, BarChart3, ChevronRight, ChevronDown,
   FileSpreadsheet, Crown, Archive, Loader, AlertCircle, MessageSquare, Send,
+  Mail, Phone, Copy, RotateCcw, Trash2,
 } from "lucide-react";
 import PhoneInput from "../components/common/PhoneInput";
 import ConfirmDialog from "../components/common/ConfirmDialog";
@@ -71,6 +72,52 @@ const STATUS_META = {
   IN_PROGRESS: { label: "In Progress", color: "text-blue-400 bg-blue-500/10" },
   CLOSED: { label: "Closed", color: "text-navy-400 bg-navy-800" },
 };
+
+/* ── Static contact details, same as the mobile app's Contact Us page. ── */
+function ContactRow({ icon: Icon, label, value, href }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API can be unavailable (non-HTTPS, permissions) — the
+      // value is still selectable by hand from the text below.
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-navy-800">
+        <Icon className="h-4 w-4 text-navy-400" />
+      </div>
+      <a href={href} className="min-w-0 flex-1">
+        <p className="text-xs text-navy-500">{label}</p>
+        <p className="truncate text-sm font-semibold text-white hover:text-orange-400">{value}</p>
+      </a>
+      <button
+        onClick={copy}
+        title={`Copy ${label.toLowerCase()}`}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-navy-500 transition hover:bg-navy-800 hover:text-white"
+      >
+        {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  );
+}
+
+function ContactCard({ language }) {
+  return (
+    <SettingCard title={language === "ne" ? "सम्पर्क गर्नुहोस्" : "Contact Us"} icon={Phone}>
+      <div className="divide-y divide-navy-800">
+        <ContactRow icon={Mail} label="Email" value="bewosai@gmail.com" href="mailto:bewosai@gmail.com" />
+        <ContactRow icon={Phone} label="Phone" value="9744895505" href="tel:9744895505" />
+      </div>
+    </SettingCard>
+  );
+}
 
 /* ── Comments / feedback — any user can leave one, and see their own reply
    status; Super Admin sees every comment, by user, in Support Tickets. ── */
@@ -237,6 +284,9 @@ export default function SettingsPage() {
   const [saveError, setSaveError] = useState("");
   const [showCloseFiscalYear, setShowCloseFiscalYear] = useState(false);
   const [closingFiscalYear, setClosingFiscalYear] = useState(false);
+  const [showDeleteBusiness, setShowDeleteBusiness] = useState(false);
+  const [businessStatusSaving, setBusinessStatusSaving] = useState(false);
+  const [businessStatusError, setBusinessStatusError] = useState("");
   const [fiscalYearError, setFiscalYearError] = useState("");
   const [fiscalYears, setFiscalYears] = useState([]);
   const [fiscalYearsLoading, setFiscalYearsLoading] = useState(true);
@@ -343,6 +393,40 @@ export default function SettingsPage() {
       setFiscalYearError(e.response?.data?.error || "Couldn't close the fiscal year.");
     } finally {
       setClosingFiscalYear(false);
+    }
+  };
+
+  // Self-service "delete" — archives the business rather than removing
+  // anything. An archived business becomes read-only (see
+  // BusinessNotArchivedForWrites) but every record stays intact and it can
+  // be restored anytime; only Super Admin can permanently delete a
+  // business (see SuperAdminPage's Businesses tab).
+  const handleArchiveBusiness = async () => {
+    if (!currentBusiness?.id) return;
+    setBusinessStatusSaving(true);
+    setBusinessStatusError("");
+    try {
+      const { data } = await authApi.updateBusiness(currentBusiness.id, { status: "ARCHIVED" });
+      updateBusinessInList(data);
+      setShowDeleteBusiness(false);
+    } catch (e) {
+      setBusinessStatusError(e.response?.data?.status?.[0] || e.response?.data?.error || "Couldn't delete this business.");
+    } finally {
+      setBusinessStatusSaving(false);
+    }
+  };
+
+  const handleRestoreBusiness = async () => {
+    if (!currentBusiness?.id) return;
+    setBusinessStatusSaving(true);
+    setBusinessStatusError("");
+    try {
+      const { data } = await authApi.updateBusiness(currentBusiness.id, { status: "ACTIVE" });
+      updateBusinessInList(data);
+    } catch (e) {
+      setBusinessStatusError(e.response?.data?.status?.[0] || e.response?.data?.error || "Couldn't restore this business.");
+    } finally {
+      setBusinessStatusSaving(false);
     }
   };
 
@@ -646,6 +730,57 @@ export default function SettingsPage() {
         </SettingCard>
         )}
 
+        {/* Danger Zone */}
+        {section === "business" && (
+        <SettingCard title={language === "ne" ? "व्यवसाय मेटाउनुहोस्" : "Delete Business"} icon={Trash2}>
+          {businessStatusError && (
+            <p className="flex items-center gap-1.5 text-xs text-red-400">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {businessStatusError}
+            </p>
+          )}
+          {currentBusiness?.status === "ARCHIVED" ? (
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm text-navy-300">
+                  {language === "ne"
+                    ? `"${currentBusiness?.name}" हाल मेटाइएको (आर्काइभ) छ — यो पढ्न मात्र मिल्ने अवस्थामा छ। कुनै पनि डेटा हराएको छैन।`
+                    : <>"<strong className="text-white">{currentBusiness?.name}</strong>" is currently deleted (archived) — read-only until restored. No data was lost.</>}
+                </p>
+              </div>
+              <button
+                onClick={handleRestoreBusiness}
+                disabled={businessStatusSaving}
+                className="flex shrink-0 items-center gap-1.5 rounded-xl border border-green-500/30 px-3 py-2 text-xs font-semibold text-green-400 transition hover:bg-green-500/10 disabled:opacity-50"
+              >
+                {businessStatusSaving ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                {language === "ne" ? "पुनर्स्थापना गर्नुहोस्" : "Restore Business"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm text-navy-300">
+                  {language === "ne"
+                    ? "यो व्यवसाय मेटाउनुहोस्। सबै डेटा (बिक्री, खरिद, ग्राहक आदि) सुरक्षित रहन्छ र तपाईं कुनै पनि बेला पुनर्स्थापना गर्न सक्नुहुन्छ।"
+                    : "Delete this business. All its data (sales, purchases, parties, etc.) stays intact — you can restore it anytime from here."}
+                </p>
+                <p className="mt-1.5 text-xs text-navy-500">
+                  {language === "ne" ? "पुनर्स्थापना नगरेसम्म यो पढ्न मात्र मिल्ने हुनेछ।" : "It becomes read-only until you restore it."}
+                </p>
+              </div>
+              <button
+                onClick={() => { setBusinessStatusError(""); setShowDeleteBusiness(true); }}
+                disabled={!currentBusiness?.id}
+                className="flex shrink-0 items-center gap-1.5 rounded-xl border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {language === "ne" ? "व्यवसाय मेटाउनुहोस्" : "Delete Business"}
+              </button>
+            </div>
+          )}
+        </SettingCard>
+        )}
+
         {/* Invoice Customization */}
         {section === "appearance" && (
         <SettingCard title={language === "ne" ? "बिजक अनुकूलन" : "Invoice Customization"} icon={FileText}>
@@ -817,7 +952,12 @@ export default function SettingsPage() {
         </SettingCard>
         )}
 
-        {section === "support" && <CommentsCard language={language} />}
+        {section === "support" && (
+          <div className="space-y-4">
+            <ContactCard language={language} />
+            <CommentsCard language={language} />
+          </div>
+        )}
       </div>
 
       {/* App Info */}
@@ -854,6 +994,27 @@ export default function SettingsPage() {
           confirmCls="bg-red-500 hover:bg-red-600 text-white disabled:opacity-60"
           onConfirm={closingFiscalYear ? undefined : handleCloseFiscalYear}
           onCancel={() => !closingFiscalYear && setShowCloseFiscalYear(false)}
+        />
+      )}
+
+      {showDeleteBusiness && (
+        <ConfirmDialog
+          message={
+            <span>
+              {language === "ne"
+                ? `"${currentBusiness?.name}" मेटाउने हो? यो पढ्न मात्र मिल्ने हुनेछ — कुनै पनि डेटा हराउँदैन, र तपाईं यहीँबाट पुनर्स्थापना गर्न सक्नुहुन्छ।`
+                : <>Delete <strong className="text-white">{currentBusiness?.name}</strong>? It becomes read-only — no data is deleted, and you can restore it from here anytime.</>}
+              {businessStatusError && (
+                <span className="mt-3 flex items-center gap-1.5 text-xs text-red-400">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {businessStatusError}
+                </span>
+              )}
+            </span>
+          }
+          confirmLabel={businessStatusSaving ? <Loader className="h-4 w-4 animate-spin" /> : "Delete Business"}
+          confirmCls="bg-red-500 hover:bg-red-600 text-white disabled:opacity-60"
+          onConfirm={businessStatusSaving ? undefined : handleArchiveBusiness}
+          onCancel={() => !businessStatusSaving && setShowDeleteBusiness(false)}
         />
       )}
     </div>

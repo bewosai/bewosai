@@ -50,7 +50,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
     final billType = p.paidAmount <= 0 && p.dueAmount > 0 ? 'Credit' : 'Cash';
     showBillPrintDialog(
       context,
-      documentTitle: 'Proferma Invoice',
+      documentTitle: 'Proforma Invoice',
       data: BillPdfData(
         businessName: business?.name ?? '',
         businessPhone: business?.phone ?? '',
@@ -74,6 +74,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                 name: i.productName,
                 hsCode: i.hsCode,
                 quantity: i.quantity,
+                unitLabel: i.unitLabel.isNotEmpty ? i.unitLabel : i.productUnitName,
                 unitPrice: i.unitPrice,
                 discountAmount: i.discountAmount,
                 total: i.total,
@@ -1337,9 +1338,9 @@ class _BillImagePicker extends StatelessWidget {
   }
 }
 
-/// Small tappable chip toggling a purchase line between its product's
-/// primary and secondary unit — see quick_pos_screen.dart's `_UnitToggle`
-/// for the full rationale (identical mechanism, purchase side).
+/// Dropdown picking which of the product's units a purchase line is billed
+/// in — see quick_pos_screen.dart's `_UnitToggle` for the full rationale
+/// (identical mechanism, purchase side).
 class _PurchaseUnitToggle extends StatelessWidget {
   final _PurchaseItemRow item;
   final VoidCallback onChanged;
@@ -1350,34 +1351,36 @@ class _PurchaseUnitToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final unit = item.unitDetail!;
     final currentLabel = item.unitLabel.isEmpty ? unit.name : item.unitLabel;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () {
-        final isSecondary =
-            currentLabel.trim().toLowerCase() == unit.secondaryUnit.trim().toLowerCase();
-        final newLabel = isSecondary ? unit.name : unit.secondaryUnit;
-        item.unitLabel = newLabel;
-        item.priceController.text = unit.priceFor(item.basePrice, newLabel).toString();
-        onChanged();
-      },
-      child: Container(
-        width: 44,
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        decoration: BoxDecoration(
-          color: AppColors.orange.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          currentLabel,
-          textAlign: TextAlign.center,
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
+    return Container(
+      width: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: AppColors.orange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: currentLabel,
+          isDense: true,
+          isExpanded: true,
+          icon: const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.orangeDark),
           style: const TextStyle(
             fontSize: 9,
             fontWeight: FontWeight.w700,
             color: AppColors.orangeDark,
           ),
+          items: [unit.name, unit.secondaryUnit]
+              .map((label) => DropdownMenuItem(
+                    value: label,
+                    child: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
+                  ))
+              .toList(),
+          onChanged: (newLabel) {
+            if (newLabel == null || newLabel == currentLabel) return;
+            item.unitLabel = newLabel;
+            item.priceController.text = unit.priceFor(item.basePrice, newLabel).toString();
+            onChanged();
+          },
         ),
       ),
     );

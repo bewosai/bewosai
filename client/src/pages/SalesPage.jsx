@@ -112,7 +112,7 @@ function PrintModal({ sale, onClose }) {
         billTo={{ name: sale.customer_name || sale.party_name || "Walk-in", address: sale.party_address, phone: sale.party_phone }}
         items={items.map(item => ({
           description: item.product_name || item.name,
-          quantity: item.quantity,
+          quantity: item.unit_label ? `${item.quantity} ${item.unit_label}` : item.quantity,
           price: parseFloat(item.unit_price).toFixed(2),
           discount: parseFloat(item.discount_amount || 0).toFixed(2),
           taxLabel: taxRate ? `${taxRate}%` : "--",

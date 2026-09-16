@@ -5,7 +5,7 @@ import {
   ShoppingCart, Users, Package, BarChart3, Monitor, UserCheck,
   Image, MessageCircle, Building2, ShieldCheck, Upload, FileText,
   Bell, WifiOff, Share2, Globe, Cloud,
-  ArrowRight, CheckCircle2, Download, Smartphone,
+  ArrowRight, CheckCircle2, Download, Smartphone, Mail, Phone,
 } from "lucide-react";
 
 const features = [
@@ -165,13 +165,19 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-navy-950 text-white">
+    <div id="top" className="min-h-screen bg-navy-950 text-white">
       {/* Navbar */}
       <nav className="sticky top-0 z-50 border-b border-navy-800 bg-navy-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
             <img src={bewosaiLogo} alt="Bewosai" className="h-9 w-9 rounded-xl object-cover" />
             <span className="text-xl font-bold tracking-tight text-white">Bewosai</span>
+          </div>
+          <div className="hidden items-center gap-6 text-sm font-medium text-navy-300 md:flex">
+            <a href="#top" className="transition hover:text-orange-400">Home</a>
+            <a href="#features" className="transition hover:text-orange-400">Features</a>
+            <a href="#pricing" className="transition hover:text-orange-400">Pricing</a>
+            <a href="#contact" className="transition hover:text-orange-400">Contact</a>
           </div>
           <div className="flex items-center gap-3">
             {!installed && (
@@ -374,7 +380,7 @@ export default function LandingPage() {
                       : "border border-navy-700 text-white hover:border-orange-500 hover:text-orange-400"
                   }`}
                 >
-                  Get Started
+                  {plan.badge ? "Get Premium" : "Get Started"}
                 </Link>
               </div>
             ))}
@@ -385,7 +391,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-navy-800 py-12">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
             <div>
               <div className="flex items-center gap-2">
                 <img src={bewosaiLogo} alt="Bewosai" className="h-8 w-8 rounded-lg object-cover" />
@@ -438,6 +444,22 @@ export default function LandingPage() {
                 when your business grows. Works offline, syncs when you're
                 back online, and speaks your language.
               </p>
+            </div>
+
+            <div id="contact">
+              <h4 className="text-sm font-bold text-white">Contact</h4>
+              <ul className="mt-4 space-y-2.5 text-sm text-navy-400">
+                <li>
+                  <a href="mailto:bewosai@gmail.com" className="flex items-center gap-2 transition hover:text-orange-400">
+                    <Mail className="h-3.5 w-3.5 shrink-0" /> bewosai@gmail.com
+                  </a>
+                </li>
+                <li>
+                  <a href="tel:9744895505" className="flex items-center gap-2 transition hover:text-orange-400">
+                    <Phone className="h-3.5 w-3.5 shrink-0" /> 9744895505
+                  </a>
+                </li>
+              </ul>
             </div>
           </div>
 

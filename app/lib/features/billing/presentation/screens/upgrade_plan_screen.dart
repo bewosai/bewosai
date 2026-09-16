@@ -79,7 +79,9 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final business = context.watch<AuthProvider>().currentBusiness;
+    final auth = context.watch<AuthProvider>();
+    final business = auth.currentBusiness;
+    final user = auth.user;
     final billing = context.watch<BillingProvider>();
 
     return Scaffold(
@@ -92,10 +94,14 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    if (business != null)
+                    if (user != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: Text("${business.name}'s subscription", style: TextStyle(color: AppColors.textSecondary)),
+                        child: Text(
+                          "Your account's subscription (${user.email.isNotEmpty ? user.email : user.phone})"
+                          "${business != null ? ' — covers every business you own, including ${business.name}' : ''}",
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
                       ),
                     _CurrentPlanCard(billing: billing),
                     const SizedBox(height: 20),

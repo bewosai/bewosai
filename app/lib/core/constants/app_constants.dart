@@ -104,6 +104,13 @@ class AppConstants {
   // Staff roles — accounts.StaffMember ROLE_CHOICES
   static const List<String> staffRoles = ['OWNER', 'MANAGER', 'CASHIER', 'VIEWER'];
 
+  // A staff member has no email/phone of their own — they sign in purely by
+  // opening this link (see accounts.views.StaffLoginView), always served by
+  // the web app regardless of which platform the owner shared it from.
+  // Mirrors client/src/pages/StaffPage.jsx's staffLoginUrl().
+  static const String _webAppUrl = 'https://bewosaiapp.vercel.app';
+  static String staffLoginUrl(String token) => '$_webAppUrl/staff-login/$token';
+
   // Stock movement types — inventory.StockMovement TYPE_CHOICES (OPENING is set
   // automatically when a product is created, so it's excluded from manual adjustments)
   static const List<String> stockMovementTypes = [

@@ -8,11 +8,13 @@ class StaffUseCases {
 
   Future<List<StaffMember>> listStaff() => _repository.list();
 
-  Future<StaffMember> inviteStaff({required String email, String name = '', String role = 'CASHIER'}) =>
-      _repository.invite(email: email, name: name, role: role);
+  Future<StaffMember> inviteStaff({required int businessId, required String name, String role = 'CASHIER'}) =>
+      _repository.invite(businessId: businessId, name: name, role: role);
 
   Future<StaffMember> updateRole(int businessId, int staffId, String role) =>
       _repository.updateStaff(businessId, staffId, role: role);
 
   Future<void> removeStaff(int businessId, int staffId) => _repository.remove(businessId, staffId);
+
+  Future<StaffMember> regenerateLink(int businessId, int staffId) => _repository.regenerateLink(businessId, staffId);
 }

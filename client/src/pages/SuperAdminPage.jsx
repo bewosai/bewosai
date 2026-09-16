@@ -1176,7 +1176,11 @@ function UsersTab({ onCountChange }) {
                             <p className="font-medium text-white">{u.name || "—"}</p>
                             {u.is_platform_admin && <Badge label="Admin" color="orange" />}
                           </div>
-                          <p className="text-xs text-navy-400">{u.email}</p>
+                          {u.email && <p className="text-xs text-navy-400">{u.email}</p>}
+                          {u.phone && <p className="text-xs text-navy-400">{u.phone}</p>}
+                          {!u.email && !u.phone && (
+                            <p className="text-xs text-navy-600 italic">No email or phone on file</p>
+                          )}
                         </div>
                       </div>
                     </td>

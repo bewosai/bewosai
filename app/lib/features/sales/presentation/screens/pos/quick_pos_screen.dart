@@ -1125,13 +1125,13 @@ class _LineItemRow extends StatelessWidget {
   }
 }
 
-/// Small tappable chip that toggles a line item between its product's
-/// primary and secondary unit (e.g. "Box" ↔ "Piece"), recomputing the
-/// suggested price from the product's true base price each time (see
-/// _LineItem.basePrice) so repeated toggling never compounds a conversion
-/// on top of a previous one. Only rendered when the product actually has a
-/// secondary unit configured — otherwise this column simply isn't there,
-/// preserving the single-line layout for the common single-unit case.
+/// Dropdown that picks which of the product's units this line is billed in
+/// (e.g. "Box" vs "Piece"), recomputing the suggested price from the
+/// product's true base price each time (see _LineItem.basePrice) so
+/// switching back and forth never compounds a conversion on top of a
+/// previous one. Only rendered when the product actually has a secondary
+/// unit configured — otherwise this column simply isn't there, preserving
+/// the single-line layout for the common single-unit case.
 class _UnitToggle extends StatelessWidget {
   final _LineItem item;
   final VoidCallback onChanged;
@@ -1142,34 +1142,36 @@ class _UnitToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final unit = item.unitDetail!;
     final currentLabel = item.unitLabel.isEmpty ? unit.name : item.unitLabel;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () {
-        final isSecondary =
-            currentLabel.trim().toLowerCase() == unit.secondaryUnit.trim().toLowerCase();
-        final newLabel = isSecondary ? unit.name : unit.secondaryUnit;
-        item.unitLabel = newLabel;
-        item.priceController.text = unit.priceFor(item.basePrice, newLabel).toString();
-        onChanged();
-      },
-      child: Container(
-        width: 44,
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        decoration: BoxDecoration(
-          color: AppColors.orange.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          currentLabel,
-          textAlign: TextAlign.center,
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
+    return Container(
+      width: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: AppColors.orange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: currentLabel,
+          isDense: true,
+          isExpanded: true,
+          icon: const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.orangeDark),
           style: const TextStyle(
             fontSize: 9,
             fontWeight: FontWeight.w700,
             color: AppColors.orangeDark,
           ),
+          items: [unit.name, unit.secondaryUnit]
+              .map((label) => DropdownMenuItem(
+                    value: label,
+                    child: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
+                  ))
+              .toList(),
+          onChanged: (newLabel) {
+            if (newLabel == null || newLabel == currentLabel) return;
+            item.unitLabel = newLabel;
+            item.priceController.text = unit.priceFor(item.basePrice, newLabel).toString();
+            onChanged();
+          },
         ),
       ),
     );

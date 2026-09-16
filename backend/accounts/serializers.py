@@ -69,6 +69,23 @@ class BusinessSerializer(serializers.ModelSerializer):
     def get_staff_count(self, obj):
         return obj.staff.filter(is_active=True).count()
 
+    def validate_status(self, value):
+        # SUSPENDED is a Super Admin enforcement action (policy violations,
+        # non-payment) — an owner PATCHing their own business must only be
+        # able to move between ACTIVE and ARCHIVED (the self-service
+        # "delete"/"restore my business" pair). Also blocks changing status
+        # at all while currently suspended, or setting status=ACTIVE would
+        # let an owner lift their own platform-imposed suspension.
+        if self.instance and self.instance.status == Business.STATUS_SUSPENDED:
+            raise serializers.ValidationError(
+                "This business has been suspended by the platform. Contact support to resolve it."
+            )
+        if value not in (Business.STATUS_ACTIVE, Business.STATUS_ARCHIVED):
+            raise serializers.ValidationError(
+                "A business can only be set to active or archived here."
+            )
+        return value
+
 
 class FiscalYearSerializer(serializers.ModelSerializer):
     closed_by_name = serializers.CharField(source="closed_by.name", read_only=True, default="")
@@ -91,7 +108,23 @@ class StaffMemberSerializer(serializers.ModelSerializer):
         # here, so surfacing it is not a wider exposure than the endpoint
         # already has.
         fields = ("id", "user", "user_name", "user_email", "business", "role", "permissions", "is_active", "joined_at", "login_token")
-        read_only_fields = ("id", "joined_at", "login_token")
+        # business is read-only: nothing legitimately re-parents an existing
+        # StaffMember row to a different business through this endpoint —
+        # moving someone means remove-then-reinvite, not a field edit. Left
+        # writable, a caller with only edit access to their own row (a
+        # Manager granted the "staff" module, say) could PATCH their own
+        # membership onto a business they have no relationship to at all.
+        read_only_fields = ("id", "business", "joined_at", "login_token")
+
+    def validate_role(self, value):
+        # OWNER is granted exactly once, at business creation
+        # (BusinessListCreateView.perform_create) — never through this
+        # endpoint, or anyone with staff-edit access (not necessarily the
+        # real owner) could promote themselves or anyone else to full
+        # ownership of the business.
+        if value == StaffMember.ROLE_OWNER:
+            raise serializers.ValidationError("A staff member can't be made an owner here.")
+        return value
 
 
 class InviteStaffSerializer(serializers.Serializer):
@@ -102,6 +135,13 @@ class InviteStaffSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=150)
     role = serializers.ChoiceField(choices=StaffMember.ROLE_CHOICES)
     permissions = serializers.JSONField(required=False, default=dict)
+
+    def validate_role(self, value):
+        # See StaffMemberSerializer.validate_role — a new staff member must
+        # never be created as OWNER through the invite endpoint.
+        if value == StaffMember.ROLE_OWNER:
+            raise serializers.ValidationError("A staff member can't be invited as an owner.")
+        return value
 
 
 def validate_login_identifier(value):

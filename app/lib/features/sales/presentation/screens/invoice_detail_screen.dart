@@ -88,7 +88,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     final billType = s.paidAmount <= 0 && s.dueAmount > 0 ? 'Credit' : 'Cash';
     showBillPrintDialog(
       context,
-      documentTitle: 'Proferma Invoice',
+      documentTitle: 'Proforma Invoice',
       data: BillPdfData(
         businessName: business?.name ?? '',
         businessPhone: business?.phone ?? '',
@@ -112,6 +112,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                 name: i.productName,
                 hsCode: i.hsCode,
                 quantity: i.quantity,
+                unitLabel: i.unitLabel.isNotEmpty ? i.unitLabel : i.productUnitName,
                 unitPrice: i.unitPrice,
                 discountAmount: i.discountAmount,
                 total: i.total,
@@ -304,13 +305,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                               ),
                               Expanded(
                                 flex: 2,
-                                child: Text(
-                                  Formatters.amount(item.quantity),
-                                  textAlign: TextAlign.right,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                                ),
+                                child: _InvoiceItemQty(item: item),
                               ),
                               Expanded(
                                 flex: 3,
@@ -477,6 +472,75 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Shows a bill line's quantity with its unit. When the product has a
+/// secondary unit configured, a chevron lets the user flip between the
+/// primary unit (shown first) and the secondary one — e.g. "5 Box" ->
+/// tap -> "60 Piece" — without cluttering the row for the common
+/// single-unit case, where the chevron simply isn't shown.
+class _InvoiceItemQty extends StatefulWidget {
+  final SaleItem item;
+  const _InvoiceItemQty({required this.item});
+
+  @override
+  State<_InvoiceItemQty> createState() => _InvoiceItemQtyState();
+}
+
+class _InvoiceItemQtyState extends State<_InvoiceItemQty> {
+  bool _showSecondary = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    if (!item.hasSecondaryUnit) {
+      final label = item.productUnitName.isNotEmpty
+          ? '${Formatters.amount(item.quantity)} ${item.productUnitName}'
+          : Formatters.amount(item.quantity);
+      return Text(
+        label,
+        textAlign: TextAlign.right,
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+      );
+    }
+
+    final billedInSecondary = item.unitLabel.trim().toLowerCase() == item.productUnitSecondary.trim().toLowerCase();
+    final primaryQty = item.baseQuantity ?? (billedInSecondary ? item.quantity / item.productUnitConversionFactor! : item.quantity);
+    final secondaryQty = billedInSecondary ? item.quantity : primaryQty * item.productUnitConversionFactor!;
+
+    final qty = _showSecondary ? secondaryQty : primaryQty;
+    final unitName = _showSecondary ? item.productUnitSecondary : item.productUnitName;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Flexible(
+          child: Text(
+            '${Formatters.amount(qty)} $unitName',
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+        ),
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => setState(() => _showSecondary = !_showSecondary),
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: Icon(
+              _showSecondary ? Icons.chevron_left : Icons.chevron_right,
+              size: 16,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -10,6 +10,11 @@ class StaffMember {
   final Map<String, dynamic> permissions;
   final bool isActive;
   final DateTime? joinedAt;
+  // Passwordless "click this link to open the app as this staff member"
+  // credential — null until an owner/permitted manager generates or
+  // regenerates one (see StaffService.regenerateLink). Staff created
+  // without an email/phone have no other way to sign in.
+  final String? loginToken;
 
   StaffMember({
     required this.id,
@@ -21,6 +26,7 @@ class StaffMember {
     required this.permissions,
     required this.isActive,
     this.joinedAt,
+    this.loginToken,
   });
 
   factory StaffMember.fromJson(Map<String, dynamic> json) => StaffMember(
@@ -33,6 +39,7 @@ class StaffMember {
         permissions: (json['permissions'] as Map?)?.cast<String, dynamic>() ?? {},
         isActive: json['is_active'] as bool? ?? true,
         joinedAt: Formatters.parseDate(json['joined_at'] as String?),
+        loginToken: json['login_token'] as String?,
       );
 
   String get initial => userName.isNotEmpty ? userName[0].toUpperCase() : userEmail[0].toUpperCase();

@@ -59,6 +59,35 @@ services:
       - key: SPARROW_IDENTITY
         sync: false
 
+  # Weekly reminder to any business owner whose current fiscal year has
+  # ended but hasn't been closed in the app yet (Settings > Advanced).
+  # Runs against the same production database as bewosai-backend above.
+  - type: cron
+    name: bewosai-fiscal-year-reminders
+    runtime: python
+    plan: free
+    schedule: "0 3 * * 1"
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python manage.py send_fiscal_year_reminders"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "localhost,127.0.0.1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bewosai-db
+          property: connectionString
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+
   # Independent copy of the backend for testing changes against its own
   # database before they reach production — same code, same build/start
   # commands, separate everything else (DB, SECRET_KEY, email).

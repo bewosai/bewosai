@@ -106,29 +106,61 @@ def require_staff_permission(module_key):
         message = "Your account doesn't have access to this. Ask the business owner to enable it for you."
 
         def has_permission(self, request, view):
-            from accounts.models import StaffMember
-
             business = get_business(request)
             if not business:
                 # No resolvable business — some other permission class
                 # (membership, subscription) is the right one to reject
                 # this request; don't produce a second, misleading error.
                 return True
-            if business.owner_id == request.user.id:
-                return True
-
-            staff = business.staff.filter(user=request.user, is_active=True).first()
-            if not staff or staff.role == StaffMember.ROLE_OWNER:
-                return True
-
-            module_perms = staff.permissions.get(module_key)
-            if not isinstance(module_perms, dict):
-                return True
-
-            action = _ACTION_BY_METHOD.get(request.method, "view")
-            return module_perms.get(action, True) is not False
+            return staff_can(request.user, business, module_key, request.method)
 
     return _RequireStaffPermission
+
+
+def staff_can(user, business, module_key, method="GET"):
+    """
+    The same per-module permission check require_staff_permission's view
+    class performs, factored out so a view whose business comes from the
+    URL (e.g. accounts.views.StaffListView's business_id kwarg) can check
+    permission against *that* business specifically — get_business(request)
+    only ever resolves the request's "current business" (header/query
+    param), which isn't necessarily the same business_id the URL is acting
+    on for a user who's staff on more than one business.
+
+    IMPORTANT: unlike require_staff_permission's inner check (which only
+    ever calls this with a `business` get_business(request) already proved
+    the user is an active staff member of), a caller passing an arbitrary
+    business by ID must get False for someone with no relationship to it at
+    all — "no staff row" and "an existing staff row with nothing configured
+    for this module" are different cases and must not share a return value,
+    or any authenticated user could pass any other business's ID and be
+    treated as an unrestricted member of it.
+    """
+    from accounts.models import StaffMember
+
+    if business.owner_id == user.id:
+        return True
+
+    staff = business.staff.filter(user=user, is_active=True).first()
+    if not staff:
+        return False
+    if staff.role == StaffMember.ROLE_OWNER:
+        return True
+
+    module_perms = staff.permissions.get(module_key)
+    if not isinstance(module_perms, dict):
+        # Every other module defaults to allowed when unconfigured, so
+        # nobody who already used a feature loses it the moment permissions
+        # start being enforced. "staff" can't share that default: it's the
+        # module that controls who can invite/edit/remove staff (including
+        # granting themselves more access), so an unconfigured entry here
+        # — the norm for every staff member invited before this existed, or
+        # invited by a client that doesn't send an explicit permission
+        # matrix — must default to DENIED, not allowed.
+        return module_key != "staff"
+
+    action = _ACTION_BY_METHOD.get(method, "view")
+    return module_perms.get(action, True) is not False
 
 
 class IsPremiumBusiness(BasePermission):

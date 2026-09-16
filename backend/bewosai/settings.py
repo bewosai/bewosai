@@ -98,6 +98,13 @@ DATABASES = {
 
 AUTH_USER_MODEL = "accounts.User"
 
+# The only place Django's session-based login is used is /admin/ (the app's
+# own login is JWT/OTP-based and never touches this) — there's no
+# /accounts/profile/ route in this project, so a login whose `next` doesn't
+# resolve (Django's LoginView falls back to this default in that case)
+# must not land on a 404.
+LOGIN_REDIRECT_URL = "/admin/"
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
