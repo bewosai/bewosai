@@ -51,9 +51,15 @@ export function AuthProvider({ children }) {
     setUser(data.user);
     setBusinesses(data.businesses);
 
-    // Auto-select the one business if available
-    if (data.businesses.length === 1) {
-      const biz = data.businesses[0];
+    // Auto-select: the one business if that's all there is, or — with
+    // multiple businesses — whichever one this browser last had selected
+    // (survives logout via `last_business_id`, see logout() below), so
+    // returning users land straight on their dashboard instead of the
+    // Select Business picker every time they log back in.
+    const lastId = localStorage.getItem("last_business_id");
+    const remembered = lastId && data.businesses.find((b) => String(b.id) === lastId);
+    const biz = data.businesses.length === 1 ? data.businesses[0] : remembered;
+    if (biz) {
       localStorage.setItem("current_business", JSON.stringify(biz));
       localStorage.setItem("business_id", String(biz.id));
       setCurrentBusiness(biz);
@@ -128,6 +134,7 @@ export function AuthProvider({ children }) {
   const selectBusiness = useCallback((biz) => {
     localStorage.setItem("current_business", JSON.stringify(biz));
     localStorage.setItem("business_id", String(biz.id));
+    localStorage.setItem("last_business_id", String(biz.id));
     setCurrentBusiness(biz);
   }, []);
 
@@ -176,8 +183,12 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     const refresh = localStorage.getItem("refresh");
+    const lastBusinessId = localStorage.getItem("last_business_id");
     try { await authApi.logout(refresh); } catch {}
     localStorage.clear();
+    // Preserved deliberately (see _storeSession) so the next login on this
+    // browser can auto-restore the same business instead of re-prompting.
+    if (lastBusinessId) localStorage.setItem("last_business_id", lastBusinessId);
     setUser(null);
     setBusinesses([]);
     setCurrentBusiness(null);

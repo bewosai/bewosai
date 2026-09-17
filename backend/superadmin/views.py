@@ -43,7 +43,7 @@ class PlatformStatsView(APIView):
         total_users = User.objects.count()
         total_businesses = Business.objects.count()
         active_businesses = Business.objects.filter(status=Business.STATUS_ACTIVE).count()
-        suspended_businesses = total_businesses - active_businesses
+        suspended_businesses = Business.objects.filter(status=Business.STATUS_SUSPENDED).count()
         premium_count = Business.objects.filter(plan=Business.PLAN_PREMIUM).count()
         new_this_month = Business.objects.filter(created_at__gte=last_30).count()
         new_users_this_month = User.objects.filter(created_at__gte=last_30).count()
@@ -579,13 +579,13 @@ class BusinessDataView(APIView):
         from inventory.models import Product
         from parties.models import Party
 
-        sales_agg = Sale.objects.filter(business=biz).aggregate(
+        sales_agg = Sale.objects.filter(business=biz, is_deleted=False).aggregate(
             count=Count("id"), total=Sum("total")
         )
-        purchases_agg = Purchase.objects.filter(business=biz).aggregate(
+        purchases_agg = Purchase.objects.filter(business=biz, is_deleted=False).aggregate(
             count=Count("id"), total=Sum("total")
         )
-        expenses_agg = Expense.objects.filter(business=biz).aggregate(
+        expenses_agg = Expense.objects.filter(business=biz, is_deleted=False).aggregate(
             count=Count("id"), total=Sum("amount")
         )
 

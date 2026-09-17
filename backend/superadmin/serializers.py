@@ -46,9 +46,15 @@ class LicenseSerializer(serializers.ModelSerializer):
         # code is immutable once generated (spec: "Do not allow editing the
         # actual license code"); status/activated_at/revoked_at only change
         # through the dedicated activate/extend/revoke actions, not raw PATCH.
+        # business/duration_type/start_date are also locked here — moving a
+        # license to another business must go through LicenseReassignView
+        # (which blocks reassigning an active license), and changing the
+        # duration/start date without recomputing expiry_date would desync
+        # the two — extend/revoke are the only paths that touch either.
         read_only_fields = (
-            "id", "code", "business_name", "email_snapshot", "duration_days",
-            "expiry_date", "status", "activated_at", "revoked_at",
+            "id", "code", "business", "business_name", "email_snapshot",
+            "duration_type", "duration_days", "start_date", "expiry_date",
+            "status", "activated_at", "revoked_at",
             "created_by", "created_by_name", "created_at", "updated_at",
         )
 

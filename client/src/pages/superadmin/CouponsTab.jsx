@@ -273,7 +273,7 @@ export default function CouponsTab() {
       await load();
       setDeactivateTarget(null);
     } catch (err) {
-      setDeactivateError(err.response?.data?.error || err.response?.data?.detail || "Could not deactivate this coupon.");
+      setDeactivateError(err.response?.data?.message || err.response?.data?.error || "Could not deactivate this coupon.");
     } finally {
       setBusyId(null);
     }
