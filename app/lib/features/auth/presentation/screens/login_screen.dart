@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/constants/country_codes.dart';
+// import '../../../../core/constants/country_codes.dart'; // phone login/signup temporarily disabled (2026-09-16)
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
@@ -31,15 +31,17 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailFormKey = GlobalKey<FormState>();
   final _otpFormKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
+  // Phone login/signup temporarily disabled (2026-09-16) — see
+  // sparrow_sms_nepal_only memory; ask before re-enabling.
+  // final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
   final _nameController = TextEditingController();
   final _otpFocus = FocusNode();
 
   /// 0 = email, 1 = OTP
   int _step = 0;
-  bool _phoneMode = false;
-  String _countryCode = kCountryCodes.first.code;
+  static const bool _phoneMode = false;
+  // String _countryCode = kCountryCodes.first.code;
   bool _remember = true;
   bool _isNewUserFlow = false;
   int _cooldown = 0;
@@ -66,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _timer?.cancel();
     _wakingHintTimer?.cancel();
     _emailController.dispose();
-    _phoneController.dispose();
+    // _phoneController.dispose(); // phone login/signup temporarily disabled (2026-09-16)
     _otpController.dispose();
     _nameController.dispose();
     _otpFocus.dispose();
@@ -93,9 +95,12 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final auth = context.read<AuthProvider>();
-    final identifier = _phoneMode
-        ? '$_countryCode${_phoneController.text.trim()}'
-        : _emailController.text.trim();
+    // Phone login/signup temporarily disabled (2026-09-16) — see
+    // sparrow_sms_nepal_only memory; ask before re-enabling.
+    // final identifier = _phoneMode
+    //     ? '$_countryCode${_phoneController.text.trim()}'
+    //     : _emailController.text.trim();
+    final identifier = _emailController.text.trim();
 
     _startWakingHint();
     final ok = await auth.sendOtp(identifier, isSignup: isSignup);
@@ -292,37 +297,39 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _modeTab(String label, IconData icon, bool selected, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(11),
-          boxShadow: selected
-              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))]
-              : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 16, color: selected ? AppColors.orange : AppColors.textSecondary),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: selected ? AppColors.textPrimary : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // Unused since the phone/email mode toggle was disabled (2026-09-16) —
+  // kept commented out (not deleted) for easy restore.
+  // Widget _modeTab(String label, IconData icon, bool selected, VoidCallback onTap) {
+  //   return GestureDetector(
+  //     onTap: onTap,
+  //     child: AnimatedContainer(
+  //       duration: const Duration(milliseconds: 180),
+  //       padding: const EdgeInsets.symmetric(vertical: 10),
+  //       decoration: BoxDecoration(
+  //         color: selected ? Colors.white : Colors.transparent,
+  //         borderRadius: BorderRadius.circular(11),
+  //         boxShadow: selected
+  //             ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))]
+  //             : null,
+  //       ),
+  //       child: Row(
+  //         mainAxisAlignment: MainAxisAlignment.center,
+  //         children: [
+  //           Icon(icon, size: 16, color: selected ? AppColors.orange : AppColors.textSecondary),
+  //           const SizedBox(width: 6),
+  //           Text(
+  //             label,
+  //             style: TextStyle(
+  //               fontSize: 13,
+  //               fontWeight: FontWeight.w700,
+  //               color: selected ? AppColors.textPrimary : AppColors.textSecondary,
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildEmailStep(AuthProvider auth) {
     return Form(
@@ -330,92 +337,97 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: AppColors.navy50,
-              borderRadius: BorderRadius.circular(14),
+          // Phone login/signup temporarily disabled (2026-09-16) — mode
+          // toggle and phone input removed, email-only for now. Kept
+          // commented out (not deleted) for easy restore; see
+          // sparrow_sms_nepal_only memory — ask before re-enabling.
+          //
+          // Container(
+          //   padding: const EdgeInsets.all(4),
+          //   decoration: BoxDecoration(
+          //     color: AppColors.navy50,
+          //     borderRadius: BorderRadius.circular(14),
+          //   ),
+          //   child: Row(
+          //     children: [
+          //       Expanded(child: _modeTab('Email', Icons.mail_outline, !_phoneMode, () => setState(() => _phoneMode = false))),
+          //       Expanded(child: _modeTab('Phone', Icons.phone_outlined, _phoneMode, () => setState(() => _phoneMode = true))),
+          //     ],
+          //   ),
+          // ),
+          // const SizedBox(height: 16),
+          // if (_phoneMode) ...[
+          //   Row(
+          //     crossAxisAlignment: CrossAxisAlignment.start,
+          //     children: [
+          //       Container(
+          //         height: 56,
+          //         padding: const EdgeInsets.symmetric(horizontal: 4),
+          //         decoration: BoxDecoration(
+          //           border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.3)),
+          //           borderRadius: BorderRadius.circular(12),
+          //         ),
+          //         child: DropdownButtonHideUnderline(
+          //           child: DropdownButton<String>(
+          //             value: _countryCode,
+          //             items: kCountryCodes
+          //                 .map((c) => DropdownMenuItem(
+          //                       value: c.code,
+          //                       child: Text('${c.flag} ${c.code}'),
+          //                     ))
+          //                 .toList(),
+          //             onChanged: (v) => setState(() => _countryCode = v ?? _countryCode),
+          //           ),
+          //         ),
+          //       ),
+          //       const SizedBox(width: 10),
+          //       Expanded(
+          //         child: TextFormField(
+          //           controller: _phoneController,
+          //           keyboardType: TextInputType.phone,
+          //           textInputAction: TextInputAction.done,
+          //           autofillHints: const [AutofillHints.telephoneNumber],
+          //           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          //           decoration: const InputDecoration(
+          //             labelText: 'Phone number',
+          //             hintText: '9812345678',
+          //           ),
+          //           validator: (v) {
+          //             final digits = v?.trim() ?? '';
+          //             if (digits.length < 7 || digits.length > 15) {
+          //               return 'Enter a valid phone number';
+          //             }
+          //             return null;
+          //           },
+          //           onFieldSubmitted: (_) {
+          //             if (!auth.isLoading) _sendOtp();
+          //           },
+          //         ),
+          //       ),
+          //     ],
+          //   ),
+          //   if (_countryCode != '+977') ...[
+          //     const SizedBox(height: 8),
+          //     Text(
+          //       "SMS delivery is only available for Nepal numbers — for other countries we'll email the code to this account's address on file instead.",
+          //       style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          //     ),
+          //   ],
+          // ] else
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.email],
+            decoration: const InputDecoration(
+              labelText: 'Email address',
+              prefixIcon: Icon(Icons.mail_outline),
             ),
-            child: Row(
-              children: [
-                Expanded(child: _modeTab('Email', Icons.mail_outline, !_phoneMode, () => setState(() => _phoneMode = false))),
-                Expanded(child: _modeTab('Phone', Icons.phone_outlined, _phoneMode, () => setState(() => _phoneMode = true))),
-              ],
-            ),
+            validator: Validators.email,
+            onFieldSubmitted: (_) {
+              if (!auth.isLoading) _sendOtp();
+            },
           ),
-          const SizedBox(height: 16),
-          if (_phoneMode) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  height: 56,
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.3)),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _countryCode,
-                      items: kCountryCodes
-                          .map((c) => DropdownMenuItem(
-                                value: c.code,
-                                child: Text('${c.flag} ${c.code}'),
-                              ))
-                          .toList(),
-                      onChanged: (v) => setState(() => _countryCode = v ?? _countryCode),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextFormField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.done,
-                    autofillHints: const [AutofillHints.telephoneNumber],
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Phone number',
-                      hintText: '9812345678',
-                    ),
-                    validator: (v) {
-                      final digits = v?.trim() ?? '';
-                      if (digits.length < 7 || digits.length > 15) {
-                        return 'Enter a valid phone number';
-                      }
-                      return null;
-                    },
-                    onFieldSubmitted: (_) {
-                      if (!auth.isLoading) _sendOtp();
-                    },
-                  ),
-                ),
-              ],
-            ),
-            if (_countryCode != '+977') ...[
-              const SizedBox(height: 8),
-              Text(
-                "SMS delivery is only available for Nepal numbers — for other countries we'll email the code to this account's address on file instead.",
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-              ),
-            ],
-          ] else
-            TextFormField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.done,
-              autofillHints: const [AutofillHints.email],
-              decoration: const InputDecoration(
-                labelText: 'Email address',
-                prefixIcon: Icon(Icons.mail_outline),
-              ),
-              validator: Validators.email,
-              onFieldSubmitted: (_) {
-                if (!auth.isLoading) _sendOtp();
-              },
-            ),
           const SizedBox(height: 20),
           PrimaryButton(
             label: 'Continue',

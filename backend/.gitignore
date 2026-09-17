@@ -4,6 +4,7 @@ __pycache__/
 *.sqlite3
 *.sqlite3-journal
 .env
+.env.render
 media/*
 !media/.gitkeep
 staticfiles/

@@ -12,12 +12,13 @@ export default function VerifyOtpPage() {
   const location = useLocation();
 
   const identifier = location.state?.identifier;
-  const isPhone = identifier ? !identifier.includes("@") : false;
+  // Phone login/signup temporarily disabled (2026-09-16) — identifier is
+  // always an email now, so this always resolves to false. Kept commented
+  // out (not deleted) for easy restore; see sparrow_sms_nepal_only memory.
+  // const isPhone = identifier ? !identifier.includes("@") : false;
+  const isPhone = false;
   const initialUserExists = location.state?.userExists ?? false;
-  // The backend's own message — e.g. "OTP sent to your phone" for a Nepal
-  // number via Sparrow SMS, or "sent to j***@example.com instead" when an
-  // existing account's phone isn't one Sparrow can reach and it fell back
-  // to that account's email on file.
+  // The backend's own message.
   const initialMessage = location.state?.message;
 
   const [step, setStep] = useState(2); // 2=otp, 3=profile (new users only)

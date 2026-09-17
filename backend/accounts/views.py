@@ -10,9 +10,9 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import date, timedelta
 from bewosai.email import send_otp_email
-from bewosai.sms import send_otp_sms
+# from bewosai.sms import send_otp_sms  # phone login/signup temporarily disabled (2026-09-16)
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, get_platform, require_feature, require_staff_permission, staff_can
-from bewosai.utils import get_bid, get_business, mask_email
+from bewosai.utils import get_bid, get_business
 from .models import User, Business, FiscalYear, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import (
     UserSerializer, BusinessSerializer, FiscalYearSerializer, StaffMemberSerializer, InviteStaffSerializer,
@@ -34,20 +34,22 @@ def api_response(success, message, status_code, **extra):
     return Response({"success": success, "message": message, **extra}, status=status_code)
 
 
-def _nepal_local_number(identifier):
-    """
-    Sparrow SMS only delivers to bare 10-digit Nepali mobile numbers.
-    Returns that 10-digit string for a +977 (or country-code-less, assumed
-    domestic) number, or None if `identifier` isn't a Nepal number — in
-    which case the caller falls back to emailing the code instead, since no
-    SMS gateway on file can reach it.
-    """
-    digits = identifier.lstrip("+")
-    if digits.startswith("977") and len(digits) == 13:
-        digits = digits[3:]
-    if len(digits) == 10 and digits.isdigit():
-        return digits
-    return None
+# Phone-number login/signup temporarily disabled (2026-09-16) — kept
+# commented out (not deleted) so it can be restored later.
+# def _nepal_local_number(identifier):
+#     """
+#     Sparrow SMS only delivers to bare 10-digit Nepali mobile numbers.
+#     Returns that 10-digit string for a +977 (or country-code-less, assumed
+#     domestic) number, or None if `identifier` isn't a Nepal number — in
+#     which case the caller falls back to emailing the code instead, since no
+#     SMS gateway on file can reach it.
+#     """
+#     digits = identifier.lstrip("+")
+#     if digits.startswith("977") and len(digits) == 13:
+#         digits = digits[3:]
+#     if len(digits) == 10 and digits.isdigit():
+#         return digits
+#     return None
 
 
 def _first_error(errors):
@@ -69,54 +71,68 @@ class SendOTPView(APIView):
 
         identifier = serializer.validated_data["identifier"]
         is_signup = serializer.validated_data["is_signup"]
-        is_phone = "@" not in identifier
-        via_phone_display = None
-        nepal_local = None
-        fallback_email = None
 
-        if is_phone:
-            existing = User.objects.filter(phone=identifier).first()
-            # Sparrow SMS (our gateway) only delivers to Nepali numbers — for
-            # anything else the code has to go out over email instead.
-            nepal_local = _nepal_local_number(identifier)
+        # --- Phone-number login/signup temporarily disabled (2026-09-16) ---
+        # `validate_login_identifier` (serializers.py) now only accepts
+        # emails, so `identifier` is always an email here. The phone branch
+        # below is kept commented out (not deleted) so it can be restored
+        # later — ask before re-enabling.
+        #
+        # is_phone = "@" not in identifier
+        # via_phone_display = None
+        # nepal_local = None
+        # fallback_email = None
+        #
+        # if is_phone:
+        #     existing = User.objects.filter(phone=identifier).first()
+        #     # Sparrow SMS (our gateway) only delivers to Nepali numbers — for
+        #     # anything else the code has to go out over email instead.
+        #     nepal_local = _nepal_local_number(identifier)
+        #
+        #     if is_signup:
+        #         if existing:
+        #             return api_response(
+        #                 False, "This phone number is already registered. Please sign in instead.",
+        #                 status.HTTP_400_BAD_REQUEST, user_exists=True,
+        #             )
+        #         if not nepal_local:
+        #             # A brand-new account has no email on file yet to fall
+        #             # back to, so phone sign-up only works for the one
+        #             # gateway we actually have (Nepal numbers via Sparrow).
+        #             return api_response(
+        #                 False,
+        #                 "Signing up with a phone number is only available for Nepal (+977) numbers right now — please use your email instead.",
+        #                 status.HTTP_400_BAD_REQUEST,
+        #             )
+        #     else:
+        #         if not existing:
+        #             return api_response(False, "No account found with that phone number.", status.HTTP_404_NOT_FOUND)
+        #         # Existing account on a non-Nepal number: fall back to
+        #         # whichever email address it already has on file.
+        #         if not nepal_local:
+        #             if not existing.email:
+        #                 return api_response(
+        #                     False, "This account has no email on file to send a code to — SMS delivery isn't available for this number.",
+        #                     status.HTTP_400_BAD_REQUEST,
+        #                 )
+        #             fallback_email = existing.email
+        #             via_phone_display = mask_email(fallback_email)
+        # else:
+        #     existing = User.objects.filter(email=identifier).first()
+        #     if is_signup and existing:
+        #         return api_response(
+        #             False, "This email is already registered. Please sign in instead.",
+        #             status.HTTP_400_BAD_REQUEST, user_exists=True,
+        #         )
 
-            if is_signup:
-                if existing:
-                    return api_response(
-                        False, "This phone number is already registered. Please sign in instead.",
-                        status.HTTP_400_BAD_REQUEST, user_exists=True,
-                    )
-                if not nepal_local:
-                    # A brand-new account has no email on file yet to fall
-                    # back to, so phone sign-up only works for the one
-                    # gateway we actually have (Nepal numbers via Sparrow).
-                    return api_response(
-                        False,
-                        "Signing up with a phone number is only available for Nepal (+977) numbers right now — please use your email instead.",
-                        status.HTTP_400_BAD_REQUEST,
-                    )
-            else:
-                if not existing:
-                    return api_response(False, "No account found with that phone number.", status.HTTP_404_NOT_FOUND)
-                # Existing account on a non-Nepal number: fall back to
-                # whichever email address it already has on file.
-                if not nepal_local:
-                    if not existing.email:
-                        return api_response(
-                            False, "This account has no email on file to send a code to — SMS delivery isn't available for this number.",
-                            status.HTTP_400_BAD_REQUEST,
-                        )
-                    fallback_email = existing.email
-                    via_phone_display = mask_email(fallback_email)
-        else:
-            existing = User.objects.filter(email=identifier).first()
+        existing = User.objects.filter(email=identifier).first()
 
-            # Reject explicit sign-up attempts for already-registered emails
-            if is_signup and existing:
-                return api_response(
-                    False, "This email is already registered. Please sign in instead.",
-                    status.HTTP_400_BAD_REQUEST, user_exists=True,
-                )
+        # Reject explicit sign-up attempts for already-registered emails
+        if is_signup and existing:
+            return api_response(
+                False, "This email is already registered. Please sign in instead.",
+                status.HTTP_400_BAD_REQUEST, user_exists=True,
+            )
 
         wait = OTPCode.seconds_until_resend(identifier)
         if wait > 0:
@@ -134,28 +150,17 @@ class SendOTPView(APIView):
         # log — the client always got "success": true even when no email
         # ever went out, which made real delivery failures undebuggable from
         # the app. The extra second or two of latency is worth the honesty.
-        if nepal_local:
-            sent = send_otp_sms(nepal_local, code)
-            fail_message = "Couldn't send the verification SMS right now. Please try again in a moment."
-        elif is_phone:
-            sent = send_otp_email(fallback_email, code)
-            fail_message = "Couldn't send the verification email right now. Please try again in a moment."
-        else:
-            sent = send_otp_email(identifier, code)
-            fail_message = "Couldn't send the verification email right now. Please try again in a moment."
+        sent = send_otp_email(identifier, code)
+        fail_message = "Couldn't send the verification email right now. Please try again in a moment."
 
         if not sent:
-            logger.error("Failed to send OTP via %s to %s", "SMS" if nepal_local else "email", identifier if not nepal_local else nepal_local)
+            logger.error("Failed to send OTP via email to %s", identifier)
             otp.delete()
             return api_response(False, fail_message, status.HTTP_502_BAD_GATEWAY)
 
-        logger.info("OTP sent for %s (new_account=%s, via_phone=%s, sms=%s)", identifier, existing is None, is_phone, bool(nepal_local))
+        logger.info("OTP sent for %s (new_account=%s)", identifier, existing is None)
 
-        message = (
-            "OTP sent to your phone. Valid for 10 minutes." if nepal_local
-            else f"We've sent your code to {via_phone_display} instead." if via_phone_display
-            else f"OTP sent to {identifier}. Valid for 10 minutes."
-        )
+        message = f"OTP sent to {identifier}. Valid for 10 minutes."
         return api_response(
             True, message, status.HTTP_200_OK,
             user_exists=existing is not None,
@@ -175,7 +180,7 @@ class VerifyOTPView(APIView):
         code = serializer.validated_data["code"]
         remember = serializer.validated_data["remember"]
         name = serializer.validated_data["name"]
-        is_phone = "@" not in identifier
+        # is_phone = "@" not in identifier  # phone login/signup temporarily disabled (2026-09-16) — identifier is always an email now
 
         otp, error_code = OTPCode.verify_and_consume(identifier, code)
 
@@ -193,27 +198,30 @@ class VerifyOTPView(APIView):
             return api_response(False, "Incorrect code. Please check and try again.", status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            if is_phone:
-                user = User.objects.filter(phone=identifier).first()
-            else:
-                user = User.objects.filter(email=identifier).first()
+            # Phone login/signup temporarily disabled (2026-09-16) — identifier
+            # is always an email now; the phone lookup/create branch below is
+            # kept commented out (not deleted) for easy restore.
+            # if is_phone:
+            #     user = User.objects.filter(phone=identifier).first()
+            # else:
+            user = User.objects.filter(email=identifier).first()
             is_new = user is None
             if is_new:
                 # account_type is a placeholder here; the user picks it via set-account-type
-                if is_phone:
-                    user = User.objects.create_user(
-                        phone=identifier,
-                        name=name,
-                        account_type=ACCOUNT_BUSINESS,
-                        is_verified=True,
-                    )
-                else:
-                    user = User.objects.create_user(
-                        email=identifier,
-                        name=name or identifier.split("@")[0].capitalize(),
-                        account_type=ACCOUNT_BUSINESS,
-                        is_verified=True,
-                    )
+                # if is_phone:
+                #     user = User.objects.create_user(
+                #         phone=identifier,
+                #         name=name,
+                #         account_type=ACCOUNT_BUSINESS,
+                #         is_verified=True,
+                #     )
+                # else:
+                user = User.objects.create_user(
+                    email=identifier,
+                    name=name or identifier.split("@")[0].capitalize(),
+                    account_type=ACCOUNT_BUSINESS,
+                    is_verified=True,
+                )
 
             user.last_login_at = timezone.now()
             user.is_verified = True

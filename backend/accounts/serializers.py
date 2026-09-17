@@ -166,10 +166,12 @@ def validate_login_identifier(value):
             )
         return email, False
 
-    digits = value.lstrip("+")
-    if not digits.isdigit() or not (7 <= len(digits) <= 15):
-        raise serializers.ValidationError("Enter a valid email address or phone number.")
-    return value, True
+    # --- Phone-number login/signup temporarily disabled (2026-09-16) ---
+    # digits = value.lstrip("+")
+    # if not digits.isdigit() or not (7 <= len(digits) <= 15):
+    #     raise serializers.ValidationError("Enter a valid email address or phone number.")
+    # return value, True
+    raise serializers.ValidationError("Enter a valid email address.")
 
 
 class SendOTPSerializer(serializers.Serializer):
