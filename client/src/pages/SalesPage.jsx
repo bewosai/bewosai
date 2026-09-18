@@ -58,6 +58,7 @@ const EMPTY_FORM = {
   due_date: "",
   items: [{ ...EMPTY_ITEM }],
   discount: 0,
+  discount_mode: "percent", // "percent" | "amount" — how the Overall Discount field is read
   tax_rate: 0,
   paid_amount: 0,
   payment_method: "CASH",
@@ -220,9 +221,10 @@ function SaleModal({ onClose, onSaved, editData }) {
           product_id: it.product_id ?? it.product ?? "",
         }))
       : [{ ...EMPTY_ITEM }],
-    discount: editData.subtotal && parseFloat(editData.subtotal) > 0
-      ? Math.round((parseFloat(editData.discount || 0) / parseFloat(editData.subtotal)) * 10000) / 100
-      : (editData.discount || 0),
+    // Shown as the exact saved amount: converting to a rounded percentage and
+    // back would nudge the discount by a few paisa on every re-save.
+    discount: parseFloat(editData.discount || 0),
+    discount_mode: parseFloat(editData.discount || 0) > 0 ? "amount" : "percent",
     tax_rate: editData.tax_rate ?? currentBusiness?.default_tax_rate ?? 0,
     paid_amount: editData.paid_amount || 0,
     payment_method: editData.payment_method || "CASH",
@@ -312,8 +314,22 @@ function SaleModal({ onClose, onSaved, editData }) {
   };
 
   const subtotal = form.items.reduce((s, it) => s + (it.quantity * it.unit_price) - (parseFloat(it.discount_amount) || 0), 0);
-  const discountPercent = Math.min(100, Math.max(0, parseFloat(form.discount) || 0));
-  const discountAmount = subtotal * discountPercent / 100;
+  const discountIsAmount = form.discount_mode === "amount";
+  const discountValue = Math.max(0, parseFloat(form.discount) || 0);
+  // Either a % of the subtotal or a flat amount, capped to [0, subtotal].
+  const discountAmount = Math.min(
+    Math.max(0, subtotal),
+    discountIsAmount ? discountValue : subtotal * Math.min(100, discountValue) / 100,
+  );
+  const discountPercent = subtotal > 0 ? Math.round((discountAmount / subtotal) * 10000) / 100 : 0;
+  // Switching mode converts the typed value so the discount itself is unchanged.
+  const setDiscountMode = (mode) => {
+    if (mode === form.discount_mode) return;
+    const converted = mode === "amount"
+      ? Math.round(discountAmount * 100) / 100
+      : discountPercent;
+    setForm(f => ({ ...f, discount_mode: mode, discount: converted }));
+  };
   const taxableAmount = Math.max(0, subtotal - discountAmount);
   const taxRate = vatEnabled ? Math.min(100, Math.max(0, parseFloat(form.tax_rate) || 0)) : 0;
   const taxAmount = taxableAmount * taxRate / 100;
@@ -605,8 +621,21 @@ function SaleModal({ onClose, onSaved, editData }) {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-navy-400">Overall Discount (%)</label>
-                  <input type="number" min="0" max="100" step="0.01"
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-navy-400">
+                      Overall Discount ({discountIsAmount ? "Rs" : "%"})
+                    </label>
+                    <div className="flex gap-1">
+                      {[["percent", "%"], ["amount", "Rs"]].map(([mode, label]) => (
+                        <button key={mode} type="button" onClick={() => setDiscountMode(mode)}
+                          className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                            form.discount_mode === mode ? "bg-orange-500 text-white" : "bg-navy-700 text-navy-300"
+                          }`}
+                        >{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <input type="number" min="0" max={discountIsAmount ? undefined : 100} step="0.01"
                     className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
                     value={form.discount}
                     onChange={e => setForm(f => ({ ...f, discount: parseFloat(e.target.value) || 0 }))}
@@ -639,7 +668,7 @@ function SaleModal({ onClose, onSaved, editData }) {
             </div>
             <div className="rounded-xl border border-navy-700 bg-navy-800/40 p-4 space-y-2 text-sm">
               <div className="flex justify-between text-navy-400"><span>Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-navy-400"><span>Discount ({discountPercent}%)</span><span>- Rs. {discountAmount.toFixed(2)}</span></div>
+              <div className="flex justify-between text-navy-400"><span>Discount{discountIsAmount ? "" : ` (${discountPercent}%)`}</span><span>- Rs. {discountAmount.toFixed(2)}</span></div>
               <div className="flex justify-between text-navy-400"><span>Tax ({taxRate}%)</span><span>+ Rs. {taxAmount.toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-white border-t border-navy-700 pt-2"><span>Grand Total</span><span>Rs. {grandTotal.toFixed(2)}</span></div>
               <div className="pt-1 space-y-2">

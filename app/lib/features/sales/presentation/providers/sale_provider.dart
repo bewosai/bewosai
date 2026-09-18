@@ -196,6 +196,14 @@ class SaleProvider extends ChangeNotifier {
     }
   }
 
+  /// Moves the invoice to the Recycle Bin (soft delete on the backend) and
+  /// drops it from the list.
+  Future<bool> delete(int id) => _guard(() async {
+        await _useCases.deleteSale(id);
+        sales = sales.where((s) => s.id != id).toList();
+        return true;
+      });
+
   Future<bool> cancel(int id) => _guard(() async {
         await _useCases.cancelSale(id);
         sales = sales.map((s) => s.id == id

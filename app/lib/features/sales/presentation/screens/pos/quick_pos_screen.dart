@@ -78,6 +78,9 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   // snaps Amount Paid to the current total/zero the moment it's tapped,
   // not continuously kept in sync as items change afterward.
   bool _creditSale = false;
+  // Whether the invoice-level Discount field holds a flat amount (Rs) rather
+  // than a percentage of the subtotal.
+  bool _discountIsAmount = false;
   bool _saving = false;
   bool _loaded = false;
   int? _editId;
@@ -143,9 +146,10 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     _cashAmountController.text = sale.cashAmount.toString();
     _creditSale = sale.dueAmount > 0;
     _notesController.text = sale.notes;
-    _discountPctController.text = sale.subtotal > 0
-        ? ((sale.discount / sale.subtotal) * 100).toStringAsFixed(2)
-        : '0';
+    // Shown as the exact saved amount: converting to a rounded percentage and
+    // back would nudge the discount by a few paisa each time it's re-saved.
+    _discountIsAmount = sale.discount > 0;
+    _discountPctController.text = sale.discount > 0 ? _fmtNumber(sale.discount) : '0';
     if (sale.customer != null) {
       final match = partyProvider.parties.where((p) => p.id == sale.customer);
       if (match.isNotEmpty) _customer = match.first;
@@ -184,8 +188,32 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   }
 
   double get _subtotal => _items.fold(0.0, (sum, i) => sum + i.total);
-  double get _discountPct => double.tryParse(_discountPctController.text) ?? 0;
-  double get _discountAmount => _subtotal * _discountPct / 100;
+  double get _discountValue => double.tryParse(_discountPctController.text) ?? 0;
+  // The single discount field is either a percentage of the subtotal or a
+  // flat amount (_discountIsAmount); either way it's capped to [0, subtotal]
+  // so a typo can't push the taxable amount negative.
+  double get _discountAmount {
+    final raw = _discountIsAmount ? _discountValue : _subtotal * _discountValue / 100;
+    return raw.clamp(0, _subtotal).toDouble();
+  }
+
+  static String _fmtNumber(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
+  /// Switches the discount between % and a flat amount, converting the value
+  /// already typed so the discount itself doesn't change — only how it's shown.
+  void _setDiscountMode(bool asAmount) {
+    if (asAmount == _discountIsAmount) return;
+    final current = _discountAmount;
+    setState(() {
+      _discountIsAmount = asAmount;
+      _discountPctController.text = current == 0
+          ? '0'
+          : asAmount
+              ? _fmtNumber(current)
+              : _fmtNumber(_subtotal > 0 ? current / _subtotal * 100 : 0);
+    });
+  }
   double get _taxable => _subtotal - _discountAmount;
   double get _taxRate => double.tryParse(_taxRateController.text) ?? 0;
   double get _taxAmount => _vatEnabled ? _taxable * _taxRate / 100 : 0;
@@ -766,6 +794,28 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                     children: [
                       Row(
                         children: [
+                          Text(
+                            'Discount as',
+                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(width: 10),
+                          ChoiceChip(
+                            label: const Text('% of total'),
+                            selected: !_discountIsAmount,
+                            selectedColor: AppColors.orangeLight,
+                            onSelected: (_) => _setDiscountMode(false),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: const Text('Amount (Rs)'),
+                            selected: _discountIsAmount,
+                            selectedColor: AppColors.orangeLight,
+                            onSelected: (_) => _setDiscountMode(true),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
                           Expanded(
                             child: TextField(
                               controller: _discountPctController,
@@ -773,8 +823,8 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
-                              decoration: const InputDecoration(
-                                labelText: 'Discount (%)',
+                              decoration: InputDecoration(
+                                labelText: _discountIsAmount ? 'Discount (Rs)' : 'Discount (%)',
                               ),
                               onChanged: (_) => setState(() {}),
                             ),

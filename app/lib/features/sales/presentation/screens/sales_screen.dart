@@ -247,6 +247,34 @@ class _SalesScreenState extends State<SalesScreen> {
                                     ),
                                   ],
                                 ),
+                                // A still-queued offline invoice has no server
+                                // record to delete (tap it to edit/resend instead).
+                                if (!s.pendingSync)
+                                  IconButton(
+                                    tooltip: 'Delete',
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      color: AppColors.error,
+                                      size: 20,
+                                    ),
+                                    onPressed: () async {
+                                      final provider = context.read<SaleProvider>();
+                                      final confirmed = await showDeleteConfirmDialog(
+                                        context,
+                                        message: '${s.invoiceNumber} will be moved to Recycle Bin.',
+                                      );
+                                      if (!confirmed) return;
+                                      final ok = await provider.delete(s.id);
+                                      if (!context.mounted) return;
+                                      showAppSnackBar(
+                                        context,
+                                        ok
+                                            ? 'Invoice moved to Recycle Bin'
+                                            : (provider.error ?? 'Could not delete invoice'),
+                                        isError: !ok,
+                                      );
+                                    },
+                                  ),
                               ],
                             ),
                           ),
