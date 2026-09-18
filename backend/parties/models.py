@@ -39,19 +39,13 @@ class Party(models.Model):
     @property
     def balance(self):
         """
-        Outstanding amount owed by (positive) or to (negative) this party.
-        Sourced from Sale/Purchase.due_amount rather than the PartyPayment ledger,
-        since due_amount is kept current by both sale/purchase creation and
-        payment reconciliation (see PartyPaymentListCreateView._reconcile_payment),
-        while PartyPayment rows alone miss dues never yet reconciled.
+        Outstanding amount owed by (positive) or to (negative) this party —
+        see parties.balances for exactly what goes into it. Shared with the
+        dashboard totals and the ledger so they always agree.
         """
-        sales_due = self.sales.filter(
-            status="CONFIRMED", is_deleted=False
-        ).aggregate(total=models.Sum("due_amount"))["total"] or 0
-        purchases_due = self.purchases.filter(
-            status="CONFIRMED", is_deleted=False
-        ).aggregate(total=models.Sum("due_amount"))["total"] or 0
-        return self.opening_balance + sales_due - purchases_due
+        from .balances import party_balances
+
+        return party_balances(self.business_id, self.pk).get(self.pk, 0)
 
 
 class PartyPayment(models.Model):

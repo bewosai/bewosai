@@ -222,7 +222,7 @@ class PartyLedgerView(_RequireParties, APIView):
         entries = []
 
         # ── Sales ────────────────────────────────────────────────────────────
-        for s in Sale.objects.filter(customer=party, is_deleted=False).order_by("sale_date"):
+        for s in Sale.objects.filter(customer=party, status="CONFIRMED", is_deleted=False).order_by("sale_date"):
             entries.append({
                 "date": str(s.sale_date), "type": "SALE",
                 "ref": s.invoice_number,
@@ -244,7 +244,7 @@ class PartyLedgerView(_RequireParties, APIView):
 
         # ── Sale returns ─────────────────────────────────────────────────────
         for sr in SaleReturn.objects.filter(
-            original_sale__customer=party, original_sale__is_deleted=False
+            original_sale__customer=party, original_sale__status="CONFIRMED", original_sale__is_deleted=False
         ).order_by("return_date"):
             entries.append({
                 "date": str(sr.return_date), "type": "SALE_RETURN",
@@ -254,7 +254,7 @@ class PartyLedgerView(_RequireParties, APIView):
             })
 
         # ── Purchases ────────────────────────────────────────────────────────
-        for p in Purchase.objects.filter(supplier=party, is_deleted=False).order_by("purchase_date"):
+        for p in Purchase.objects.filter(supplier=party, status="CONFIRMED", is_deleted=False).order_by("purchase_date"):
             entries.append({
                 "date": str(p.purchase_date), "type": "PURCHASE",
                 "ref": p.bill_number,
@@ -274,7 +274,7 @@ class PartyLedgerView(_RequireParties, APIView):
 
         # ── Purchase returns ─────────────────────────────────────────────────
         for pr in PurchaseReturn.objects.filter(
-            original_purchase__supplier=party, original_purchase__is_deleted=False
+            original_purchase__supplier=party, original_purchase__status="CONFIRMED", original_purchase__is_deleted=False
         ).order_by("return_date"):
             entries.append({
                 "date": str(pr.return_date), "type": "PURCHASE_RETURN",

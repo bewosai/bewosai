@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import date, timedelta
 
 from rest_framework import permissions
@@ -103,13 +104,24 @@ class DashboardSummaryView(APIView):
             business=biz, date__gte=month_start, is_deleted=False
         ).aggregate(total=Sum("amount"))["total"] or 0
 
-        total_receivable = Sale.objects.filter(
-            business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False
-        ).aggregate(total=Sum("due_amount"))["total"] or 0
+        # Same per-party balances the Parties screen shows (opening balances,
+        # returns and unmatched payments included), so "To Receive"/"To Give"
+        # here always equals the sum of what that screen lists. Credit sales /
+        # purchases with no party attached have no balance to net against, so
+        # their open dues are added on top as before.
+        from parties.balances import party_balances
 
-        total_payable = Purchase.objects.filter(
-            business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False
-        ).aggregate(total=Sum("due_amount"))["total"] or 0
+        balances = party_balances(biz.id).values()
+        total_receivable = sum((b for b in balances if b > 0), Decimal("0")) + (
+            Sale.objects.filter(
+                business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False, customer__isnull=True
+            ).aggregate(total=Sum("due_amount"))["total"] or 0
+        )
+        total_payable = sum((-b for b in balances if b < 0), Decimal("0")) + (
+            Purchase.objects.filter(
+                business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False, supplier__isnull=True
+            ).aggregate(total=Sum("due_amount"))["total"] or 0
+        )
 
         purchases_today = Purchase.objects.filter(
             business=biz, purchase_date=today, is_deleted=False
