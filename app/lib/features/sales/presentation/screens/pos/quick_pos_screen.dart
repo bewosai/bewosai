@@ -85,7 +85,10 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   bool _reminderEnabled = false;
   DateTime? _reminderAt;
 
-  final List<_LineItem> _items = [_LineItem()];
+  // Starts empty: an item only lands here once picked and confirmed in the
+  // item-detail sheet (see _pickProduct / _showItemDetailSheet), so there's
+  // never a blank half-filled row to fix up.
+  final List<_LineItem> _items = [];
 
   @override
   void initState() {
@@ -164,7 +167,6 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       li.discountController.text = it.discountAmount.toString();
       _items.add(li);
     }
-    if (_items.isEmpty) _items.add(_LineItem());
   }
 
   @override
@@ -283,6 +285,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
             item.qtyController.text = qty.toString();
             item.priceController.text = price.toString();
             item.discountController.text = discount.toString();
+            if (!_items.contains(item)) _items.add(item);
           });
         },
       ),
@@ -735,16 +738,24 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                           index: e.key + 1,
                           item: e.value,
                           onPickProduct: () => _pickProduct(e.value),
-                          onRemove: _items.length > 1
-                              ? () => setState(() => _items.removeAt(e.key))
-                              : null,
+                          onRemove: () => setState(() => _items.removeAt(e.key)),
                           onChanged: () => setState(() {}),
                         ),
                       ),
+                      if (_items.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            'No items yet — tap "Add Item" to choose a product.',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          ),
+                        ),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
-                        onPressed: () =>
-                            setState(() => _items.add(_LineItem())),
+                        // Opens the product dropdown straight away; the item is
+                        // only added to the invoice once confirmed in the detail
+                        // sheet, so cancelling leaves nothing behind.
+                        onPressed: () => _pickProduct(_LineItem()),
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add Item'),
                       ),

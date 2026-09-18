@@ -200,8 +200,12 @@ class _SearchSheetState<T> extends State<SearchSheet<T>> {
                       itemBuilder: (ctx, i) {
                         final item = filtered[i];
                         void onTap() {
-                          widget.onSelected(item);
+                          // Close this sheet BEFORE running onSelected: it may
+                          // open a follow-up sheet (e.g. the invoice's item
+                          // detail), and popping afterwards would close that
+                          // new sheet instead of this one.
                           Navigator.pop(context);
+                          widget.onSelected(item);
                         }
                         if (widget.detailBuilder != null) {
                           return InkWell(
