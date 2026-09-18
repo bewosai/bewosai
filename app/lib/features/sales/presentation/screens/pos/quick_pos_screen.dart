@@ -251,18 +251,40 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
             ),
           ],
         ),
-        onSelected: (p) {
+        onSelected: (p) => _showItemDetailSheet(item, p),
+        onAddNew: () => _openAddProductDialog(item),
+        addNewLabel: 'Add New Product',
+      ),
+    );
+  }
+
+  /// Shown right after a product is picked (or newly created) — the
+  /// product's own detail (category, unit, stock, price) plus editable
+  /// Quantity/Price/Discount and a live total, so the user reviews and sets
+  /// those before the item actually lands on the invoice, instead of it
+  /// appearing with a bare "0" quantity they then have to notice and fix
+  /// inline in the cramped line-item row.
+  void _showItemDetailSheet(_LineItem item, Product p) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _ItemDetailSheet(
+        product: p,
+        initialQty: item.product == p.id && item.qty > 0 ? item.qty : 1,
+        initialPrice: item.product == p.id && item.price > 0 ? item.price : p.salePrice,
+        initialDiscount: item.product == p.id ? item.discount : 0,
+        onAdd: (qty, price, discount) {
           setState(() {
             item.product = p.id;
             item.nameController.text = p.name;
             item.unitDetail = p.unitDetail;
             item.unitLabel = p.unitDetail?.name ?? '';
             item.basePrice = p.salePrice;
-            item.priceController.text = p.salePrice.toString();
+            item.qtyController.text = qty.toString();
+            item.priceController.text = price.toString();
+            item.discountController.text = discount.toString();
           });
         },
-        onAddNew: () => _openAddProductDialog(item),
-        addNewLabel: 'Add New Product',
       ),
     );
   }
@@ -351,15 +373,8 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                 );
                 if (!dialogContext.mounted) return;
                 if (created != null) {
-                  setState(() {
-                    item.product = created.id;
-                    item.nameController.text = created.name;
-                    item.unitDetail = created.unitDetail;
-                    item.unitLabel = created.unitDetail?.name ?? '';
-                    item.basePrice = created.salePrice;
-                    item.priceController.text = created.salePrice.toString();
-                  });
                   Navigator.pop(dialogContext);
+                  if (mounted) _showItemDetailSheet(item, created);
                 } else {
                   setDialogState(() => saving = false);
                   showAppSnackBar(
@@ -1028,6 +1043,185 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Shown right after a product is picked — its own detail (category, unit,
+/// stock, price) alongside editable Quantity/Price/Discount and a live
+/// total, so mistakes (forgetting to set a quantity, a price that doesn't
+/// look right) are caught here instead of after the item is already sitting
+/// in the invoice's compact line-item row.
+class _ItemDetailSheet extends StatefulWidget {
+  final Product product;
+  final double initialQty;
+  final double initialPrice;
+  final double initialDiscount;
+  final void Function(double qty, double price, double discount) onAdd;
+
+  const _ItemDetailSheet({
+    required this.product,
+    required this.initialQty,
+    required this.initialPrice,
+    required this.initialDiscount,
+    required this.onAdd,
+  });
+
+  @override
+  State<_ItemDetailSheet> createState() => _ItemDetailSheetState();
+}
+
+class _ItemDetailSheetState extends State<_ItemDetailSheet> {
+  static String _clean(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+
+  final _formKey = GlobalKey<FormState>();
+  late final _qtyController = TextEditingController(text: _clean(widget.initialQty));
+  late final _priceController = TextEditingController(text: _clean(widget.initialPrice));
+  late final _discountController = TextEditingController(text: _clean(widget.initialDiscount));
+
+  double get _qty => double.tryParse(_qtyController.text) ?? 0;
+  double get _price => double.tryParse(_priceController.text) ?? 0;
+  double get _discount => double.tryParse(_discountController.text) ?? 0;
+  double get _total => (_qty * _price) - _discount;
+
+  @override
+  void dispose() {
+    _qtyController.dispose();
+    _priceController.dispose();
+    _discountController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.product;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SheetHeader(title: p.name),
+                const SizedBox(height: 8),
+                Text(
+                  p.categoryName.isEmpty ? 'Uncategorized' : p.categoryName,
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                // A separate row (rather than crammed alongside the category
+                // text above) with Flexible on the stock side so a long
+                // product/unit name wraps or ellipsizes instead of pushing
+                // the price off-screen or overflowing the sheet.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (p.isLowStock) ...[
+                            const StatusBadge(label: 'LOW', color: AppColors.error),
+                            const SizedBox(width: 6),
+                          ],
+                          Flexible(
+                            child: Text(
+                              '${Formatters.amount(p.stockQuantity)} ${p.unitName} in stock',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      Formatters.currency(p.salePrice),
+                      style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary, fontSize: 13),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _qtyController,
+                        autofocus: true,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(labelText: 'Quantity *'),
+                        validator: (v) =>
+                            Validators.required(v, 'Quantity') ?? Validators.positiveNumber(v, 'Quantity'),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _priceController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(labelText: 'Price *'),
+                        validator: (v) =>
+                            Validators.required(v, 'Price') ?? Validators.positiveNumber(v, 'Price'),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _discountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Discount'),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total',
+                      style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      Formatters.currency(_total),
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: PrimaryButton(
+                        label: 'Add to Invoice',
+                        onPressed: () {
+                          if (!(_formKey.currentState?.validate() ?? false)) return;
+                          widget.onAdd(_qty, _price, _discount);
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
