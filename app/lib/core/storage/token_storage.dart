@@ -29,6 +29,9 @@ class TokenStorage {
   Future<void> saveAccessToken(String access) =>
       _secure.write(key: AppConstants.keyAccessToken, value: access);
 
+  Future<void> saveRefreshToken(String refresh) =>
+      _secure.write(key: AppConstants.keyRefreshToken, value: refresh);
+
   Future<Map<String, dynamic>?> get user async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(AppConstants.keyUser);

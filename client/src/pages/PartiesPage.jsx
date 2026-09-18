@@ -55,7 +55,7 @@ function PartyModal({ initial, onClose, onSaved }) {
     // Stored/edited as an always-positive amount + direction rather than a
     // signed number — entering "-500" to mean "I owe them" isn't obvious,
     // so the sign is derived from obDirection at submit time instead.
-    opening_balance: Math.abs(initialBalance) || "0",
+    opening_balance: Math.abs(initialBalance) || "",
   });
   // "To Receive" (they owe us, positive) vs "To Give" (we owe them,
   // negative) — matches the wording already used on the party balance card.

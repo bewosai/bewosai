@@ -80,6 +80,7 @@ class _BewosaiAppState extends State<BewosaiApp> {
     // a trial/license lapses — this is the only signal for a lapse that
     // happens mid-session, well after LicenseProvider's last explicit check.
     ApiClient.instance.onSubscriptionRequired = () => _licenseProvider.markBlocked();
+    ApiClient.instance.onSessionExpired = _authProvider.sessionExpired;
   }
 
   @override

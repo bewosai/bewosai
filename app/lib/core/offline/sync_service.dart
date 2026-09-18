@@ -121,7 +121,9 @@ class SyncService {
         await AppDatabase.instance.removePendingSale(tempId);
         syncedAny = true;
       } on ApiException catch (e) {
-        if (e.isNetworkError) {
+        // A 401 means "not signed in right now", not a bad record — keep it
+        // queued and retry after the next login instead of flagging it.
+        if (e.isNetworkError || e.statusCode == 401) {
           // Still offline/flaky — stop here so nothing behind it is
           // replayed out of order, and retry the whole queue next reconnect.
           break;
@@ -162,9 +164,9 @@ class SyncService {
         await AppDatabase.instance.removePendingWrite(tempId);
         syncedAny = true;
       } on ApiException catch (e) {
-        if (e.isNetworkError) {
-          // Still offline/flaky — stop here so nothing behind it is
-          // replayed out of order, and retry the whole queue next reconnect.
+        if (e.isNetworkError || e.statusCode == 401) {
+          // Offline/flaky, or not signed in right now — stop here so nothing
+          // behind it is replayed out of order, and retry on the next pass.
           break;
         }
         // A real rejection from the server won't fix itself on retry —

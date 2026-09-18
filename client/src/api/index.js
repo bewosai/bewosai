@@ -26,21 +26,48 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// One refresh shared by every request that gets a 401 at the same time. The
+// backend rotates refresh tokens and blacklists the old one, so several
+// parallel refreshes with the same token can only succeed once — the rest
+// used to fail and log the user out.
+let refreshInFlight = null;
+function refreshAccessToken() {
+  if (!refreshInFlight) {
+    refreshInFlight = axios
+      .post(`${API_URL}/auth/refresh/`, { refresh: localStorage.getItem("refresh") })
+      .then(({ data }) => {
+        localStorage.setItem("access", data.access);
+        // ROTATE_REFRESH_TOKENS: the token just used is now blacklisted, so
+        // the replacement in the response must be kept.
+        if (data.refresh) localStorage.setItem("refresh", data.refresh);
+        return data.access;
+      })
+      .finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+}
+
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
     const original = err.config;
     if (err.response?.status === 401 && !original._retry) {
       original._retry = true;
+      let access = null;
       try {
-        const refresh = localStorage.getItem("refresh");
-        const { data } = await axios.post(`${API_URL}/auth/refresh/`, { refresh });
-        localStorage.setItem("access", data.access);
-        original.headers.Authorization = `Bearer ${data.access}`;
+        access = await refreshAccessToken();
+      } catch (refreshErr) {
+        // Only a server rejection of the refresh token means the session is
+        // really dead; a network blip must not log the user out.
+        const status = refreshErr.response?.status;
+        if (status === 400 || status === 401) {
+          localStorage.clear();
+          window.location.href = "/login";
+        }
+      }
+      if (access) {
+        original.headers.Authorization = `Bearer ${access}`;
         return api(original);
-      } catch {
-        localStorage.clear();
-        window.location.href = "/login";
       }
     }
     // The backend's HasActiveSubscription permission blocks every

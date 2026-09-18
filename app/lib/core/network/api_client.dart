@@ -11,11 +11,17 @@ class ApiException implements Exception {
   /// fixed — used by [SyncService] to tell "retry later" apart from "needs
   /// the user to fix this record" when replaying the offline outbox.
   final bool isNetworkError;
-  ApiException(this.message, {this.isNetworkError = false});
+  /// HTTP status for a server rejection (null for network failures) — lets
+  /// [SyncService] treat a 401 as "not signed in right now, retry after
+  /// login" rather than a permanent problem with the queued record.
+  final int? statusCode;
+  ApiException(this.message, {this.isNetworkError = false, this.statusCode});
 
   @override
   String toString() => message;
 }
+
+enum _RefreshOutcome { ok, rejected, unavailable }
 
 /// Singleton Dio client: attaches the JWT + active business ID to every
 /// request, retries transient network errors, and transparently refreshes
@@ -68,18 +74,32 @@ class ApiClient {
           }
         }
 
-        if (e.response?.statusCode == 401) {
-          final refreshed = await _refreshToken();
-          if (refreshed) {
+        if (e.response?.statusCode == 401 && e.requestOptions.extra['authRetried'] != true) {
+          final sentAuth = e.requestOptions.headers['Authorization'];
+          final current = await TokenStorage.instance.accessToken;
+          // Another request that failed at the same moment may already have
+          // refreshed the session — then just retry with the newer token
+          // instead of spending (and rotating) the refresh token again.
+          final outcome = (current != null && sentAuth != 'Bearer $current')
+              ? _RefreshOutcome.ok
+              : await _refreshToken();
+          if (outcome == _RefreshOutcome.ok) {
             final token = await TokenStorage.instance.accessToken;
             final opts = e.requestOptions;
             opts.headers['Authorization'] = 'Bearer $token';
+            opts.extra['authRetried'] = true;
             try {
               final response = await _dio.fetch(opts);
               return handler.resolve(response);
-            } catch (_) {}
-          } else {
+            } on DioException catch (retryError) {
+              return handler.next(retryError);
+            }
+          } else if (outcome == _RefreshOutcome.rejected) {
+            // The server itself says this session is dead — only then is it
+            // safe to wipe it. A network blip during refresh must NOT log
+            // the user out.
             await TokenStorage.instance.clear();
+            onSessionExpired?.call();
           }
         }
 
@@ -109,21 +129,45 @@ class ApiClient {
   /// status check, and this is the only signal that catches it.
   void Function()? onSubscriptionRequired;
 
+  /// Set once from main.dart to AuthProvider.sessionExpired — fired when the
+  /// server rejects the refresh token, so the app returns to sign-in instead
+  /// of every screen failing with "Authentication credentials were not
+  /// provided" until the app is restarted.
+  void Function()? onSessionExpired;
+
   static const int _maxRetries = 2;
 
-  Future<bool> _refreshToken() async {
+  Future<_RefreshOutcome>? _refreshInFlight;
+
+  /// One refresh shared by every request that hits a 401 together (a screen
+  /// loading several endpoints at once). The backend rotates refresh tokens
+  /// and blacklists the old one, so N parallel refreshes with the same token
+  /// can only succeed once — the rest used to fail and wipe the login.
+  Future<_RefreshOutcome> _refreshToken() =>
+      _refreshInFlight ??= _doRefresh().whenComplete(() => _refreshInFlight = null);
+
+  Future<_RefreshOutcome> _doRefresh() async {
     try {
       final refresh = await TokenStorage.instance.refreshToken;
-      if (refresh == null) return false;
+      if (refresh == null) return _RefreshOutcome.rejected;
       final res = await Dio(BaseOptions(
         baseUrl: AppConstants.baseUrl,
         connectTimeout: const Duration(seconds: 75),
         receiveTimeout: const Duration(seconds: 75),
       )).post('/auth/refresh/', data: {'refresh': refresh});
       await TokenStorage.instance.saveAccessToken(res.data['access'] as String);
-      return true;
+      // ROTATE_REFRESH_TOKENS: the response carries the replacement refresh
+      // token and the one just used is now blacklisted — keep the new one.
+      final rotated = res.data['refresh'];
+      if (rotated is String && rotated.isNotEmpty) {
+        await TokenStorage.instance.saveRefreshToken(rotated);
+      }
+      return _RefreshOutcome.ok;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      return (code == 400 || code == 401) ? _RefreshOutcome.rejected : _RefreshOutcome.unavailable;
     } catch (_) {
-      return false;
+      return _RefreshOutcome.unavailable;
     }
   }
 
@@ -156,7 +200,10 @@ class ApiClient {
             final firstValue = data.values.first;
             msg = firstValue is List && firstValue.isNotEmpty ? firstValue.first : firstValue;
           }
-          return ApiException((msg ?? 'Server error (${error.response?.statusCode})').toString());
+          return ApiException(
+            (msg ?? 'Server error (${error.response?.statusCode})').toString(),
+            statusCode: error.response?.statusCode,
+          );
         default:
           return ApiException(error.message ?? 'An unexpected error occurred.', isNetworkError: true);
       }

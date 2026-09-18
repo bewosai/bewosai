@@ -312,6 +312,18 @@ class AuthProvider extends ChangeNotifier {
         return true;
       });
 
+  /// The server rejected our refresh token (ApiClient already wiped the
+  /// stored tokens) — drop back to the sign-in screen rather than leaving
+  /// the user on a page where every request fails.
+  void sessionExpired() {
+    if (status == AuthStatus.loggedOut) return;
+    user = null;
+    businesses = [];
+    currentBusiness = null;
+    status = AuthStatus.loggedOut;
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     final refresh = await _storage.refreshToken;
     await _authUseCases.logout(refresh);
