@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 from datetime import date, timedelta
 
@@ -15,6 +16,8 @@ from inventory.models import Product
 from parties.models import PartyPayment
 from purchases.models import Purchase
 from banking.models import BankAccount
+
+logger = logging.getLogger(__name__)
 
 
 class _RequireReports:
@@ -109,19 +112,31 @@ class DashboardSummaryView(APIView):
         # here always equals the sum of what that screen lists. Credit sales /
         # purchases with no party attached have no balance to net against, so
         # their open dues are added on top as before.
-        from parties.balances import party_balances
+        try:
+            from parties.balances import party_balances
 
-        balances = party_balances(biz.id).values()
-        total_receivable = sum((b for b in balances if b > 0), Decimal("0")) + (
-            Sale.objects.filter(
-                business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False, customer__isnull=True
+            balances = party_balances(biz.id).values()
+            total_receivable = sum((b for b in balances if b > 0), Decimal("0")) + (
+                Sale.objects.filter(
+                    business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False, customer__isnull=True
+                ).aggregate(total=Sum("due_amount"))["total"] or 0
+            )
+            total_payable = sum((-b for b in balances if b < 0), Decimal("0")) + (
+                Purchase.objects.filter(
+                    business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False, supplier__isnull=True
+                ).aggregate(total=Sum("due_amount"))["total"] or 0
+            )
+        except Exception:
+            # The dashboard is the first screen after login — a problem in the
+            # balance calculation must never stop it loading. Fall back to plain
+            # invoice dues and log the real error for fixing.
+            logger.exception("party_balances failed for business %s; using invoice-due totals", biz.id)
+            total_receivable = Sale.objects.filter(
+                business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False
             ).aggregate(total=Sum("due_amount"))["total"] or 0
-        )
-        total_payable = sum((-b for b in balances if b < 0), Decimal("0")) + (
-            Purchase.objects.filter(
-                business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False, supplier__isnull=True
+            total_payable = Purchase.objects.filter(
+                business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False
             ).aggregate(total=Sum("due_amount"))["total"] or 0
-        )
 
         purchases_today = Purchase.objects.filter(
             business=biz, purchase_date=today, is_deleted=False

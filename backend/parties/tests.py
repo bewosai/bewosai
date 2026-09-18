@@ -131,3 +131,16 @@ class PartyBalanceTests(TestCase):
         self.assertEqual(res.status_code, 200, res.content)
         self.assertEqual(D(res.data["total_receivable"]), D(700))
         self.assertEqual(D(res.data["total_payable"]), D(200))
+
+    def test_dashboard_still_loads_if_the_balance_calculation_fails(self):
+        from unittest import mock
+
+        a = self.party(0, "A")
+        self.sale(a, 500, number="S-A")
+        client = APIClient()
+        client.force_authenticate(self.owner)
+        with mock.patch("parties.balances.party_balances", side_effect=RuntimeError("boom")):
+            with self.assertLogs("reports.views", level="ERROR"):
+                res = client.get("/api/reports/dashboard/", HTTP_X_BUSINESS_ID=str(self.business.id))
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(D(res.data["total_receivable"]), D(500))   # plain invoice dues
