@@ -2,6 +2,7 @@ import logging
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from rest_framework import status, generics, permissions
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -541,6 +542,35 @@ def _staff_managed_business(request, bid, method):
     return business
 
 
+def _staff_limit_error(business, exclude_member=None):
+    """
+    A 403 Response if `business` has no free staff slot (beyond the owner), else
+    None. `exclude_member` is left out of the count — used when re-activating
+    an existing member, who is about to take a slot rather than add a second one.
+    """
+    others = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER)
+    if exclude_member is not None:
+        others = others.exclude(pk=exclude_member.pk)
+    is_unlimited = business.staff_limit_override is None and business.effective_plan == Business.PLAN_PREMIUMPLUS
+    plan_limit = (
+        StaffListView.PREMIUM_STAFF_LIMIT if business.effective_plan != Business.PLAN_FREE
+        else StaffListView.FREE_STAFF_LIMIT
+    )
+    staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_limit
+    if is_unlimited or others.count() < staff_limit:
+        return None
+    plan_name = "Premium" if business.effective_plan != Business.PLAN_FREE else "Free"
+    return Response(
+        {
+            "error": (
+                f"Your {plan_name} plan allows up to {staff_limit} staff member"
+                f"{'s' if staff_limit != 1 else ''} besides the owner."
+            )
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
 class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
     serializer_class = StaffMemberSerializer
 
@@ -565,21 +595,9 @@ class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
             if not business:
                 return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
 
-            non_owner_count = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER).count()
-            is_unlimited = business.staff_limit_override is None and business.effective_plan == Business.PLAN_PREMIUMPLUS
-            plan_limit = self.PREMIUM_STAFF_LIMIT if business.effective_plan != Business.PLAN_FREE else self.FREE_STAFF_LIMIT
-            staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_limit
-            if not is_unlimited and non_owner_count >= staff_limit:
-                plan_name = "Premium" if business.effective_plan != Business.PLAN_FREE else "Free"
-                return Response(
-                    {
-                        "error": (
-                            f"Your {plan_name} plan allows up to {staff_limit} staff member"
-                            f"{'s' if staff_limit != 1 else ''} besides the owner."
-                        )
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+            limit_error = _staff_limit_error(business)
+            if limit_error is not None:
+                return limit_error
 
             # A link-based staff member has no email/phone of their own — no
             # existing account to match against, so every invite creates a
@@ -608,6 +626,29 @@ class StaffDetailView(_RequireStaffManagement, generics.RetrieveUpdateDestroyAPI
         if not _staff_managed_business(self.request, bid, self.request.method):
             return StaffMember.objects.none()
         return StaffMember.objects.filter(business_id=bid)
+
+    @staticmethod
+    def _guard_owner(member):
+        # The owner's membership is what lists the business for them at all —
+        # deleting or deactivating it (even by mistake, or by a manager who was
+        # granted staff access) would lock the owner out of their own business.
+        if member.role == StaffMember.ROLE_OWNER or member.user_id == member.business.owner_id:
+            raise ValidationError({"error": "The business owner's access can't be changed or removed."})
+
+    def perform_update(self, serializer):
+        member = serializer.instance
+        self._guard_owner(member)
+        # Switching someone back on takes a staff slot, so it's subject to the
+        # same plan limit as inviting a new member.
+        if serializer.validated_data.get("is_active") and not member.is_active:
+            limit_error = _staff_limit_error(member.business, exclude_member=member)
+            if limit_error is not None:
+                raise PermissionDenied(limit_error.data["error"])
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._guard_owner(instance)
+        instance.delete()
 
 
 class StaffRegenerateLinkView(_RequireStaffManagement, APIView):
