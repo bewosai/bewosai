@@ -53,7 +53,11 @@ export default function VerifyOtpPage() {
     if (digits.length < 6) { setError("Enter the complete 6-digit OTP."); return; }
     const res = await verifyOtp(identifier, digits, remember);
     if (res.ok) {
-      if (res.needsProfileSetup) {
+      if (res.isPlatformAdmin && (res.businesses?.length ?? 0) === 0) {
+        // A platform admin with no business of their own goes straight to the
+        // Super Admin panel instead of being asked to create one first.
+        navigate("/superadmin", { replace: true });
+      } else if (res.needsProfileSetup) {
         // New user — must pick profile
         setIsNewUser(true);
         setStep(3);

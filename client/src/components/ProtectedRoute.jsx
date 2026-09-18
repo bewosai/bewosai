@@ -1,10 +1,11 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLicense } from "../context/LicenseContext";
 
 export default function ProtectedRoute({ children, forType }) {
   const { isLoggedIn, user, currentBusiness } = useAuth();
   const { loaded: licenseLoaded, hasActiveSubscription } = useLicense();
+  const location = useLocation();
 
   if (!isLoggedIn) return <Navigate to="/login" replace />;
 
@@ -19,7 +20,12 @@ export default function ProtectedRoute({ children, forType }) {
   }
 
   // Business users with no business selected → pick one
-  if (forType === "business" && !currentBusiness) {
+  // A platform admin can open the Super Admin panel without any business of
+  // their own — a brand-new admin account has none, and would otherwise be
+  // sent off to create one before they could see the panel that manages
+  // everyone else's.
+  const adminOnSuperAdmin = user?.is_platform_admin && location.pathname.startsWith("/superadmin");
+  if (forType === "business" && !currentBusiness && !adminOnSuperAdmin) {
     return <Navigate to="/select-business" replace />;
   }
 

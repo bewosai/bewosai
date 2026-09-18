@@ -61,6 +61,18 @@ def _first_error(errors):
     return "Invalid request."
 
 
+def _grant_platform_admin_if_listed(user):
+    """Makes `user` a platform admin if their (already verified) email is in
+    settings.PLATFORM_ADMIN_EMAILS. Called only after the email has been proved
+    — a correct emailed code or a verified Google account — never on a bare
+    claim of an address."""
+    email = (user.email or "").strip().lower()
+    if email and email in settings.PLATFORM_ADMIN_EMAILS and not user.is_platform_admin:
+        user.is_platform_admin = True
+        user.save(update_fields=["is_platform_admin"])
+        logger.warning("Granted platform admin to %s via PLATFORM_ADMIN_EMAILS", email)
+
+
 class SendOTPView(APIView):
     permission_classes = [permissions.AllowAny]
     throttle_scope = "otp_send"
@@ -139,6 +151,13 @@ class SendOTPView(APIView):
         if wait > 0:
             return api_response(
                 False, f"Please wait {wait}s before requesting another code.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        if OTPCode.sends_in_last_hour(identifier) >= OTPCode.MAX_SENDS_PER_HOUR:
+            return api_response(
+                False,
+                "Too many codes have been requested for this email. Please try again in an hour.",
                 status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
@@ -227,6 +246,7 @@ class VerifyOTPView(APIView):
             user.last_login_at = timezone.now()
             user.is_verified = True
             user.save(update_fields=["last_login_at", "is_verified"])
+            _grant_platform_admin_if_listed(user)
 
             LoginActivity.objects.create(
                 user=user,
@@ -291,6 +311,7 @@ class GoogleLoginView(APIView):
             user.last_login_at = timezone.now()
             user.is_verified = True
             user.save(update_fields=["last_login_at", "is_verified"])
+            _grant_platform_admin_if_listed(user)
 
             LoginActivity.objects.create(
                 user=user,

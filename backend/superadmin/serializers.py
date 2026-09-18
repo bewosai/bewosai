@@ -1,4 +1,9 @@
+from datetime import timedelta
+
+from django.utils import timezone
 from rest_framework import serializers
+
+from accounts.serializers import UserSerializer
 from .models import SupportTicket, Announcement, Feature, License, LicenseAuditLog, ActivityLog
 
 
@@ -84,3 +89,36 @@ class ActivityLogSerializer(serializers.ModelSerializer):
             "action", "model_name", "object_repr", "created_at",
         )
         read_only_fields = fields
+
+
+class AdminUserSerializer(UserSerializer):
+    """A user as Super Admin's Users list sees them: the usual profile fields plus
+    how they use the app — last sign-in, last activity, sign-in count, and the
+    device/IP of the latest sign-in. The three annotated values (login_count,
+    last_login_ip, last_login_ua) are added by UserManagementView's queryset."""
+
+    # Recent enough to call someone "online": last_active_at is only written every
+    # ~5 minutes (accounts.authentication), so allow that lag plus a margin.
+    ONLINE_WINDOW = timedelta(minutes=10)
+
+    login_count = serializers.IntegerField(read_only=True, default=0)
+    last_login_ip = serializers.CharField(read_only=True, default=None, allow_null=True)
+    last_login_device = serializers.SerializerMethodField()
+    is_online = serializers.SerializerMethodField()
+
+    class Meta(UserSerializer.Meta):
+        fields = UserSerializer.Meta.fields + (
+            "last_login_at", "last_active_at", "login_count", "last_login_ip", "last_login_device", "is_online",
+        )
+        read_only_fields = fields
+
+    def get_last_login_device(self, obj):
+        ua = getattr(obj, "last_login_ua", None)
+        if not ua:
+            return None
+        from .views import _device_label  # local import: views imports this module
+
+        return _device_label(ua)
+
+    def get_is_online(self, obj):
+        return bool(obj.last_active_at and timezone.now() - obj.last_active_at <= self.ONLINE_WINDOW)

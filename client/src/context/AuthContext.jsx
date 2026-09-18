@@ -78,6 +78,7 @@ export function AuthProvider({ children }) {
         isNew: data.is_new_user,
         needsProfileSetup: data.needs_profile_setup,
         accountType: data.user.account_type,
+        isPlatformAdmin: !!data.user.is_platform_admin,
         businesses: data.businesses,
       };
     } catch (err) {

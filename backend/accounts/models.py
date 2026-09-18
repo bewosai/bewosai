@@ -55,6 +55,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
+    # When this account last made an authenticated request (see
+    # accounts.authentication.TrackedJWTAuthentication). last_login_at only moves
+    # when someone signs in, but sessions last up to 30 days — so it goes stale
+    # for anyone actively using the app. This is the "really last seen" time.
+    last_active_at = models.DateTimeField(null=True, blank=True)
     # Platform-admin-only override of BusinessListCreateView's plan-based
     # business-count cap (FREE=2/PREMIUM=5) for this user specifically — set
     # via superadmin.UserActionView's "set_business_limit" action. Null means
@@ -108,6 +113,16 @@ class OTPCode(models.Model):
             expires_at=timezone.now() + timedelta(minutes=10),
         )
         return otp, code
+
+    # Codes one email address can be sent per rolling hour. The 60s cooldown stops
+    # rapid resends; this stops someone slowly filling a stranger's inbox.
+    MAX_SENDS_PER_HOUR = 8
+
+    @classmethod
+    def sends_in_last_hour(cls, identifier):
+        return cls.objects.filter(
+            identifier=identifier, created_at__gte=timezone.now() - timedelta(hours=1),
+        ).count()
 
     @classmethod
     def seconds_until_resend(cls, identifier):

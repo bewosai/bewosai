@@ -4,7 +4,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db import models
-from django.db.models import Count, Sum
+from django.db.models import Count, F, OuterRef, Q, Subquery, Sum
 from django.utils import timezone
 
 from accounts.models import User, Business, LoginActivity
@@ -17,7 +17,7 @@ from .models import (
 )
 from .serializers import (
     SupportTicketSerializer, AnnouncementSerializer, FeatureSerializer,
-    LicenseSerializer, LicenseAuditLogSerializer, ActivityLogSerializer,
+    LicenseSerializer, LicenseAuditLogSerializer, ActivityLogSerializer, AdminUserSerializer,
 )
 
 
@@ -178,19 +178,31 @@ class BusinessActionView(APIView):
 class UserManagementView(APIView):
     permission_classes = [IsPlatformAdmin]
 
+    # ?ordering= values the Users list can be sorted by. Anything else falls back to
+    # newest first, so a stray parameter can never reach the query.
+    ORDERINGS = {
+        "created": ("-created_at",),
+        "active": (F("last_active_at").desc(nulls_last=True), "-created_at"),
+        "login": (F("last_login_at").desc(nulls_last=True), "-created_at"),
+        "logins": ("-login_count", "-created_at"),
+        "name": ("name", "-created_at"),
+    }
+
     def get(self, request):
-        search = request.query_params.get("search", "")
-        qs = User.objects.all().order_by("-created_at")
+        search = request.query_params.get("search", "").strip()
+        latest_login = LoginActivity.objects.filter(user=OuterRef("pk"), success=True).order_by("-timestamp")
+        qs = User.objects.annotate(
+            login_count=Count("login_activities", filter=Q(login_activities__success=True)),
+            last_login_ip=Subquery(latest_login.values("ip_address")[:1]),
+            last_login_ua=Subquery(latest_login.values("user_agent")[:1]),
+        )
         if search:
-            qs = (
-                qs.filter(email__icontains=search)
-                | qs.filter(name__icontains=search)
-                | qs.filter(phone__icontains=search)
-            )
+            qs = qs.filter(Q(email__icontains=search) | Q(name__icontains=search) | Q(phone__icontains=search))
+        qs = qs.order_by(*self.ORDERINGS.get(request.query_params.get("ordering"), self.ORDERINGS["created"]))
 
         paginator = LargePageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
-        return paginator.get_paginated_response(UserSerializer(page, many=True).data)
+        return paginator.get_paginated_response(AdminUserSerializer(page, many=True).data)
 
 
 class UserActionView(APIView):

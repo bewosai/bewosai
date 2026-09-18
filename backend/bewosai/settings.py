@@ -155,7 +155,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "accounts.authentication.TrackedJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
@@ -173,11 +173,19 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": (
         "rest_framework.throttling.ScopedRateThrottle",
     ),
+    # Limits are per IP address, and phone networks / shop or office WiFi put
+    # many real people behind one address — 5 code requests an hour used to lock
+    # everyone on that address out with "Request was throttled". They're now a
+    # backstop against floods only; the real protections are per email (a 60s
+    # cooldown and an hourly cap in SendOTPView) and per code (a limit on wrong
+    # guesses in OTPCode.verify_and_consume). "otp_verify" is shared by email
+    # sign-in, Google sign-in, staff login links and coupons.
     "DEFAULT_THROTTLE_RATES": (
-        {"otp_send": "60/hour", "otp_verify": "120/hour"}
+        {"otp_send": "300/hour", "otp_verify": "600/hour"}
         if DEBUG else
-        {"otp_send": "5/hour", "otp_verify": "20/hour"}
+        {"otp_send": "40/hour", "otp_verify": "300/hour"}
     ),
+    "EXCEPTION_HANDLER": "bewosai.exceptions.api_exception_handler",
 }
 
 SPECTACULAR_SETTINGS = {
@@ -255,6 +263,15 @@ CORS_ALLOW_HEADERS = [
     "x-requested-with",
     "x-business-id",  # Flutter app business context header
     "x-platform",     # "web" (React) / "mobile" (Flutter) — feature-flag platform targeting
+]
+
+# Emails (comma-separated, e.g. "a@x.com,b@y.com") that become platform admins
+# (Super Admin) when they sign in — via a verified email code or Google. Kept in
+# an environment variable rather than in code so who has admin rights is a
+# deployment decision, not something committed to the repo. This only ever
+# grants; to take admin away, untick it in Super Admin (or Django admin).
+PLATFORM_ADMIN_EMAILS = [
+    e.strip().lower() for e in config("PLATFORM_ADMIN_EMAILS", default="").split(",") if e.strip()
 ]
 
 SENDGRID_API_KEY = config("SENDGRID_API_KEY", default="")

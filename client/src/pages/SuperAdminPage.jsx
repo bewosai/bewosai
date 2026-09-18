@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "../utils/translations";
 import { useNavigate } from "react-router-dom";
 import { adToBS, formatBS } from "../utils/nepaliDate";
+import { formatNepalDateTime, timeAgo } from "../utils/dates";
 import {
   Users, Building2, ShieldCheck, CheckCircle2, XCircle, X,
   CalendarDays, ChevronLeft, ChevronRight, Plus, Edit2,
@@ -1097,28 +1098,47 @@ function UsersTab({ onCountChange }) {
   const [deletingUser, setDeletingUser] = useState(null);
   const [deleteError, setDeleteError] = useState("");
   const [acting, setActing] = useState(false);
+  // Most recently active first: the point of this list is "who's using the app".
+  const [ordering, setOrdering] = useState("active");
+  const [loadError, setLoadError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  // Ticks every 30s so "5 min ago" keeps counting between refreshes.
+  const [now, setNow] = useState(Date.now());
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // `silent` refreshes (the auto-refresh) keep the table on screen instead of
+  // flashing a spinner every minute.
+  const load = useCallback(async (silent = false) => {
+    if (silent) setRefreshing(true); else setLoading(true);
     try {
-      const params = { page, page_size: USER_PAGE_SIZE };
+      const params = { page, page_size: USER_PAGE_SIZE, ordering };
       if (debouncedSearch) params.search = debouncedSearch;
       const { data } = await adminApi.users(params);
       const results = data?.results ?? data ?? [];
       const total = data?.count ?? results.length;
       setRows(results);
       setCount(total);
+      setLoadError("");
+      setUpdatedAt(new Date());
       onCountChange?.(total);
-    } catch {
-      setRows([]);
-      setCount(0);
+    } catch (e) {
+      // Say so: an empty table used to look exactly like "no users".
+      setLoadError(e.response?.data?.detail || e.response?.data?.error || "Couldn't load users. Check your connection and try again.");
+      if (!silent) { setRows([]); setCount(0); }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, ordering]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setPage(1); }, [debouncedSearch]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, ordering]);
+  // Keep the login data current without anyone pressing anything.
+  useEffect(() => {
+    const refresh = setInterval(() => load(true), 60000);
+    const tick = setInterval(() => setNow(Date.now()), 30000);
+    return () => { clearInterval(refresh); clearInterval(tick); };
+  }, [load]);
 
   const doDelete = async () => {
     setActing(true);
@@ -1141,11 +1161,33 @@ function UsersTab({ onCountChange }) {
           <input className="w-full rounded-lg bg-navy-800 border border-navy-700 pl-9 pr-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
             placeholder="Search by name, email or phone..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
-          <Plus className="h-4 w-4" /> New User
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={ordering} onChange={e => setOrdering(e.target.value)}
+            className="rounded-lg bg-navy-800 border border-navy-700 px-2.5 py-2 text-xs text-navy-200 focus:border-orange-500 focus:outline-none">
+            <option value="active">Recently active</option>
+            <option value="login">Latest sign-in</option>
+            <option value="logins">Most sign-ins</option>
+            <option value="created">Newest accounts</option>
+            <option value="name">Name A–Z</option>
+          </select>
+          <button onClick={() => load(true)} disabled={refreshing || loading} title="Refresh now"
+            className="flex items-center gap-1.5 rounded-lg border border-navy-700 px-2.5 py-2 text-xs text-navy-300 hover:border-orange-500/40 hover:text-orange-400 disabled:opacity-50 transition">
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            {updatedAt ? `Updated ${updatedAt.toLocaleTimeString("en-GB", { timeZone: "Asia/Kathmandu", hour: "numeric", minute: "2-digit", hour12: true })}` : "Refresh"}
+          </button>
+          <button onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
+            <Plus className="h-4 w-4" /> New User
+          </button>
+        </div>
       </div>
+
+      {loadError && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+          <span>{loadError}</span>
+          <button onClick={() => load()} className="shrink-0 rounded border border-red-400/40 px-2 py-1 font-semibold hover:bg-red-500/20">Retry</button>
+        </div>
+      )}
 
       <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
         {loading ? (
@@ -1158,6 +1200,9 @@ function UsersTab({ onCountChange }) {
               <thead>
                 <tr className="border-b border-navy-800 text-left text-xs text-navy-500">
                   <th className="px-4 py-3 font-medium">User</th>
+                  <th className="px-4 py-3 font-medium">Last active</th>
+                  <th className="px-4 py-3 font-medium">Last sign-in</th>
+                  <th className="px-4 py-3 font-medium text-center">Sign-ins</th>
                   <th className="px-4 py-3 font-medium">Type</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium text-right">Actions</th>
@@ -1184,6 +1229,24 @@ function UsersTab({ onCountChange }) {
                         </div>
                       </div>
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap" title={u.last_active_at ? formatNepalDateTime(u.last_active_at) : "Hasn't used the app since activity tracking began"}>
+                      {u.is_online ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-400">
+                          <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" /> Online now
+                        </span>
+                      ) : (
+                        <span className={`text-xs ${u.last_active_at ? "text-navy-300" : "text-navy-600"}`}>{timeAgo(u.last_active_at, now)}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {u.last_login_at ? (
+                        <>
+                          <p className="text-xs text-navy-300" title={formatNepalDateTime(u.last_login_at)}>{timeAgo(u.last_login_at, now)}</p>
+                          <p className="text-[10px] text-navy-500">{[u.last_login_device, u.last_login_ip].filter(Boolean).join(" · ")}</p>
+                        </>
+                      ) : <span className="text-xs text-navy-600">Never signed in</span>}
+                    </td>
+                    <td className="px-4 py-3 text-center text-xs text-navy-300">{u.login_count ?? 0}</td>
                     <td className="px-4 py-3 text-navy-300 capitalize">{u.account_type}</td>
                     <td className="px-4 py-3"><Badge label={u.is_active ? "Active" : "Inactive"} color={u.is_active ? "green" : "red"} /></td>
                     <td className="px-4 py-3">
