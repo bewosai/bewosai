@@ -803,7 +803,7 @@ export default function ReportsPage() {
                     </div>
                     {agingData.top_debtors.map((d, i) => (
                       <div key={d.customer_id ?? i} className="grid grid-cols-12 gap-2 items-center px-4 py-3 border-t border-navy-800/30 hover:bg-navy-800/20 text-xs min-w-160">
-                        <div className="col-span-6 text-white truncate">{d.customer__name || "Walk-in"}</div>
+                        <div className="col-span-6 text-white truncate">{d.customer__name || "Cash Sales"}</div>
                         <div className="col-span-3 text-right text-navy-400">{d.invoice_count}</div>
                         <div className="col-span-3 text-right text-red-400 font-semibold">Rs. {parseFloat(d.total_due || 0).toLocaleString()}</div>
                       </div>

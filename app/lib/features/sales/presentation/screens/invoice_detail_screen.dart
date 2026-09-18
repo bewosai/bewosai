@@ -68,7 +68,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     if (s == null) return;
     final text = Uri.encodeComponent(
       'Invoice ${s.invoiceNumber}\n'
-      'Customer: ${s.customerName.isNotEmpty ? s.customerName : 'Walk-in'}\n'
+      'Customer: ${s.customerName.isNotEmpty ? s.customerName : 'Cash Sales'}\n'
       'Total: ${Formatters.currency(s.total)}\n'
       'Paid: ${Formatters.currency(s.paidAmount)}\n'
       'Due: ${Formatters.currency(s.dueAmount)}',
@@ -97,7 +97,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         businessVat: business?.vatNumber ?? '',
         number: s.invoiceNumber,
         partyLabel: 'Customer',
-        partyName: s.customerName.isNotEmpty ? s.customerName : 'Walk-in',
+        partyName: s.customerName.isNotEmpty ? s.customerName : 'Cash Sales',
         partyPan: s.partyPan,
         partyAddress: s.partyAddress,
         partyPhone: s.partyPhone,
@@ -201,7 +201,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                       Text(
                         s.customerName.isNotEmpty
                             ? s.customerName
-                            : 'Walk-in Customer',
+                            : 'Cash Sales',
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       if (s.partyPhone.isNotEmpty)

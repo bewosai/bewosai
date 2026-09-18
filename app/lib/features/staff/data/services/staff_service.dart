@@ -11,7 +11,7 @@ const _fullAccess = {'view': true, 'create': true, 'edit': true, 'delete': true}
 const _viewOnly = {'view': true, 'create': false, 'edit': false, 'delete': false};
 const _noAccess = {'view': false, 'create': false, 'edit': false, 'delete': false};
 
-Map<String, dynamic> _defaultPermissionsFor(String role) {
+Map<String, dynamic> defaultPermissionsFor(String role) {
   switch (role) {
     case 'MANAGER':
       return {
@@ -72,7 +72,7 @@ class StaffService {
       final res = await _dio.post('/auth/businesses/$businessId/staff/', data: {
         'name': name,
         'role': role,
-        'permissions': _defaultPermissionsFor(role),
+        'permissions': defaultPermissionsFor(role),
       });
       return StaffMember.fromJson(res.data as Map<String, dynamic>);
     } catch (e) {

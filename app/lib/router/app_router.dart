@@ -48,7 +48,7 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
         builder: (context, state) {
           final tab = int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
           final subtab = int.tryParse(state.uri.queryParameters['subtab'] ?? '') ?? 0;
-          return MainShell(initialIndex: tab, initialSubTab: subtab);
+          return MainShell(initialIndex: tab, initialSubTab: subtab, navToken: state.uri.queryParameters['t'] ?? '');
         },
       ),
       GoRoute(

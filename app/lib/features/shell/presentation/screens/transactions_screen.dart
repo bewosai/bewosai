@@ -11,7 +11,10 @@ class TransactionsScreen extends StatefulWidget {
   /// 0 = Sales, 1 = Purchases — which sub-tab to land on (e.g. the
   /// Dashboard's "Purchase (This Month)" card jumps here on index 1).
   final int initialSubTab;
-  const TransactionsScreen({super.key, this.initialSubTab = 0});
+  /// See MainShell.navToken: a new value re-applies [initialSubTab] even when it
+  /// is the same as last time (the user may have switched sub-tab by hand since).
+  final String requestToken;
+  const TransactionsScreen({super.key, this.initialSubTab = 0, this.requestToken = ''});
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -32,7 +35,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     // once built, so re-landing here (e.g. the Home screen's "Purchase"
     // shortcut going to subtab 1 a second time) only updates this prop —
     // it never recreates _tabController's initialIndex above.
-    if (widget.initialSubTab != oldWidget.initialSubTab) {
+    if (widget.initialSubTab != oldWidget.initialSubTab || widget.requestToken != oldWidget.requestToken) {
       _tabController.index = widget.initialSubTab.clamp(0, 1);
     }
   }

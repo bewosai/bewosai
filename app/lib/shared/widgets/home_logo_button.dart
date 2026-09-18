@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../router/dashboard_route.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 
 /// Business-avatar "logo" shown in every pushed screen's AppBar — tapping it
@@ -20,7 +21,7 @@ class HomeLogoButton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () => context.go('/dashboard'),
+        onTap: () => context.go(dashboardLocation()),
         child: CircleAvatar(
           radius: 16,
           backgroundColor: AppColors.orangeLight,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../router/dashboard_route.dart';
 
 /// Same 5 tabs as [MainShell]'s bar, reused on every pushed screen so the
 /// bottom nav stays visible and functional app-wide. Tapping a tab jumps
@@ -29,7 +30,7 @@ class AppBottomNav extends StatelessWidget {
           currentIndex: currentIndex,
           onTap: (i) {
             HapticFeedback.selectionClick();
-            context.go('/dashboard?tab=$i');
+            context.go(dashboardLocation(tab: i));
           },
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Home'),

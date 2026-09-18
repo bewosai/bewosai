@@ -2,10 +2,13 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/features/feature_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../router/dashboard_route.dart';
 import '../../../../shared/widgets/announcement_banner.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/nepal_clock.dart';
 import '../../../auth/data/models/business_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../banking/presentation/providers/banking_provider.dart';
@@ -14,10 +17,12 @@ import '../../../inventory/presentation/screens/inventory_screen.dart';
 import '../../../parties/presentation/screens/parties_screen.dart';
 import '../../../parties/presentation/screens/party_payment_form.dart';
 import '../../../purchases/presentation/providers/purchase_provider.dart';
+import '../../../purchases/presentation/screens/purchase_return_screen.dart';
 import '../../../reports/data/models/report_models.dart';
 import '../../../reports/presentation/providers/report_provider.dart';
 import '../../../reports/presentation/screens/reports_screen.dart';
 import '../../../sales/presentation/screens/pos/quick_pos_screen.dart';
+import '../../../sales/presentation/screens/sales_return_screen.dart';
 
 /// Presentation only.
 /// Data: ReportProvider / PurchaseProvider / BankingProvider / AuthProvider
@@ -94,6 +99,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   padding: EdgeInsets.all(padding),
                   children: [
                     const AnnouncementBanner(),
+                    const NepalClock(),
+                    const SizedBox(height: 14),
                     _StatGrid(dashboard: d, isTablet: isTablet),
                     const SizedBox(height: 20),
                     const _ExploreAppRow(),
@@ -200,7 +207,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                     .customerName
                                                     .isNotEmpty
                                                 ? d.recentSales[i].customerName
-                                                : 'Walk-in',
+                                                : 'Cash Sales',
                                             style: TextStyle(
                                               color: AppColors.textSecondary,
                                               fontSize: 12,
@@ -274,12 +281,12 @@ class _StatGrid extends StatelessWidget {
           // Sales/Purchases aren't standalone routes — they're sub-tabs of
           // the "Transactions" shell tab (see TransactionsScreen). go()
           // (not push()) replaces the stack, same as tapping the bottom nav.
-          onTap: () => context.go('/dashboard?tab=1&subtab=0'),
+          onTap: () => context.go(dashboardLocation(tab: 1, subtab: 0)),
         ),
         _StatCard(
           value: Formatters.currency(purchaseMonth),
           label: 'Purchase (This Month)',
-          onTap: () => context.go('/dashboard?tab=1&subtab=1'),
+          onTap: () => context.go(dashboardLocation(tab: 1, subtab: 1)),
         ),
         _StatCard(
           value: Formatters.currency(d.expensesMonth),
@@ -622,6 +629,7 @@ class _ShortcutsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final features = context.watch<FeatureProvider>();
     final shortcuts = <_ShortcutItem>[
       _ShortcutItem(
         Icons.person_add_alt_outlined,
@@ -652,8 +660,27 @@ class _ShortcutsGrid extends StatelessWidget {
       _ShortcutItem(
         Icons.shopping_bag_outlined,
         'Purchase',
-        () => context.go('/dashboard?tab=1&subtab=1'),
+        () => context.go(dashboardLocation(tab: 1, subtab: 1)),
       ),
+      // Goods coming back: from a customer (stock restored) or going back to a
+      // supplier (stock reduced). Each opens its form directly; hidden if the
+      // owner has switched that module off.
+      if (features.isEnabled('pos'))
+        _ShortcutItem(
+          Icons.assignment_return_outlined,
+          'Sales Return',
+          () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SalesReturnFormScreen()),
+          ),
+        ),
+      if (features.isEnabled('purchases'))
+        _ShortcutItem(
+          Icons.undo_outlined,
+          'Purchase Return',
+          () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PurchaseReturnFormScreen()),
+          ),
+        ),
       _ShortcutItem(
         Icons.inventory_2_outlined,
         'Add Item',

@@ -111,7 +111,7 @@ function PrintModal({ sale, onClose }) {
         dueDate={sale.due_date}
         business={{ name: businessName, address: businessAddress, phone: businessPhone, logo: businessLogo, pan: businessPan, vat: businessVat }}
         billToLabel="Bill To"
-        billTo={{ name: sale.customer_name || sale.party_name || "Walk-in", address: sale.party_address, phone: sale.party_phone }}
+        billTo={{ name: sale.customer_name || sale.party_name || "Cash Sales", address: sale.party_address, phone: sale.party_phone }}
         items={items.map(item => ({
           description: item.product_name || item.name,
           quantity: item.unit_label ? `${item.quantity} ${item.unit_label}` : item.quantity,
@@ -354,7 +354,14 @@ function SaleModal({ onClose, onSaved, editData }) {
 
   const handleSubmit = async (statusOverride) => {
     setError("");
-    if (!form.customer_id && !form.customer_name) { setError("Please select a customer."); return; }
+    // No customer = a Cash Sale. It has to be paid in full: an unpaid balance (or an
+    // overpayment) with nobody attached to it would never show up as anyone's
+    // To Receive / To Give.
+    const isCashSale = !form.customer_id && !form.customer_name;
+    if (isCashSale && Math.abs(grandTotal - (parseFloat(form.paid_amount) || 0)) > 0.005) {
+      setError("A Cash Sale must be paid in full. Choose a customer to leave a balance due.");
+      return;
+    }
     if (form.items.some(it => !it.product_id || !it.quantity || it.quantity <= 0)) {
       setError("Please select a product and a valid quantity for every item.");
       return;
@@ -433,12 +440,17 @@ function SaleModal({ onClose, onSaved, editData }) {
           {/* Customer + Invoice # */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="relative">
-              <label className="mb-1 block text-xs font-semibold text-navy-400">Customer *</label>
+              <label className="mb-1 block text-xs font-semibold text-navy-400">Customer <span className="font-normal text-navy-500">(leave empty for Cash Sales)</span></label>
               <input
                 className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
-                placeholder="Search customer..."
+                placeholder="Cash Sales — or search a customer..."
                 value={customerSearch}
-                onChange={e => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }}
+                onChange={e => {
+                  setCustomerSearch(e.target.value);
+                  setShowCustomerDropdown(true);
+                  // Erasing the box means "no customer" — don't keep the old one selected behind it.
+                  if (e.target.value === "") setForm(f => ({ ...f, customer_id: "", customer_name: "" }));
+                }}
                 onFocus={() => setShowCustomerDropdown(true)}
               />
               {showCustomerDropdown && (
@@ -449,6 +461,14 @@ function SaleModal({ onClose, onSaved, editData }) {
                       setShowQuickAddCustomer(true);
                     }}>
                     <Plus size={14} /> Add New Customer{customerSearch ? ` "${customerSearch}"` : ""}
+                  </button>
+                  <button className="w-full px-3 py-2 text-left text-sm font-semibold text-white hover:bg-navy-700 border-t border-navy-700/50"
+                    onMouseDown={() => {
+                      setForm(f => ({ ...f, customer_id: "", customer_name: "" }));
+                      setCustomerSearch("");
+                      setShowCustomerDropdown(false);
+                    }}>
+                    Cash Sales <span className="text-navy-500 text-xs font-normal">· no customer, paid in full</span>
                   </button>
                   {filteredCustomers.slice(0, 20).map(c => (
                     <button key={c.id} className="w-full px-3 py-2 text-left text-sm text-white hover:bg-navy-700 border-t border-navy-700/50"
@@ -880,7 +900,7 @@ function SavedModal({ sale, onPrint, onShare, onNew, onClose }) {
         <div>
           <h2 className="text-lg font-bold text-white">Invoice Saved</h2>
           <p className="mt-1 text-sm text-navy-400">
-            #{sale.invoice_number || sale.id} · {sale.customer_name || sale.party_name || "Walk-in"} · Rs. {parseFloat(sale.total ?? sale.total_amount ?? 0).toLocaleString()}
+            #{sale.invoice_number || sale.id} · {sale.customer_name || sale.party_name || "Cash Sales"} · Rs. {parseFloat(sale.total ?? sale.total_amount ?? 0).toLocaleString()}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -1031,7 +1051,7 @@ export default function SalesPage() {
   };
 
   const shareWhatsApp = (sale) => {
-    const msg = `Invoice #${sale.invoice_number || sale.id}\nCustomer: ${sale.customer_name || sale.party_name || "Walk-in"}\nDate: ${sale.sale_date || sale.date}\nTotal: Rs. ${parseFloat(sale.total ?? sale.total_amount ?? 0).toFixed(2)}\nPaid: Rs. ${parseFloat(sale.paid_amount || 0).toFixed(2)}\nDue: Rs. ${parseFloat(sale.due_amount || 0).toFixed(2)}\nStatus: ${sale.status}`;
+    const msg = `Invoice #${sale.invoice_number || sale.id}\nCustomer: ${sale.customer_name || sale.party_name || "Cash Sales"}\nDate: ${sale.sale_date || sale.date}\nTotal: Rs. ${parseFloat(sale.total ?? sale.total_amount ?? 0).toFixed(2)}\nPaid: Rs. ${parseFloat(sale.paid_amount || 0).toFixed(2)}\nDue: Rs. ${parseFloat(sale.due_amount || 0).toFixed(2)}\nStatus: ${sale.status}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -1136,7 +1156,7 @@ export default function SalesPage() {
                   #{sale.invoice_number || sale.id}
                 </div>
                 <div className="col-span-12 sm:col-span-2 text-white truncate">
-                  {sale.customer_name || sale.party_name || "Walk-in"}
+                  {sale.customer_name || sale.party_name || "Cash Sales"}
                 </div>
                 <div className="col-span-12 sm:col-span-1 text-navy-400 text-xs">
                   {formatDate(sale.sale_date || sale.date, dateMode, language)}

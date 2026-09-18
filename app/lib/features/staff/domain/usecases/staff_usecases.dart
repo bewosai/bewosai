@@ -1,5 +1,6 @@
 import '../../data/models/staff_model.dart';
 import '../../data/repositories/staff_repository_impl.dart';
+import '../../data/services/staff_service.dart' show defaultPermissionsFor;
 import '../repositories/staff_repository.dart';
 
 class StaffUseCases {
@@ -11,8 +12,14 @@ class StaffUseCases {
   Future<StaffMember> inviteStaff({required int businessId, required String name, String role = 'CASHIER'}) =>
       _repository.invite(businessId: businessId, name: name, role: role);
 
+  // The role and its permission matrix have to change together: the backend
+  // enforces the stored matrix (not the role label), so sending only the role
+  // would leave e.g. a promoted Cashier still restricted like a Cashier.
   Future<StaffMember> updateRole(int businessId, int staffId, String role) =>
-      _repository.updateStaff(businessId, staffId, role: role);
+      _repository.updateStaff(businessId, staffId, role: role, permissions: defaultPermissionsFor(role));
+
+  Future<StaffMember> setActive(int businessId, int staffId, bool active) =>
+      _repository.updateStaff(businessId, staffId, isActive: active);
 
   Future<void> removeStaff(int businessId, int staffId) => _repository.remove(businessId, staffId);
 

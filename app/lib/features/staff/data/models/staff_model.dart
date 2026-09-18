@@ -42,5 +42,11 @@ class StaffMember {
         loginToken: json['login_token'] as String?,
       );
 
-  String get initial => userName.isNotEmpty ? userName[0].toUpperCase() : userEmail[0].toUpperCase();
+  // Never indexes into an empty string: a link-only staff member has no email,
+  // and a blank name would otherwise crash the whole Staff list.
+  String get initial {
+    if (userName.isNotEmpty) return userName[0].toUpperCase();
+    if (userEmail.isNotEmpty) return userEmail[0].toUpperCase();
+    return '?';
+  }
 }

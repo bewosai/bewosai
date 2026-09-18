@@ -1,81 +1,81 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../../../core/calendar/nepal_time.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../../shared/widgets/return_lines.dart';
-import '../../data/models/purchase_model.dart';
-import '../providers/purchase_provider.dart';
-import '../../../../core/calendar/nepal_time.dart';
+import '../../data/models/sale_model.dart';
+import '../../data/services/sale_service.dart';
+import '../providers/sale_provider.dart';
 
-/// Mirrors the web app's Purchase Return page: pick a bill, pick which line
-/// items and how much of each to return, stock is decremented automatically
-/// server-side (goods going back to the supplier) — see
-/// PurchaseReturnSerializer.create() on the backend.
-class PurchaseReturnScreen extends StatefulWidget {
-  const PurchaseReturnScreen({super.key});
+/// Sales Return: goods a customer sends back. Pick the invoice, choose how
+/// much of each line comes back, and the stock is restored automatically on
+/// the server (see SaleReturnSerializer.create). Mirrors [PurchaseReturnScreen].
+class SalesReturnScreen extends StatefulWidget {
+  const SalesReturnScreen({super.key});
 
   @override
-  State<PurchaseReturnScreen> createState() => _PurchaseReturnScreenState();
+  State<SalesReturnScreen> createState() => _SalesReturnScreenState();
 }
 
-class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
+class _SalesReturnScreenState extends State<SalesReturnScreen> {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PurchaseProvider>().loadReturns();
-      // Needed by the "pick a bill" sheet in the form screen.
-      final pp = context.read<PurchaseProvider>();
-      if (pp.purchases.isEmpty) pp.load();
+      final sp = context.read<SaleProvider>();
+      sp.loadReturns();
+      if (sp.sales.isEmpty) sp.load(); // the "pick an invoice" list
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final pp = context.watch<PurchaseProvider>();
+    final sp = context.watch<SaleProvider>();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Purchase Return'),
+        title: const Text('Sales Return'),
         actions: const [HomeLogoButton()],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'purchase_return_fab',
+        heroTag: 'sales_return_fab',
         onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const PurchaseReturnFormScreen()),
+          MaterialPageRoute(builder: (_) => const SalesReturnFormScreen()),
         ),
         icon: const Icon(Icons.add),
         label: const Text('New Return'),
       ),
       body: ResponsiveBody(
         child: RefreshIndicator(
-          onRefresh: () => context.read<PurchaseProvider>().loadReturns(),
-          child: pp.isLoadingReturns && pp.returns.isEmpty
+          onRefresh: () => context.read<SaleProvider>().loadReturns(),
+          child: sp.isLoadingReturns && sp.returns.isEmpty
               ? const LoadingView()
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    if (pp.returns.isEmpty && pp.error != null)
+                    if (sp.returns.isEmpty && sp.returnsError != null)
                       EmptyState(
                         icon: Icons.error_outline,
                         title: 'Could not load returns',
-                        message: pp.error!,
+                        message: sp.returnsError!,
                         action: PrimaryButton(
                           label: 'Retry',
                           expand: false,
-                          onPressed: () => context.read<PurchaseProvider>().loadReturns(),
+                          onPressed: () => context.read<SaleProvider>().loadReturns(),
                         ),
                       )
-                    else if (pp.returns.isEmpty)
+                    else if (sp.returns.isEmpty)
                       const EmptyState(
                         icon: Icons.assignment_return_outlined,
-                        title: 'No return records found',
-                        message: 'Product returns to suppliers and automatic stock adjustment.',
+                        title: 'No sales returns yet',
+                        message: 'Goods customers send back, with the stock added back automatically.',
                       )
                     else
-                      ...pp.returns.map(
+                      ...sp.returns.map(
                         (r) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: AppCard(
@@ -96,13 +96,13 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Bill: ${r.originalPurchaseNumber.isNotEmpty ? r.originalPurchaseNumber : r.originalPurchase}',
+                                        'Invoice: ${r.invoiceNumber.isNotEmpty ? r.invoiceNumber : r.originalSale}',
                                         style: const TextStyle(fontWeight: FontWeight.w600),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
                                         '${Formatters.date(r.returnDate)} · ${r.reason.isNotEmpty ? r.reason : 'No reason given'}',
-                                        style: TextStyle(fontSize: 12, color: AppColors.navy500),
+                                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                                       ),
                                     ],
                                   ),
@@ -115,7 +115,7 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                                       style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.error),
                                     ),
                                     const SizedBox(height: 2),
-                                    const Text('Stock Adjusted', style: TextStyle(fontSize: 11, color: AppColors.success)),
+                                    const Text('Stock Restored', style: TextStyle(fontSize: 11, color: AppColors.success)),
                                   ],
                                 ),
                               ],
@@ -123,6 +123,7 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                           ),
                         ),
                       ),
+                    const SizedBox(height: 80),
                   ],
                 ),
         ),
@@ -132,17 +133,17 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
 }
 
 /// The "record a return" form. Public so the Dashboard's Quick Entry can open it
-/// directly; [purchase] pre-selects the bill.
-class PurchaseReturnFormScreen extends StatefulWidget {
-  final Purchase? purchase;
-  const PurchaseReturnFormScreen({super.key, this.purchase});
+/// directly; [sale] pre-selects the invoice (e.g. from an invoice's own page).
+class SalesReturnFormScreen extends StatefulWidget {
+  final Sale? sale;
+  const SalesReturnFormScreen({super.key, this.sale});
 
   @override
-  State<PurchaseReturnFormScreen> createState() => _PurchaseReturnFormScreenState();
+  State<SalesReturnFormScreen> createState() => _SalesReturnFormScreenState();
 }
 
-class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
-  Purchase? _originalPurchase;
+class _SalesReturnFormScreenState extends State<SalesReturnFormScreen> {
+  Sale? _sale;
   List<ReturnLine> _lines = [];
   DateTime _returnDate = NepalTime.now();
   final _reasonController = TextEditingController();
@@ -154,14 +155,14 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final pp = context.read<PurchaseProvider>();
+      final sp = context.read<SaleProvider>();
       // Earlier returns decide how much of each line is still returnable, and
-      // the bill picker needs the purchases list.
-      pp.loadReturns().then((_) {
-        if (mounted && _originalPurchase != null) _buildLines(_originalPurchase!);
+      // the invoice picker needs the sales list.
+      sp.loadReturns().then((_) {
+        if (mounted && _sale != null) _buildLines(_sale!);
       });
-      if (pp.purchases.isEmpty) pp.load();
-      if (widget.purchase != null) _selectBill(widget.purchase!);
+      if (sp.sales.isEmpty) sp.load();
+      if (widget.sale != null) _selectSale(widget.sale!);
     });
   }
 
@@ -176,47 +177,58 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
 
   double get _returnAmount => ReturnLine.totalOf(_lines);
 
-  void _pickBill() {
-    final purchases = context.read<PurchaseProvider>().purchases.where((p) => p.status != 'CANCELLED').toList();
+  void _pickInvoice() {
+    // Only real, live invoices: a cancelled one has nothing to return, and one
+    // still queued offline doesn't exist on the server yet.
+    final sales = context
+        .read<SaleProvider>()
+        .sales
+        .where((s) => s.status == 'CONFIRMED' && !s.pendingSync)
+        .toList();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => SearchSheet<Purchase>(
-        title: 'Select Original Bill',
-        items: purchases,
-        labelBuilder: (p) => p.billNumber,
-        subtitleBuilder: (p) => '${p.supplierName} · ${Formatters.currency(p.total)}',
-        onSelected: _selectBill,
+      builder: (ctx) => SearchSheet<Sale>(
+        title: 'Select Invoice',
+        items: sales,
+        labelBuilder: (s) => s.invoiceNumber,
+        subtitleBuilder: (s) =>
+            '${s.customerName.isNotEmpty ? s.customerName : 'Cash Sales'} · ${Formatters.currency(s.total)}',
+        onSelected: _selectSale,
       ),
     );
   }
 
-  Future<void> _selectBill(Purchase p) async {
+  Future<void> _selectSale(Sale s) async {
     setState(() {
-      _originalPurchase = p;
+      _sale = s;
       _loadingItems = true;
       _error = null;
     });
-    // The list response doesn't reliably carry every item — fetch full detail.
-    final full = await context.read<PurchaseProvider>().getPurchase(p.id);
-    if (!mounted) return;
-    if (full == null && p.items.isEmpty) {
-      setState(() {
-        _loadingItems = false;
-        _error = "Couldn't load this bill's items. Check your connection and try again.";
-      });
-      return;
+    // The list response doesn't reliably carry every item — fetch the full invoice.
+    Sale full = s;
+    try {
+      full = await SaleService().get(s.id);
+    } catch (_) {
+      if (s.items.isEmpty && mounted) {
+        setState(() {
+          _loadingItems = false;
+          _error = "Couldn't load this invoice's items. Check your connection and try again.";
+        });
+        return;
+      }
     }
-    _originalPurchase = full ?? p;
-    _buildLines(_originalPurchase!);
+    if (!mounted) return;
+    _sale = full;
+    _buildLines(full);
   }
 
-  void _buildLines(Purchase purchase) {
+  void _buildLines(Sale sale) {
     final returned = <int, double>{};
-    for (final r in context.read<PurchaseProvider>().returns) {
-      if (r.originalPurchase != purchase.id) continue;
+    for (final r in context.read<SaleProvider>().returns) {
+      if (r.originalSale != sale.id) continue;
       for (final it in r.items) {
-        final id = it.purchaseItem;
+        final id = it.saleItem;
         if (id != null) returned[id] = (returned[id] ?? 0) + it.quantity;
       }
     }
@@ -224,7 +236,7 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
       l.dispose();
     }
     setState(() {
-      _lines = purchase.items.map((it) {
+      _lines = sale.items.map((it) {
         final left = it.quantity - (returned[it.id] ?? 0);
         return ReturnLine(
           sourceItemId: it.id,
@@ -251,27 +263,27 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
 
   Future<void> _save() async {
     setState(() => _error = null);
-    if (_originalPurchase == null) {
-      setState(() => _error = 'Select the original purchase bill.');
+    if (_sale == null) {
+      setState(() => _error = 'Select the invoice these goods were sold on.');
       return;
     }
-    final returnedLines = _lines.where((l) => l.qty > 0).toList();
-    if (returnedLines.isEmpty) {
+    final returned = _lines.where((l) => l.qty > 0).toList();
+    if (returned.isEmpty) {
       setState(() => _error = 'Enter a return quantity for at least one item.');
       return;
     }
 
     setState(() => _saving = true);
-    final purchaseReturn = PurchaseReturn(
+    final saleReturn = SaleReturn(
       id: 0,
-      originalPurchase: _originalPurchase!.id,
-      originalPurchaseNumber: _originalPurchase!.billNumber,
+      originalSale: _sale!.id,
+      invoiceNumber: _sale!.invoiceNumber,
       returnDate: _returnDate,
       reason: _reasonController.text.trim(),
-      amount: ReturnLine.totalOf(returnedLines),
-      items: returnedLines
-          .map((l) => PurchaseReturnItem(
-                purchaseItem: l.sourceItemId,
+      amount: ReturnLine.totalOf(returned),
+      items: returned
+          .map((l) => SaleReturnItem(
+                saleItem: l.sourceItemId,
                 product: l.productId,
                 productName: l.productName,
                 quantity: l.qty,
@@ -280,12 +292,12 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
           .toList(),
     );
 
-    final provider = context.read<PurchaseProvider>();
-    final ok = await provider.createReturn(purchaseReturn);
+    final provider = context.read<SaleProvider>();
+    final ok = await provider.createReturn(saleReturn);
     if (!mounted) return;
     setState(() => _saving = false);
     if (ok) {
-      showAppSnackBar(context, 'Purchase return recorded');
+      showAppSnackBar(context, 'Sales return recorded');
       Navigator.of(context).pop();
     } else {
       setState(() => _error = provider.error ?? 'Failed to save the return.');
@@ -296,7 +308,7 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Purchase Return'),
+        title: const Text('New Sales Return'),
         actions: const [HomeLogoButton()],
       ),
       body: ResponsiveBody(
@@ -324,13 +336,17 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
             AppSectionCard(
               children: [
                 InkWell(
-                  onTap: _pickBill,
+                  onTap: _pickInvoice,
                   child: InputDecorator(
                     decoration: const InputDecoration(
-                      labelText: 'Original Bill',
+                      labelText: 'Original Invoice',
                       prefixIcon: Icon(Icons.receipt_long_outlined),
                     ),
-                    child: Text(_originalPurchase?.billNumber ?? 'Select original bill'),
+                    child: Text(
+                      _sale == null
+                          ? 'Select invoice'
+                          : '${_sale!.invoiceNumber} · ${_sale!.customerName.isNotEmpty ? _sale!.customerName : 'Cash Sales'}',
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -349,11 +365,11 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
             const SizedBox(height: 16),
             if (_loadingItems)
               const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
-            else if (_originalPurchase != null && _lines.isEmpty && _error == null)
+            else if (_sale != null && _lines.isEmpty && _error == null)
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  'This bill has no items to return.',
+                  'This invoice has no items to return.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
@@ -367,7 +383,7 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
                     if (i > 0) const Divider(height: 20),
                     ReturnLineRow(
                       line: _lines[i],
-                      billedLabel: 'Bought',
+                      billedLabel: 'Sold',
                       onChanged: () => setState(() {}),
                     ),
                   ],

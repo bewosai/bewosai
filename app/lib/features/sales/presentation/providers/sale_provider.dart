@@ -82,11 +82,22 @@ class SaleProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
+  bool isLoadingReturns = false;
+  String? returnsError;
+
+  // A failed load used to be swallowed, so the Sales Return list looked the same
+  // as "no returns yet" — keep the reason so the screen can say what happened.
   Future<void> loadReturns() async {
+    isLoadingReturns = true;
+    returnsError = null;
+    notifyListeners();
     try {
       returns = await _useCases.listReturns();
-      notifyListeners();
-    } catch (_) {}
+    } catch (e) {
+      returnsError = e is ApiException ? e.message : e.toString();
+    }
+    isLoadingReturns = false;
+    notifyListeners();
   }
 
   Future<String> nextNumber() => _useCases.nextInvoiceNumber();

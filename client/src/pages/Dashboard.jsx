@@ -324,7 +324,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-white truncate">{sale.invoice_number}</p>
-                    <p className="text-xs text-navy-500">{sale.customer_name || (language === "ne" ? "वाक-इन" : "Walk-in")} · {formatDate(sale.sale_date)}</p>
+                    <p className="text-xs text-navy-500">{sale.customer_name || (language === "ne" ? "नगद बिक्री" : "Cash Sales")} · {formatDate(sale.sale_date)}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-bold text-white">{f(sale.total)}</p>

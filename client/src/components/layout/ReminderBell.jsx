@@ -199,7 +199,7 @@ export default function ReminderBell() {
                             className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-xs text-navy-300 hover:bg-navy-800/60"
                           >
                             <span className="truncate">
-                              {d.customer__name || "Walk-in"} · {d.invoice_count} invoice{d.invoice_count !== 1 ? "s" : ""}
+                              {d.customer__name || "Cash Sales"} · {d.invoice_count} invoice{d.invoice_count !== 1 ? "s" : ""}
                             </span>
                             <span className="shrink-0 font-semibold text-orange-300">{fmt(d.total_due)}</span>
                           </button>
@@ -230,7 +230,7 @@ export default function ReminderBell() {
                           className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-xs text-navy-300 hover:bg-navy-800/60"
                         >
                           <span className="truncate">
-                            {s.invoice_number} · {s.customer_name || s.party_name || "Walk-in"}
+                            {s.invoice_number} · {s.customer_name || s.party_name || "Cash Sales"}
                           </span>
                           <span className="shrink-0 font-semibold text-blue-300">Rs. {parseFloat(s.due_amount).toFixed(0)}</span>
                         </button>
@@ -257,7 +257,7 @@ export default function ReminderBell() {
                           className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-xs text-navy-300 hover:bg-navy-800/60"
                         >
                           <span className="truncate">
-                            {s.invoice_number} · {s.customer_name || s.party_name || "Walk-in"}
+                            {s.invoice_number} · {s.customer_name || s.party_name || "Cash Sales"}
                           </span>
                           <span className="shrink-0 font-semibold text-orange-300">Rs. {parseFloat(s.due_amount).toFixed(0)}</span>
                         </button>

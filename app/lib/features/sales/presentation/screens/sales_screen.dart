@@ -179,7 +179,7 @@ class _SalesScreenState extends State<SalesScreen> {
                                       ),
                                       const SizedBox(height: 3),
                                       Text(
-                                        '${s.customerName.isNotEmpty ? s.customerName : 'Walk-in'} · ${Formatters.dateShort(s.saleDate)}',
+                                        '${s.customerName.isNotEmpty ? s.customerName : 'Cash Sales'} · ${Formatters.dateShort(s.saleDate)}',
                                         style: TextStyle(
                                           color: AppColors.textSecondary,
                                           fontSize: 12,

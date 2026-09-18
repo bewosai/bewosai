@@ -19,7 +19,7 @@ class ContactScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Contact Us')),
+      appBar: AppBar(title: const Text('Contact Us'), actions: const [HomeLogoButton()]),
       body: ResponsiveBody(
         child: ListView(
           padding: const EdgeInsets.all(16),

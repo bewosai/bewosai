@@ -171,7 +171,7 @@ class _PartyImportScreenState extends State<PartyImportScreen> {
     return FeatureGate(
       feature: 'excel_import',
       child: Scaffold(
-        appBar: AppBar(title: const Text('Import Parties')),
+        appBar: AppBar(title: const Text('Import Parties'), actions: const [HomeLogoButton()]),
         body: ResponsiveBody(
           child: ListView(
             padding: const EdgeInsets.all(16),

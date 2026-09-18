@@ -9,6 +9,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../inventory/presentation/screens/inventory_import_screen.dart';
 import '../../../parties/presentation/screens/party_import_screen.dart';
 import '../../../purchases/presentation/screens/purchase_return_screen.dart';
+import '../../../sales/presentation/screens/sales_return_screen.dart';
 import 'contact_screen.dart';
 
 class _MoreTile {
@@ -33,6 +34,12 @@ class MoreScreen extends StatelessWidget {
       _MoreTile(Icons.point_of_sale_outlined, 'Quick POS', () => context.push('/pos'), feature: 'pos'),
       _MoreTile(
         Icons.assignment_return_outlined,
+        'Sales Return',
+        () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SalesReturnScreen())),
+        feature: 'pos',
+      ),
+      _MoreTile(
+        Icons.undo_outlined,
         'Purchase Return',
         () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PurchaseReturnScreen())),
         feature: 'purchases',
@@ -59,7 +66,7 @@ class MoreScreen extends StatelessWidget {
     ].where((tile) => tile.feature == null || features.isEnabled(tile.feature!)).toList();
 
     return Scaffold(
-      appBar: AppBar(title: Text(t('more'))),
+      appBar: AppBar(title: Text(t('more')), actions: const [HomeLogoButton()]),
       body: ResponsiveBody(
         child: ListView(
           padding: const EdgeInsets.all(16),

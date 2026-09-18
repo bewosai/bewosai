@@ -153,13 +153,14 @@ export default function Sidebar({ open, setOpen }) {
       >
         {/* Logo */}
         <div className="flex items-center justify-between border-b border-navy-800 px-4 py-4">
-          <div className="flex items-center gap-3">
+          {/* The logo is the Home button: one click from any page back to the dashboard. */}
+          <NavLink to="/dashboard" onClick={() => setOpen(false)} title="Home" className="flex items-center gap-3">
             <img src={bewosaiLogo} alt="Bewosai" className="h-9 w-9 rounded-xl object-cover ring-2 ring-orange-500/30" />
             <div>
               <h1 className="text-base font-bold text-white">Bewosai</h1>
               <p className="text-[10px] text-navy-500">Business Suite</p>
             </div>
-          </div>
+          </NavLink>
           <button
             onClick={() => setOpen(false)}
             className="rounded-lg p-1.5 text-navy-400 hover:bg-navy-800 hover:text-white lg:hidden"

@@ -20,7 +20,10 @@ class MainShell extends StatefulWidget {
   /// Sub-tab within the Transactions tab (0 = Sales, 1 = Purchases) — only
   /// relevant when [initialIndex] is 1.
   final int initialSubTab;
-  const MainShell({super.key, this.initialIndex = 0, this.initialSubTab = 0});
+  /// Changes on every navigation request (see dashboardLocation), so asking
+  /// for the same tab twice still counts as a new request.
+  final String navToken;
+  const MainShell({super.key, this.initialIndex = 0, this.initialSubTab = 0, this.navToken = ''});
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -37,7 +40,7 @@ class _MainShellState extends State<MainShell> {
     // "Purchase" shortcut — only ever changes these props, never recreates
     // the State. Without this, _index (set once above) never moves and the
     // shortcut silently does nothing.
-    if (widget.initialIndex != oldWidget.initialIndex) {
+    if (widget.initialIndex != oldWidget.initialIndex || widget.navToken != oldWidget.navToken) {
       setState(() => _index = widget.initialIndex.clamp(0, 4));
     }
   }
@@ -57,7 +60,7 @@ class _MainShellState extends State<MainShell> {
     final language = context.select<SettingsProvider, String>((s) => s.settings.language);
     final screens = [
       const DashboardScreen(),
-      TransactionsScreen(initialSubTab: widget.initialSubTab),
+      TransactionsScreen(initialSubTab: widget.initialSubTab, requestToken: widget.navToken),
       const FeatureGate(feature: 'parties', child: PartiesScreen()),
       const FeatureGate(feature: 'inventory', child: InventoryScreen()),
       const MoreScreen(),

@@ -592,6 +592,17 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       );
       return;
     }
+    // No customer = a Cash Sale, which has to be paid in full: a balance due (or
+    // an overpayment) with nobody attached would never appear as anyone's
+    // To Receive / To Give. A draft isn't final yet, so it's exempt.
+    if (status == 'CONFIRMED' && _customer == null && _balanceDue.abs() > 0.005) {
+      showAppSnackBar(
+        context,
+        'A Cash Sale must be paid in full. Select a customer to leave a balance due.',
+        isError: true,
+      );
+      return;
+    }
     if (_paymentMethod != 'CASH' && _bankAccountId == null) {
       showAppSnackBar(
         context,
@@ -709,7 +720,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                             labelText: 'Customer',
                             prefixIcon: Icon(Icons.person_outline),
                           ),
-                          child: Text(_customer?.name ?? 'Walk-in Customer'),
+                          child: Text(_customer?.name ?? 'Cash Sales'),
                         ),
                       ),
                       const SizedBox(height: 12),

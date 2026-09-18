@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../router/dashboard_route.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 
 /// Standard header row for every "quick entry" bottom sheet (Add Party, Add
@@ -49,7 +50,7 @@ class SheetHeader extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           onTap: () {
             Navigator.of(context).maybePop();
-            context.go('/dashboard');
+            context.go(dashboardLocation());
           },
           child: CircleAvatar(
             radius: 16,

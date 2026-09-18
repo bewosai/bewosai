@@ -54,7 +54,7 @@ class _SettingsBackupScreenState extends State<SettingsBackupScreen> {
     final user = auth.user;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Data & Cloud Storage')),
+      appBar: AppBar(title: const Text('Data & Cloud Storage'), actions: const [HomeLogoButton()]),
       body: ResponsiveBody(
         child: ListView(
           padding: const EdgeInsets.all(16),

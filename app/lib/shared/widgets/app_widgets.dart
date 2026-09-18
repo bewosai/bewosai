@@ -140,7 +140,7 @@ class SearchSheet<T> extends StatefulWidget {
     required this.onSelected,
     this.allowClear = false,
     this.onClear,
-    this.clearLabel = 'Walk-in Customer',
+    this.clearLabel = 'Cash Sales',
     this.onAddNew,
     this.addNewLabel = 'Add New',
     this.detailBuilder,

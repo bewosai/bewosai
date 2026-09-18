@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/features/feature_provider.dart';
@@ -102,6 +103,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const SettingsAccountScreen()),
                 ),
+              ),
+              // Multi-staff: up to 8 people can sign in with their own link and
+              // a role (Manager / Cashier / Viewer). It's a Premium feature, so
+              // on the Free plan this explains that and opens Upgrade instead
+              // of leaving the option out where nobody would find it.
+              _MenuItem(
+                icon: Icons.groups_outlined,
+                label: 'Staff',
+                subtitle: features.isEnabled('staff_management')
+                    ? 'Invite staff, set their role, share their login link'
+                    : 'Premium — add up to 8 staff members. Tap to upgrade',
+                onTap: () {
+                  if (features.isEnabled('staff_management')) {
+                    context.push('/staff');
+                  } else {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const UpgradePlanScreen()),
+                    );
+                  }
+                },
               ),
               _MenuItem(
                 icon: Icons.tune_outlined,

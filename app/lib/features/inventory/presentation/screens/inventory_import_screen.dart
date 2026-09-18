@@ -182,7 +182,7 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
     return FeatureGate(
       feature: 'excel_import',
       child: Scaffold(
-        appBar: AppBar(title: const Text('Import Products')),
+        appBar: AppBar(title: const Text('Import Products'), actions: const [HomeLogoButton()]),
         body: ResponsiveBody(
           child: ListView(
             padding: const EdgeInsets.all(16),

@@ -49,6 +49,12 @@ class StaffProvider extends ChangeNotifier {
         return true;
       });
 
+  Future<bool> setActive(int businessId, int staffId, bool active) => _guard(() async {
+        final updated = await _useCases.setActive(businessId, staffId, active);
+        staff = staff.map((s) => s.id == staffId ? updated : s).toList();
+        return true;
+      });
+
   Future<bool> remove(int businessId, int staffId) => _guard(() async {
         await _useCases.removeStaff(businessId, staffId);
         staff = staff.where((s) => s.id != staffId).toList();
