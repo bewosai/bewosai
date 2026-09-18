@@ -5,6 +5,7 @@ import '../../core/calendar/nepali_calendar_service.dart';
 import '../../core/i18n/translations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/calendar/nepal_time.dart';
 
 /// Date-picking entry point used everywhere a form needs a date. Shows the
 /// standard Material (Gregorian) picker, or a Bikram Sambat grid picker when
@@ -114,7 +115,7 @@ class _NepaliDatePickerDialogState extends State<_NepaliDatePickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final today = NepaliCalendarService.toNepali(DateTime.now());
+    final today = NepaliCalendarService.toNepali(NepalTime.now());
     final monthStart = NepaliDateTime(_displayYear, _displayMonth, 1);
     final daysInMonth = monthStart.totalDays;
     final leadingBlanks =

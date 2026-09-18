@@ -4,6 +4,7 @@ import { Bell, ChevronRight, AlertTriangle, Megaphone, X } from "lucide-react";
 import { reports as reportsApi, sales as salesApi, superadmin as adminApi } from "../../api";
 import { useAppSettings, usePrivateAmount } from "../../context/AppSettingsContext";
 import { useEscToClose } from "../../hooks/useEscToClose";
+import { dateStr } from "../../utils/dates";
 
 // Announcements have no server-side "read" state (they're a broadcast, not
 // per-user), so a viewer's dismissals are tracked locally — otherwise a
@@ -69,7 +70,7 @@ export default function ReminderBell() {
     const cutoff = new Date(Date.now() - OVERDUE_AFTER_DAYS * 24 * 60 * 60 * 1000);
     salesApi.list({
       status: "CONFIRMED", has_due: true,
-      date_to: cutoff.toISOString().slice(0, 10),
+      date_to: dateStr(cutoff),
       ordering: "sale_date", page_size: 50,
     })
       .then((r) => setOverdueBills(r.data?.results ?? r.data ?? []))

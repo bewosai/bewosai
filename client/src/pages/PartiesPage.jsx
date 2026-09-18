@@ -21,6 +21,7 @@ import {
   Edit2, Trash2, BookOpen, ArrowDownLeft, ArrowUpRight,
   ShoppingCart, Package, Loader, Upload, Download,
 } from "lucide-react";
+import { todayStr } from "../utils/dates";
 
 /* ── Export current parties to .xlsx — same columns the bulk-import
    template uses, so an exported file can be edited and re-imported. ── */
@@ -33,7 +34,7 @@ function exportPartiesToExcel(parties) {
   ws["!cols"] = headers.map(() => ({ wch: 20 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Parties");
-  XLSX.writeFile(wb, `parties_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.writeFile(wb, `parties_export_${todayStr()}.xlsx`);
 }
 
 /* ── helpers ── */

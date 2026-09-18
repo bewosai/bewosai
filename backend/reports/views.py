@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from rest_framework import permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from django.utils import timezone
 from django.db.models import Sum, Count, F, DecimalField, Case, When
 from django.db.models.functions import TruncDay, Coalesce
 
@@ -80,7 +81,7 @@ class DashboardSummaryView(APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        today = date.today()
+        today = timezone.localdate()
         month_start = today.replace(day=1)
 
         sales_today = Sale.objects.filter(
@@ -227,8 +228,8 @@ class SalesReportView(_RequireReports, APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        date_from = request.query_params.get("date_from", (date.today() - timedelta(days=30)).isoformat())
-        date_to = request.query_params.get("date_to", date.today().isoformat())
+        date_from = request.query_params.get("date_from", (timezone.localdate() - timedelta(days=30)).isoformat())
+        date_to = request.query_params.get("date_to", timezone.localdate().isoformat())
 
         sales = Sale.objects.filter(
             business=biz,
@@ -265,8 +266,8 @@ class ExpenseReportView(_RequireReports, APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        date_from = request.query_params.get("date_from", (date.today() - timedelta(days=30)).isoformat())
-        date_to = request.query_params.get("date_to", date.today().isoformat())
+        date_from = request.query_params.get("date_from", (timezone.localdate() - timedelta(days=30)).isoformat())
+        date_to = request.query_params.get("date_to", timezone.localdate().isoformat())
 
         expenses = Expense.objects.filter(
             business=biz, date__range=[date_from, date_to], is_deleted=False
@@ -325,8 +326,8 @@ class ProfitReportView(_RequireReports, APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        date_from = request.query_params.get("date_from", date.today().replace(day=1).isoformat())
-        date_to = request.query_params.get("date_to", date.today().isoformat())
+        date_from = request.query_params.get("date_from", timezone.localdate().replace(day=1).isoformat())
+        date_to = request.query_params.get("date_to", timezone.localdate().isoformat())
 
         confirmed_sales = Sale.objects.filter(
             business=biz,
@@ -362,7 +363,7 @@ class ProfitReportView(_RequireReports, APIView):
         net_profit   = gross_profit - float(expenses)
 
         # Monthly trend (last 6 months)
-        today = date.today()
+        today = timezone.localdate()
         monthly = []
         for i in range(5, -1, -1):
             m = today.month - i
@@ -416,7 +417,7 @@ class ReceivableAgingView(_RequireReports, APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        today = date.today()
+        today = timezone.localdate()
         outstanding = Sale.objects.filter(
             business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False
         )
@@ -461,7 +462,7 @@ class MonthlyReportView(_RequireReports, APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        today = date.today()
+        today = timezone.localdate()
         result = []
         for i in range(11, -1, -1):
             month = today.month - i
@@ -519,7 +520,7 @@ class DayBookView(_RequireReports, APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        target_date = request.query_params.get("date", date.today().isoformat())
+        target_date = request.query_params.get("date", timezone.localdate().isoformat())
         from parties.models import PartyPayment
 
         entries = []
@@ -601,8 +602,8 @@ class CashFlowView(_RequireReports, APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        date_from = request.query_params.get("date_from", date.today().replace(day=1).isoformat())
-        date_to   = request.query_params.get("date_to",   date.today().isoformat())
+        date_from = request.query_params.get("date_from", timezone.localdate().replace(day=1).isoformat())
+        date_to   = request.query_params.get("date_to",   timezone.localdate().isoformat())
         from parties.models import PartyPayment
 
         cash_in_sales = Sale.objects.filter(
@@ -754,8 +755,8 @@ class CashInHandView(_RequireReports, APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        date_from = request.query_params.get("date_from", date.today().replace(day=1).isoformat())
-        date_to = request.query_params.get("date_to", date.today().isoformat())
+        date_from = request.query_params.get("date_from", timezone.localdate().replace(day=1).isoformat())
+        date_to = request.query_params.get("date_to", timezone.localdate().isoformat())
 
         opening_entries = self._cash_entries(biz, date_lt=date_from)
         opening_balance = sum(e["debit"] - e["credit"] for e in opening_entries)
@@ -807,8 +808,8 @@ class BankStatementView(_RequireReports, APIView):
         except BankAccount.DoesNotExist:
             return Response({"error": "Bank account not found."}, status=404)
 
-        date_from = request.query_params.get("date_from", date.today().replace(day=1).isoformat())
-        date_to = request.query_params.get("date_to", date.today().isoformat())
+        date_from = request.query_params.get("date_from", timezone.localdate().replace(day=1).isoformat())
+        date_to = request.query_params.get("date_to", timezone.localdate().isoformat())
 
         prior_credit = account.transactions.filter(
             date__lt=date_from, transaction_type="CREDIT"
@@ -860,8 +861,8 @@ class AllTransactionsView(_RequireReports, APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        date_from = request.query_params.get("date_from", (date.today() - timedelta(days=30)).isoformat())
-        date_to = request.query_params.get("date_to", date.today().isoformat())
+        date_from = request.query_params.get("date_from", (timezone.localdate() - timedelta(days=30)).isoformat())
+        date_to = request.query_params.get("date_to", timezone.localdate().isoformat())
         type_filter = (request.query_params.get("type") or "").upper()
 
         entries = []

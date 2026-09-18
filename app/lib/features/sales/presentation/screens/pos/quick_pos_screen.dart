@@ -17,6 +17,7 @@ import '../../../../parties/presentation/providers/party_provider.dart';
 import '../../../data/models/sale_model.dart';
 import '../../../data/services/sale_service.dart';
 import '../../providers/sale_provider.dart';
+import '../../../../../core/calendar/nepal_time.dart';
 
 class QuickPosScreen extends StatefulWidget {
   final int? saleId;
@@ -69,7 +70,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   final _notesController = TextEditingController();
 
   Party? _customer;
-  DateTime _saleDate = DateTime.now();
+  DateTime _saleDate = NepalTime.now();
   DateTime? _dueDate;
   String _paymentMethod = 'CASH';
   int? _bankAccountId;
@@ -131,7 +132,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
 
   void _prefill(Sale sale, PartyProvider partyProvider) {
     _invoiceController.text = sale.invoiceNumber;
-    _saleDate = sale.saleDate ?? DateTime.now();
+    _saleDate = sale.saleDate ?? NepalTime.now();
     _dueDate = sale.dueDate;
     _paymentMethod = sale.paymentMethod;
     _bankAccountId = sale.bankAccount;
@@ -1522,7 +1523,7 @@ class _DatePickerField extends StatelessWidget {
       onTap: () async {
         final picked = await AppDatePicker.pick(
           context,
-          initialDate: date ?? DateTime.now(),
+          initialDate: date ?? NepalTime.now(),
           firstDate: DateTime(2020),
           lastDate: DateTime(2100),
         );

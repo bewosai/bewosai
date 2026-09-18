@@ -6,6 +6,7 @@ import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../data/models/purchase_model.dart';
 import '../providers/purchase_provider.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 /// Mirrors the web app's Purchase Return page: pick a bill, pick which line
 /// items and how much of each to return, stock is decremented automatically
@@ -147,7 +148,7 @@ class _PurchaseReturnFormScreen extends StatefulWidget {
 class _PurchaseReturnFormScreenState extends State<_PurchaseReturnFormScreen> {
   Purchase? _originalPurchase;
   List<_ReturnLine> _lines = [];
-  DateTime _returnDate = DateTime.now();
+  DateTime _returnDate = NepalTime.now();
   final _reasonController = TextEditingController();
   bool _loadingItems = false;
   bool _saving = false;

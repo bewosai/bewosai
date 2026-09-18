@@ -7,6 +7,7 @@ import PrimaryButton from "../components/shared/PrimaryButton";
 import {
   TrendingUp, TrendingDown, Wallet, Plus, X, Calendar,
 } from "lucide-react";
+import { todayStr } from "../utils/dates";
 
 const INCOME_CATEGORIES = ["Salary", "Freelance", "Business", "Investment", "Gift", "Other"];
 const EXPENSE_CATEGORIES_PERSONAL = ["Food", "Transport", "Health", "Shopping", "Rent", "Utilities", "Entertainment", "Education", "Other"];
@@ -14,7 +15,7 @@ const EXPENSE_CATEGORIES_PERSONAL = ["Food", "Transport", "Health", "Shopping", 
 function AddTransactionModal({ type, onClose, onSaved }) {
   const [form, setForm] = useState({
     amount: "", category: type === "income" ? "Salary" : "Food",
-    date: new Date().toISOString().slice(0, 10), description: "",
+    date: todayStr(), description: "",
   });
   const [saving, setSaving] = useState(false);
   const field = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500";

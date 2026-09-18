@@ -1,4 +1,5 @@
 import 'package:nepali_utils/nepali_utils.dart';
+import './nepal_time.dart';
 
 /// Bikram Sambat (Nepali calendar) helpers, used by the Settings screen's
 /// "Show Bikram Sambat dates" toggle.
@@ -17,7 +18,7 @@ class NepaliCalendarService {
   static NepaliDateTime _toNepali(DateTime date) =>
       date.subtract(const Duration(days: 1)).toNepaliDateTime();
 
-  static String today() => _toNepali(DateTime.now()).format('MMMM d, yyyy');
+  static String today() => _toNepali(NepalTime.now()).format('MMMM d, yyyy');
 
   static String fromDateTime(DateTime date) =>
       _toNepali(date).format('MMMM d, yyyy');

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { superadmin as adminApi } from "../../api";
 import { Badge, ConfirmDialog, PaginationFooter } from "../SuperAdminPage";
 import { Plus, Copy, Check, X, RefreshCw, Search, Loader, Ban, Ticket } from "lucide-react";
+import { todayStr } from "../../utils/dates";
 
 const PAGE_SIZE = 50;
 
@@ -39,7 +40,7 @@ function CreateCouponModal({ onClose, onCreated }) {
   const [userResults, setUserResults] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [plan, setPlan] = useState("PREMIUM");
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => todayStr());
   const [endDate, setEndDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

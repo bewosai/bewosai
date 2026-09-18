@@ -7,6 +7,7 @@ import '../../../../core/offline/sync_service.dart';
 import '../../../../core/storage/token_storage.dart';
 import '../../data/models/purchase_model.dart';
 import '../../domain/usecases/purchase_usecases.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 class PurchaseProvider extends ChangeNotifier {
   final _useCases = PurchaseUseCases();
@@ -130,7 +131,7 @@ class PurchaseProvider extends ChangeNotifier {
       });
 
   double get thisMonthTotal {
-    final now = DateTime.now();
+    final now = NepalTime.now();
     return purchases
         .where((p) => p.purchaseDate != null && p.purchaseDate!.year == now.year && p.purchaseDate!.month == now.month)
         .fold(0.0, (sum, p) => sum + p.total);

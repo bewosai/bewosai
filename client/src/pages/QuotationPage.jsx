@@ -7,8 +7,9 @@ import { FileText, Plus, Loader, X, AlertCircle, Edit2, Trash2, ChevronDown, Pri
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import BillTemplate from "../components/invoice/BillTemplate";
 import PrintPreviewModal from "../components/invoice/PrintPreviewModal";
+import { todayStr } from "../utils/dates";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayStr();
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500 transition";
 
 const STATUS_STYLES = {

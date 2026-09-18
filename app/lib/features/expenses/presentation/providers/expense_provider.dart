@@ -9,6 +9,7 @@ import '../../../../core/offline/sync_service.dart';
 import '../../../../core/storage/token_storage.dart';
 import '../../data/models/expense_model.dart';
 import '../../domain/usecases/expense_usecases.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 /// Seeded only when the API returns zero categories.
 const _defaultExpenseCategories = <String>[
@@ -112,7 +113,7 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   double get thisMonthTotal {
-    final now = DateTime.now();
+    final now = NepalTime.now();
     return expenses
         .where(
           (e) =>

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/calendar/nepal_time.dart';
 import '../../../../core/calendar/nepali_calendar_service.dart';
 import '../../../../core/i18n/translations.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -120,6 +121,31 @@ class SettingsPreferencesScreen extends StatelessWidget {
                                   : 'Dates shown in AD (Gregorian)',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
+                          ),
+                        ),
+                        const Divider(height: 1, indent: 56),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              Icon(Icons.schedule_outlined, size: 22, color: AppColors.textSecondary),
+                              const SizedBox(width: 16),
+                              const Expanded(
+                                child: Text('Time zone', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  const Text('Nepal (UTC+5:45)', style: TextStyle(fontWeight: FontWeight.w600)),
+                                  Text(
+                                    // Business dates and "today" always follow Nepal
+                                    // time, whatever the phone's own timezone is set to.
+                                    'Now ${TimeOfDay.fromDateTime(NepalTime.now()).format(context)}',
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                         const Divider(height: 1, indent: 56),

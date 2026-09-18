@@ -8,6 +8,7 @@ import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../data/models/banking_model.dart';
 import '../providers/banking_provider.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 class BankingScreen extends StatefulWidget {
   const BankingScreen({super.key});
@@ -296,7 +297,7 @@ class _TransactionFormSheetState extends State<_TransactionFormSheet> {
   final _descController = TextEditingController();
   final _refController = TextEditingController();
   String _type = 'CREDIT';
-  DateTime _date = DateTime.now();
+  DateTime _date = NepalTime.now();
   bool _saving = false;
 
   Future<void> _submit() async {

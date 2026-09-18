@@ -16,8 +16,9 @@ import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
 import { priceForUnit } from "../utils/calculations";
 import BillTemplate from "../components/invoice/BillTemplate";
 import PrintPreviewModal from "../components/invoice/PrintPreviewModal";
+import { todayStr, monthStr } from "../utils/dates";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayStr();
 
 function formatDate(dateStr, dateMode, language) {
   if (!dateStr) return "";
@@ -859,7 +860,7 @@ export default function PurchasesPage() {
     const newPurchase = {
       ...item,
       bill_number: numRes?.data?.next_number || `COPY-${item.bill_number}`,
-      purchase_date: new Date().toISOString().slice(0, 10),
+      purchase_date: todayStr(),
       status: "DRAFT",
       paid_amount: 0,
     };
@@ -868,7 +869,7 @@ export default function PurchasesPage() {
     setShowModal(true);
   };
 
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = monthStr();
   const monthPurchases = list.filter(p => (p.purchase_date || p.date || "").startsWith(thisMonth));
   const totalPurchases = monthPurchases.reduce((s, x) => s + parseFloat(x.total || 0), 0);
   const totalPayable = list.reduce((s, x) => s + parseFloat(x.due_amount || 0), 0);

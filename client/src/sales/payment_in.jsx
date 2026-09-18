@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { addPaymentIn, getSales } from "../services/saleService";
+import { todayStr } from "../utils/dates";
 
 const money = (n) =>
   `Rs. ${Number(n || 0).toLocaleString(undefined, {
@@ -11,7 +12,7 @@ export default function PaymentIn() {
   const [sales, setSales] = useState([]);
   const [saleId, setSaleId] = useState("");
   const [amount, setAmount] = useState("");
-  const [paymentDateAD, setPaymentDateAD] = useState(new Date().toISOString().slice(0, 10));
+  const [paymentDateAD, setPaymentDateAD] = useState(todayStr());
   const [paymentDateBS, setPaymentDateBS] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);

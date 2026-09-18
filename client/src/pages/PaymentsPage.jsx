@@ -17,8 +17,9 @@ import SearchBar from "../components/common/SearchBar";
 import StatusBadge from "../components/common/StatusBadge";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import DatePicker from "../components/common/DatePicker";
+import { todayStr, monthStr } from "../utils/dates";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayStr();
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500 transition";
 // PartyPayment.payment_method only accepts these values on the backend (see backend/parties/models.py METHOD_CHOICES) —
 // other PAYMENT_METHODS entries (IME_PAY, MOBILE, CHEQUE, CREDIT) would 400 if submitted here.
@@ -317,7 +318,7 @@ export default function PaymentsPage() {
   // Stats
   const totalIn = payments.filter(p => p.payment_type === "IN").reduce((s, p) => s + parseFloat(p.amount), 0);
   const totalOut = payments.filter(p => p.payment_type === "OUT").reduce((s, p) => s + parseFloat(p.amount), 0);
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = monthStr();
   const monthIn = payments.filter(p => p.payment_type === "IN" && (p.date || "").startsWith(thisMonth))
     .reduce((s, p) => s + parseFloat(p.amount), 0);
 

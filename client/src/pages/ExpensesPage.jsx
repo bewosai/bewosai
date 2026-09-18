@@ -9,8 +9,9 @@ import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext"
 import { expenses as expensesApi } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
 import { useEscToClose } from "../hooks/useEscToClose";
+import { todayStr, monthStr } from "../utils/dates";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayStr();
 
 function formatDate(dateStr, dateMode, language) {
   if (!dateStr) return "";
@@ -278,7 +279,7 @@ export default function ExpensesPage() {
   useEffect(() => { loadCategories(); }, []);
 
   // Stats
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = monthStr();
   const monthExpenses = list.filter(e => (e.date || "").startsWith(thisMonth));
   const totalThisMonth = monthExpenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
   const totalAll = list.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
@@ -292,8 +293,11 @@ export default function ExpensesPage() {
   // Monthly chart data (last 6 months)
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
     const d = new Date();
+    // Mid-month first: stepping months back from the 29th-31st would otherwise
+    // overflow into the wrong month (e.g. 31 Mar - 1 month -> 3 Mar).
+    d.setDate(15);
     d.setMonth(d.getMonth() - (5 - i));
-    const key = d.toISOString().slice(0, 7);
+    const key = monthStr(d);
     const total = list.filter(e => (e.date || "").startsWith(key)).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
     return { month: MONTHS[d.getMonth()], amount: total };
   });

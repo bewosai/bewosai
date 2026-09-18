@@ -5,6 +5,7 @@ import 'package:printing/printing.dart';
 
 import '../../core/utils/amount_in_words.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/calendar/nepal_time.dart';
 
 /// One line item on a printed bill — shared shape for both Sale items and
 /// Purchase items so [buildBillPdf] doesn't need to know which one it is.
@@ -417,7 +418,7 @@ Future<pw.Document> buildBillPdf({
 }
 
 String _now() {
-  final n = DateTime.now();
+  final n = NepalTime.now();
   final d = n.day.toString().padLeft(2, '0');
   final m = n.month.toString().padLeft(2, '0');
   final hour = n.hour % 12 == 0 ? 12 : n.hour % 12;

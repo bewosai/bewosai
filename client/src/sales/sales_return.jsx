@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { createSalesReturn, getSales } from "../services/saleService";
+import { todayStr } from "../utils/dates";
 
 export default function SalesReturn() {
   const [sales, setSales] = useState([]);
   const [saleId, setSaleId] = useState("");
   const [rows, setRows] = useState([]);
-  const [dateAD, setDateAD] = useState(new Date().toISOString().slice(0, 10));
+  const [dateAD, setDateAD] = useState(todayStr());
   const [dateBS, setDateBS] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -73,7 +74,7 @@ export default function SalesReturn() {
       setSaleId("");
       setRows([]);
       setNote("");
-      setDateAD(new Date().toISOString().slice(0, 10));
+      setDateAD(todayStr());
       setDateBS("");
     } catch (err) {
       alert(err?.response?.data?.message || "Failed to create sales return");

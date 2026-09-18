@@ -17,7 +17,7 @@ import { getRecentIds, pushRecentId } from "../utils/recentItems";
 import { priceForUnit } from "../utils/calculations";
 import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayStr();
 // "2026-03-05T14:30:00Z" (API) <-> "2026-03-05T14:30" (datetime-local input)
 // — both in the browser's local time, so a reminder set for "2pm" reads
 // back as "2pm" instead of drifting by the UTC offset.
@@ -40,6 +40,7 @@ function formatDate(dateStr, dateMode, language) {
 }
 
 import { PAYMENT_METHODS as PM_CONSTS, SALE_STATUS } from "../constants";
+import { todayStr, monthStr } from "../utils/dates";
 
 // Sale.payment_method only accepts these values on the backend (see
 // backend/sales/models.py METHOD_CHOICES) — the other PM_CONSTS entries
@@ -971,7 +972,7 @@ export default function SalesPage() {
 
   useEffect(load, []);
 
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = monthStr();
   const monthSales = saleList.filter(s => (s.sale_date || s.date || "").startsWith(thisMonth));
   const totalSales = monthSales.reduce((s, x) => s + parseFloat(x.total ?? x.total_amount ?? 0), 0);
   const totalReceivable = saleList.reduce((s, x) => s + parseFloat(x.due_amount || 0), 0);
@@ -1008,7 +1009,7 @@ export default function SalesPage() {
       const newInvoice = {
         ...data,
         invoice_number: numRes?.data?.next_number || `COPY-${data.invoice_number}`,
-        sale_date: new Date().toISOString().slice(0, 10),
+        sale_date: todayStr(),
         status: "DRAFT",
         paid_amount: 0,
       };

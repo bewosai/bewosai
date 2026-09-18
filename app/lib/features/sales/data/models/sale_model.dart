@@ -1,4 +1,5 @@
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 class SaleItem {
   final int? id;
@@ -198,7 +199,7 @@ class Sale {
       };
 
   bool get isOverdue =>
-      status == 'CONFIRMED' && dueAmount > 0 && dueDate != null && dueDate!.isBefore(DateTime.now());
+      status == 'CONFIRMED' && dueAmount > 0 && dueDate != null && dueDate!.isBefore(NepalTime.now());
 }
 
 class SaleReturnItem {

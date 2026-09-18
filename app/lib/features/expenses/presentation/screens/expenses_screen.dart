@@ -12,6 +12,7 @@ import '../../../../shared/widgets/app_widgets.dart';
 import '../../../../shared/widgets/receipt_image_picker.dart';
 import '../../data/models/expense_model.dart';
 import '../providers/expense_provider.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 class ExpensesScreen extends StatefulWidget {
   final bool openAddOnStart;
@@ -297,7 +298,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
       text: e != null ? e.amount.toString() : '',
     );
     _descriptionController = TextEditingController(text: e?.description ?? '');
-    _date = e?.date ?? DateTime.now();
+    _date = e?.date ?? NepalTime.now();
     _paymentMethod = e?.paymentMethod ?? 'CASH';
     _category = e?.category;
     _receiptImageUrl = e?.receiptImageUrl;

@@ -16,6 +16,7 @@ import '../../domain/usecases/report_usecases.dart';
 import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../providers/report_provider.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 /// Tab order — indices referenced by ReportsHubScreen's Popular Reports tiles
 /// and Browse-All-Reports categories, so keep this list and that screen in sync.
@@ -51,7 +52,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       rp.loadInventory();
       rp.loadStockReport();
       rp.loadAging();
-      rp.loadDayBook(DateTime.now());
+      rp.loadDayBook(NepalTime.now());
       rp.loadExpenseReport();
       rp.loadCashInHand();
     });
@@ -573,7 +574,7 @@ class _DayBookTab extends StatefulWidget {
 }
 
 class _DayBookTabState extends State<_DayBookTab> {
-  DateTime _date = DateTime.now();
+  DateTime _date = NepalTime.now();
 
   @override
   Widget build(BuildContext context) {
@@ -1143,14 +1144,14 @@ class _BankStatementTabState extends State<_BankStatementTab> {
               onTap: () async {
                 final from = await AppDatePicker.pick(
                   ctx,
-                  initialDate: _range.from ?? DateTime.now(),
+                  initialDate: _range.from ?? NepalTime.now(),
                   firstDate: DateTime(2020),
                   lastDate: DateTime(2100),
                 );
                 if (from == null || !ctx.mounted) return;
                 final to = await AppDatePicker.pick(
                   ctx,
-                  initialDate: _range.to ?? DateTime.now(),
+                  initialDate: _range.to ?? NepalTime.now(),
                   firstDate: from,
                   lastDate: DateTime(2100),
                 );

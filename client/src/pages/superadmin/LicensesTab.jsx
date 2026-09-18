@@ -5,6 +5,7 @@ import {
   Plus, Copy, Check, X, RefreshCw, Search, Loader,
   Ban, Clock, KeyRound,
 } from "lucide-react";
+import { todayStr } from "../../utils/dates";
 
 const PAGE_SIZE = 50;
 
@@ -24,7 +25,7 @@ function GenerateLicenseModal({ businesses, onClose, onGenerated }) {
   const [businessSearch, setBusinessSearch] = useState("");
   const [durationType, setDurationType] = useState("30D");
   const [endDate, setEndDate] = useState("");
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => todayStr());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
@@ -224,7 +225,7 @@ function ExtendModal({ license, onClose, onExtended }) {
   // Mirrors the backend's own "extend from whichever is later — the
   // current expiry, or today" (LicenseExtendView) so the day count shown
   // here matches what actually gets applied.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayStr();
   const extendBase = license.expiry_date > today ? license.expiry_date : today;
   const customDays = endDate
     ? Math.max(1, Math.round((new Date(endDate) - new Date(extendBase)) / 86400000))

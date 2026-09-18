@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
 import '../../data/models/report_models.dart';
 import '../../domain/usecases/report_usecases.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 class ReportProvider extends ChangeNotifier {
   final _useCases = ReportUseCases();
@@ -130,7 +131,7 @@ class ReportProvider extends ChangeNotifier {
   /// this composes it client-side from the existing single-day one.
   Future<void> loadWeeklyCashflow() async {
     try {
-      final today = DateTime.now();
+      final today = NepalTime.now();
       final days = List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
       final results = await Future.wait(days.map((d) => _useCases.getDayBook(d)));
       weeklyCashflow = results;

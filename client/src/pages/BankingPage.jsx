@@ -6,8 +6,9 @@ import {
   CreditCard, Plus, TrendingUp, TrendingDown, X, QrCode,
   Trash2, Edit2, Upload, AlertTriangle, Loader, RefreshCw, Search,
 } from "lucide-react";
+import { todayStr } from "../utils/dates";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayStr();
 
 /* ── Confirm Dialog ─────────────────────────────────────────────────────── */
 function ConfirmDialog({ title, body, error, busy, onConfirm, onCancel }) {

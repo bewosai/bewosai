@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { createSale } from "../services/saleService";
+import { todayStr } from "../utils/dates";
 
 const money = (n) =>
   `Rs. ${Number(n || 0).toLocaleString(undefined, {
@@ -30,7 +31,7 @@ function calc(row) {
 export default function Quotation() {
   const [partyName, setPartyName] = useState("");
   const [invoiceNo, setInvoiceNo] = useState("");
-  const [dateAD, setDateAD] = useState(new Date().toISOString().slice(0, 10));
+  const [dateAD, setDateAD] = useState(todayStr());
   const [dateBS, setDateBS] = useState("");
   const [note, setNote] = useState("");
   const [items, setItems] = useState([makeRow()]);
@@ -78,7 +79,7 @@ export default function Quotation() {
       alert("Quotation saved successfully");
       setPartyName("");
       setInvoiceNo("");
-      setDateAD(new Date().toISOString().slice(0, 10));
+      setDateAD(todayStr());
       setDateBS("");
       setNote("");
       setItems([makeRow()]);

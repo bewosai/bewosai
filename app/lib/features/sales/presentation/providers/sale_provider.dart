@@ -8,6 +8,7 @@ import '../../../../core/offline/sync_service.dart';
 import '../../../../core/storage/token_storage.dart';
 import '../../data/models/sale_model.dart';
 import '../../domain/usecases/sale_usecases.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 class SaleProvider extends ChangeNotifier {
   final _useCases = SaleUseCases();
@@ -144,7 +145,7 @@ class SaleProvider extends ChangeNotifier {
       saleType: sale.saleType,
       notes: sale.notes,
       items: sale.items,
-      createdAt: DateTime.now(),
+      createdAt: NepalTime.now(),
       pendingSync: true,
     );
   }
@@ -178,7 +179,7 @@ class SaleProvider extends ChangeNotifier {
         saleType: sale.saleType,
         notes: sale.notes,
         items: sale.items,
-        createdAt: sale.createdAt ?? DateTime.now(),
+        createdAt: sale.createdAt ?? NepalTime.now(),
         pendingSync: true,
       );
       sales = sales.map((s) => s.id == tempId ? updated : s).toList();
@@ -244,7 +245,7 @@ class SaleProvider extends ChangeNotifier {
       });
 
   double get thisMonthTotal {
-    final now = DateTime.now();
+    final now = NepalTime.now();
     return sales
         .where((s) => s.saleDate != null && s.saleDate!.year == now.year && s.saleDate!.month == now.month)
         .fold(0.0, (sum, s) => sum + s.total);

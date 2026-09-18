@@ -7,6 +7,7 @@ import '../../../../shared/widgets/app_widgets.dart';
 import '../../../banking/presentation/providers/banking_provider.dart';
 import '../../data/models/party_model.dart';
 import '../providers/party_provider.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 /// Opens the Payment In / Payment Out entry sheet. If [party] is provided
 /// (e.g. from the party ledger) it's preselected and locked; otherwise the
@@ -32,7 +33,7 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
   Party? _party;
-  DateTime _date = DateTime.now();
+  DateTime _date = NepalTime.now();
   String _method = 'CASH';
   int? _bankAccountId;
   bool _saving = false;

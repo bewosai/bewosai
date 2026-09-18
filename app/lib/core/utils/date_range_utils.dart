@@ -1,3 +1,5 @@
+import '../calendar/nepal_time.dart';
+
 /// A closed date range. Both ends null means "no bound" (all time).
 class DateRange {
   final DateTime? from;
@@ -21,7 +23,7 @@ class DateRangeUtils {
   /// Day 0 of next month is the last day of this month — a simple trick
   /// that also handles variable month lengths without a lookup table.
   static DateRange forPreset(DateRangePreset preset) {
-    final now = DateTime.now();
+    final now = NepalTime.now();
     switch (preset) {
       case DateRangePreset.thisMonth:
         return DateRange(DateTime(now.year, now.month, 1), DateTime(now.year, now.month + 1, 0));

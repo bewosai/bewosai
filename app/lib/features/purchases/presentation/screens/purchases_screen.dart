@@ -19,6 +19,7 @@ import '../../../parties/data/models/party_model.dart';
 import '../../../parties/presentation/providers/party_provider.dart';
 import '../../data/models/purchase_model.dart';
 import '../providers/purchase_provider.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 class PurchasesScreen extends StatefulWidget {
   const PurchasesScreen({super.key});
@@ -362,7 +363,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
   final _notesController = TextEditingController();
   bool _vatEnabled = false;
   Party? _supplier;
-  DateTime _purchaseDate = DateTime.now();
+  DateTime _purchaseDate = NepalTime.now();
   DateTime? _dueDate;
   String _paymentMethod = 'CASH';
   int? _bankAccountId;
@@ -384,7 +385,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
       if (widget.purchase != null) {
         final p = widget.purchase!;
         _billNumberController.text = p.billNumber;
-        _purchaseDate = p.purchaseDate ?? DateTime.now();
+        _purchaseDate = p.purchaseDate ?? NepalTime.now();
         _dueDate = p.dueDate;
         _paymentMethod = p.paymentMethod;
         _bankAccountId = p.bankAccount;
@@ -848,7 +849,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                               onTap: () async {
                                 final picked = await AppDatePicker.pick(
                                   context,
-                                  initialDate: _dueDate ?? DateTime.now(),
+                                  initialDate: _dueDate ?? NepalTime.now(),
                                   firstDate: DateTime(2020),
                                   lastDate: DateTime(2100),
                                 );

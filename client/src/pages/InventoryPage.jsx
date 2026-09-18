@@ -13,6 +13,7 @@ import {
   Upload, Download,
 } from "lucide-react";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+import { todayStr } from "../utils/dates";
 
 /* ── Export current products to .xlsx — same columns the bulk-import
    template uses, so an exported file can be edited and re-imported. ── */
@@ -26,7 +27,7 @@ function exportProductsToExcel(products) {
   ws["!cols"] = headers.map(() => ({ wch: 20 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Products");
-  XLSX.writeFile(wb, `products_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.writeFile(wb, `products_export_${todayStr()}.xlsx`);
 }
 
 /* ── Field style ── */

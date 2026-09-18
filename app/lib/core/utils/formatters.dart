@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 
+import '../calendar/nepal_time.dart';
 import '../calendar/nepali_calendar_service.dart';
 import '../constants/app_constants.dart';
 
@@ -65,8 +66,15 @@ class Formatters {
 
   static String amount(num? value) => _amountFormat.format(value ?? 0);
 
+  /// A date-only value ("2026-09-18") parses to a plain local DateTime and is
+  /// shown as-is. A timestamp with a timezone offset ("...T01:45+05:45")
+  /// parses to a UTC moment, which must be shown on the *Nepal* calendar —
+  /// otherwise something entered at 1:45 AM in Nepal displays yesterday's date.
+  static DateTime _nepalDate(DateTime d) => d.isUtc ? NepalTime.fromInstant(d) : d;
+
   static String date(DateTime? date) {
     if (date == null) return '—';
+    date = _nepalDate(date);
     return useNepaliCalendar
         ? NepaliCalendarService.format(date, _nepaliDatePattern)
         : _dateFormat.format(date);
@@ -74,6 +82,7 @@ class Formatters {
 
   static String dateShort(DateTime? date) {
     if (date == null) return '—';
+    date = _nepalDate(date);
     return useNepaliCalendar
         ? NepaliCalendarService.format(date, _nepaliDateShortPattern)
         : _dateShortFormat.format(date);

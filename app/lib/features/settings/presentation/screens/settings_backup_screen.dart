@@ -7,6 +7,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/data/services/auth_service.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../../core/calendar/nepal_time.dart';
 
 /// Unlike apps that periodically snapshot local data, Bewosai has nothing
 /// stored only on the device — every sale, expense, and record is written
@@ -32,13 +33,13 @@ class _SettingsBackupScreenState extends State<SettingsBackupScreen> {
       await _authService.me();
       if (!mounted) return;
       setState(() {
-        _lastVerified = DateTime.now();
+        _lastVerified = NepalTime.now();
         _lastVerifiedOk = true;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _lastVerified = DateTime.now();
+        _lastVerified = NepalTime.now();
         _lastVerifiedOk = false;
       });
     } finally {
