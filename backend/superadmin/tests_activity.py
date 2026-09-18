@@ -36,3 +36,15 @@ class ActivityLogSignalTests(TestCase):
         party.name = "Shyam Updated"
         party.save()
         self.assertEqual(ActivityLog.objects.count(), count_before)
+
+    def test_soft_delete_logs_once_and_later_edits_do_not(self):
+        party = Party.objects.create(business=self.business, name="Hari")
+        party.is_deleted = True
+        party.save()
+        deleted = ActivityLog.objects.filter(model_name="Party", action=ActivityLog.ACTION_DELETED)
+        self.assertEqual(deleted.count(), 1)
+        self.assertEqual(deleted.first().business, self.business)
+        # Editing the already-deleted row again must not log a second delete.
+        party.notes = "still in the bin"
+        party.save()
+        self.assertEqual(deleted.count(), 1)

@@ -3,10 +3,11 @@ Populates ActivityLog automatically for a curated set of models, via Django's
 post_save/post_delete signals — connected once in SuperadminConfig.ready()
 instead of adding logging calls to every app's views. This keeps existing
 business logic completely untouched (no regression risk there) at the cost
-of only covering create/permanent-delete events: an in-place update (e.g.
-editing a Sale) isn't logged, and a *soft* delete (is_deleted=True, still a
-.save()) shows up as nothing rather than a spurious "created" — only a real
-.delete() (e.g. from the Recycle Bin's permanent-delete) fires post_delete.
+of only covering create/delete events: an in-place update (e.g. editing a
+Sale) isn't logged — internal saves like payment reconciliation would flood
+the feed. A delete is logged both when it's permanent (a real .delete(), e.g.
+from the Recycle Bin) and when it's the normal *soft* delete (is_deleted
+flipping False -> True on a .save(), which is how the apps delete).
 
 Each tracked model resolves to a (business, user, label) triple; models
 without a created_by field (Product, Party, BankAccount) still get a
@@ -61,9 +62,24 @@ def _log(action, sender, instance):
     )
 
 
+def _remember_soft_delete_state(sender, instance, **kwargs):
+    # Stash whether this row was already soft-deleted, so post_save can tell a
+    # fresh delete from an unrelated edit of an already-deleted row. Only
+    # models with an is_deleted flag, and only existing rows, are looked up.
+    if instance.pk is None or not hasattr(instance, "is_deleted"):
+        return
+    instance._activity_was_deleted = (
+        sender._base_manager.filter(pk=instance.pk).values_list("is_deleted", flat=True).first()
+    )
+
+
 def _on_saved(sender, instance, created, **kwargs):
     if created:
         _log("CREATED", sender, instance)
+    elif getattr(instance, "_activity_was_deleted", None) is False and instance.is_deleted:
+        _log("DELETED", sender, instance)
+    if hasattr(instance, "_activity_was_deleted"):
+        del instance._activity_was_deleted
 
 
 def _on_deleted(sender, instance, **kwargs):
@@ -94,9 +110,10 @@ def connect():
     safe everywhere.
     """
     from django.apps import apps
-    from django.db.models.signals import post_save, post_delete
+    from django.db.models.signals import pre_save, post_save, post_delete
 
     for app_label, model_name in TRACKED_APP_MODELS:
         model = apps.get_model(app_label, model_name)
+        pre_save.connect(_remember_soft_delete_state, sender=model, dispatch_uid=f"activitylog_presave_{app_label}_{model_name}")
         post_save.connect(_on_saved, sender=model, dispatch_uid=f"activitylog_save_{app_label}_{model_name}")
         post_delete.connect(_on_deleted, sender=model, dispatch_uid=f"activitylog_delete_{app_label}_{model_name}")
