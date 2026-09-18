@@ -51,7 +51,8 @@ class _NepaliDatePickerDialog extends StatefulWidget {
   });
 
   @override
-  State<_NepaliDatePickerDialog> createState() => _NepaliDatePickerDialogState();
+  State<_NepaliDatePickerDialog> createState() =>
+      _NepaliDatePickerDialogState();
 }
 
 class _NepaliDatePickerDialogState extends State<_NepaliDatePickerDialog> {
@@ -59,7 +60,8 @@ class _NepaliDatePickerDialogState extends State<_NepaliDatePickerDialog> {
   late int _displayYear;
   late int _displayMonth;
 
-  Language get _lang => AppTranslations.language == 'ne' ? Language.nepali : Language.english;
+  Language get _lang =>
+      AppTranslations.language == 'ne' ? Language.nepali : Language.english;
 
   @override
   void initState() {
@@ -69,7 +71,32 @@ class _NepaliDatePickerDialogState extends State<_NepaliDatePickerDialog> {
     _displayMonth = _selected.month;
   }
 
+  /// The month [delta] away, or null when it can't be shown: outside the
+  /// years the calendar package supports (constructing a date there throws —
+  /// a red error screen), or wholly outside [firstDate, lastDate].
+  ({int year, int month})? _target(int delta) {
+    var y = _displayYear;
+    var m = _displayMonth + delta;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    } else if (m < 1) {
+      m = 12;
+      y -= 1;
+    }
+    if (y < 2000 || y > 2099) return null;
+    final first = NepaliCalendarService.toGregorian(NepaliDateTime(y, m, 1));
+    final last = first.add(
+      Duration(days: NepaliDateTime(y, m, 1).totalDays - 1),
+    );
+    if (last.isBefore(widget.firstDate) || first.isAfter(widget.lastDate)) {
+      return null;
+    }
+    return (year: y, month: m);
+  }
+
   void _shiftMonth(int delta) {
+    if (_target(delta) == null) return;
     setState(() {
       var y = _displayYear;
       var m = _displayMonth + delta;
@@ -87,9 +114,11 @@ class _NepaliDatePickerDialogState extends State<_NepaliDatePickerDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final today = NepaliCalendarService.toNepali(DateTime.now());
     final monthStart = NepaliDateTime(_displayYear, _displayMonth, 1);
     final daysInMonth = monthStart.totalDays;
-    final leadingBlanks = monthStart.weekday - 1; // Nepali weekday: Sun=1..Sat=7
+    final leadingBlanks =
+        monthStart.weekday - 1; // Nepali weekday: Sun=1..Sat=7
     final weekdayLabels = _lang == Language.nepali
         ? ['आ', 'सो', 'मं', 'बु', 'बि', 'शु', 'श']
         : ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -100,64 +129,122 @@ class _NepaliDatePickerDialogState extends State<_NepaliDatePickerDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => _shiftMonth(-1)),
-                Text(
-                  monthStart.format('MMMM yyyy', _lang),
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                ),
-                IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => _shiftMonth(1)),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: weekdayLabels
-                  .map((w) => Expanded(
-                        child: Center(
-                          child: Text(w, style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            // Only the month grid scrolls (a short screen, e.g. a phone held
+            // sideways, would otherwise overflow); OK/Cancel stay pinned below.
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left),
+                          onPressed: _target(-1) == null
+                              ? null
+                              : () => _shiftMonth(-1),
                         ),
-                      ))
-                  .toList(),
-            ),
-            const SizedBox(height: 4),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7),
-              itemCount: leadingBlanks + daysInMonth,
-              itemBuilder: (ctx, index) {
-                if (index < leadingBlanks) return const SizedBox.shrink();
-                final day = index - leadingBlanks + 1;
-                final candidate = NepaliDateTime(_displayYear, _displayMonth, day);
-                final isSelected = _selected.year == _displayYear &&
-                    _selected.month == _displayMonth &&
-                    _selected.day == day;
-                final gregorian = NepaliCalendarService.toGregorian(candidate);
-                final outOfRange = gregorian.isBefore(widget.firstDate) || gregorian.isAfter(widget.lastDate);
-                return InkWell(
-                  onTap: outOfRange ? null : () => setState(() => _selected = candidate),
-                  child: Container(
-                    margin: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.orange : null,
-                      shape: BoxShape.circle,
+                        Text(
+                          monthStart.format('MMMM yyyy', _lang),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right),
+                          onPressed: _target(1) == null
+                              ? null
+                              : () => _shiftMonth(1),
+                        ),
+                      ],
                     ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '$day',
-                      style: TextStyle(
-                        color: outOfRange
-                            ? AppColors.textSecondary.withValues(alpha: 0.4)
-                            : isSelected
-                                ? Colors.white
-                                : null,
-                      ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: weekdayLabels
+                          .map(
+                            (w) => Expanded(
+                              child: Center(
+                                child: Text(
+                                  w,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
                     ),
-                  ),
-                );
-              },
+                    const SizedBox(height: 4),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 7,
+                          ),
+                      itemCount: leadingBlanks + daysInMonth,
+                      itemBuilder: (ctx, index) {
+                        if (index < leadingBlanks) {
+                          return const SizedBox.shrink();
+                        }
+                        final day = index - leadingBlanks + 1;
+                        final candidate = NepaliDateTime(
+                          _displayYear,
+                          _displayMonth,
+                          day,
+                        );
+                        final isSelected =
+                            _selected.year == _displayYear &&
+                            _selected.month == _displayMonth &&
+                            _selected.day == day;
+                        final gregorian = NepaliCalendarService.toGregorian(
+                          candidate,
+                        );
+                        final outOfRange =
+                            gregorian.isBefore(widget.firstDate) ||
+                            gregorian.isAfter(widget.lastDate);
+                        return InkWell(
+                          onTap: outOfRange
+                              ? null
+                              : () => setState(() => _selected = candidate),
+                          child: Container(
+                            margin: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.orange : null,
+                              shape: BoxShape.circle,
+                              // Today, by the real date, is always ringed so it's easy to find.
+                              border:
+                                  !isSelected &&
+                                      today.year == _displayYear &&
+                                      today.month == _displayMonth &&
+                                      today.day == day
+                                  ? Border.all(color: AppColors.orange)
+                                  : null,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '$day',
+                              style: TextStyle(
+                                color: outOfRange
+                                    ? AppColors.textSecondary.withValues(
+                                        alpha: 0.4,
+                                      )
+                                    : isSelected
+                                    ? Colors.white
+                                    : null,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             Row(
@@ -168,7 +255,10 @@ class _NepaliDatePickerDialogState extends State<_NepaliDatePickerDialog> {
                   child: Text(t('cancel')),
                 ),
                 TextButton(
-                  onPressed: () => Navigator.pop(context, NepaliCalendarService.toGregorian(_selected)),
+                  onPressed: () => Navigator.pop(
+                    context,
+                    NepaliCalendarService.toGregorian(_selected),
+                  ),
                   child: Text(t('ok')),
                 ),
               ],
