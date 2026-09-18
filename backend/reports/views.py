@@ -532,7 +532,7 @@ class DayBookView(_RequireReports, APIView):
             entries.append({
                 "date": target_date, "type": "SALE",
                 "ref": s.invoice_number,
-                "party": s.customer.name if s.customer else "Walk-in",
+                "party": s.customer.name if s.customer else "Cash Sales",
                 "debit": float(s.paid_amount),
                 "credit": 0.0,
                 "method": s.payment_method,
@@ -725,7 +725,7 @@ class CashInHandView(_RequireReports, APIView):
         for s in sales_qs:
             entries.append({
                 "date": str(s.sale_date), "type": "SALE", "ref": s.invoice_number,
-                "party": s.customer.name if s.customer else "Walk-in",
+                "party": s.customer.name if s.customer else "Cash Sales",
                 "debit": float(s.paid_amount), "credit": 0.0,
             })
         for p in purchases_qs:
@@ -874,7 +874,7 @@ class AllTransactionsView(_RequireReports, APIView):
             ).select_related("customer"):
                 entries.append({
                     "date": str(s.sale_date), "type": "SALE", "ref": s.invoice_number,
-                    "party": s.customer.name if s.customer else "Walk-in",
+                    "party": s.customer.name if s.customer else "Cash Sales",
                     "amount": float(s.total), "paid": float(s.paid_amount), "due": float(s.due_amount),
                     "method": s.payment_method,
                 })
