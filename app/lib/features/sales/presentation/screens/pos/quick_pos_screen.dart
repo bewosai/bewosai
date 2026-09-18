@@ -1079,7 +1079,9 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
   final _formKey = GlobalKey<FormState>();
   late final _qtyController = TextEditingController(text: _clean(widget.initialQty));
   late final _priceController = TextEditingController(text: _clean(widget.initialPrice));
-  late final _discountController = TextEditingController(text: _clean(widget.initialDiscount));
+  late final _discountController = TextEditingController(
+    text: widget.initialDiscount == 0 ? '' : _clean(widget.initialDiscount),
+  );
 
   double get _qty => double.tryParse(_qtyController.text) ?? 0;
   double get _price => double.tryParse(_priceController.text) ?? 0;

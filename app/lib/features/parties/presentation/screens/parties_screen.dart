@@ -395,7 +395,7 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
   // signed number — entering "-500" to mean "I owe them" isn't obvious, so
   // the sign is derived from _obDirection at submit time instead.
   late final _openingBalanceController = TextEditingController(
-    text: (widget.party?.openingBalance.abs() ?? 0).toString(),
+    text: _cleanAmount(widget.party?.openingBalance.abs() ?? 0),
   );
   late String _obDirection =
       (widget.party?.openingBalance ?? 0) < 0 ? 'PAYABLE' : 'RECEIVABLE';
@@ -404,6 +404,13 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
   );
   late String _partyType = widget.party?.partyType ?? 'CUSTOMER';
   bool _saving = false;
+
+  // Blank for zero (a new party) so there's no "0.0" to delete before typing;
+  // whole numbers without the trailing ".0".
+  static String _cleanAmount(double v) {
+    if (v == 0) return '';
+    return v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -458,6 +465,8 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _nameController,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(labelText: 'Name *'),
                 validator: (v) => Validators.required(v, 'Name'),
               ),
@@ -501,6 +510,7 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
                     child: TextFormField(
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
+                      textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(labelText: 'Phone'),
                     ),
                   ),
@@ -509,6 +519,7 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
                     child: TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(labelText: 'Email'),
                     ),
                   ),
@@ -517,6 +528,8 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _addressController,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(labelText: 'Address'),
                 maxLines: 2,
               ),
