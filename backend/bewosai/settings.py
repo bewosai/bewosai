@@ -96,6 +96,17 @@ DATABASES = {
     )
 }
 
+# Render sets RENDER=true on its services. There the disk is wiped on every
+# deploy/restart, so running on the SQLite fallback silently loses ALL user
+# data — say so loudly in the deploy logs instead of failing invisibly.
+if config("RENDER", default="", cast=str) and DATABASES["default"]["ENGINE"].endswith("sqlite3"):
+    import logging as _logging
+    _logging.getLogger("django.security.config").critical(
+        "DATABASE_URL is not set: running on SQLite on Render's ephemeral disk. "
+        "Every redeploy/restart will ERASE all user data. Attach a Postgres "
+        "database and set DATABASE_URL on this service."
+    )
+
 AUTH_USER_MODEL = "accounts.User"
 
 # The only place Django's session-based login is used is /admin/ (the app's
