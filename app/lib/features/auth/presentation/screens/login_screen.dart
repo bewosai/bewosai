@@ -44,7 +44,17 @@ class _LoginScreenState extends State<LoginScreen> {
   // String _countryCode = kCountryCodes.first.code;
   bool _remember = true;
   bool _isNewUserFlow = false;
-  int _cooldown = 0;
+  // An absolute timestamp (not a plain counter) so the real remaining wait
+  // survives _goBackToEmail() resetting the step — the backend's own 60s
+  // resend cooldown (OTPCode.RESEND_COOLDOWN_SECONDS) doesn't reset just
+  // because the user backed out of the OTP screen, so this shouldn't either.
+  DateTime? _cooldownUntil;
+  int get _cooldown {
+    final until = _cooldownUntil;
+    if (until == null) return 0;
+    final secs = until.difference(DateTime.now()).inSeconds;
+    return secs > 0 ? secs : 0;
+  }
 
   // The OTP field can trigger _verifyOtp() from two places (auto-submit at
   // 6 digits, and the keyboard's "Done" action) that can both fire before
@@ -76,21 +86,34 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _startCooldown() {
-    _cooldown = 60;
+    _cooldownUntil = DateTime.now().add(const Duration(seconds: 60));
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();
         return;
       }
-      setState(() => _cooldown--);
-      if (_cooldown <= 0) t.cancel();
+      if (_cooldown <= 0) {
+        t.cancel();
+      }
+      setState(() {});
     });
   }
 
   Future<void> _sendOtp({bool isSignup = false}) async {
     // On resend (step 1) email was already validated — skip email form check.
     if (_step == 0 && !(_emailFormKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    // Still cooling down from a previous send (possibly from before the user
+    // backed out to this step) — the backend would just reject this with
+    // the same message, so save the round trip and say it locally.
+    if (_cooldown > 0) {
+      showAppSnackBar(
+        context,
+        'Please wait ${_cooldown}s before requesting another code.',
+        isError: true,
+      );
       return;
     }
 
@@ -171,8 +194,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _goBackToEmail() {
-    _timer?.cancel();
-    _cooldown = 0;
+    // Deliberately leave _cooldownUntil (and _timer) alone — the backend's
+    // cooldown keeps counting down regardless of which step is on screen,
+    // so resetting it here just to zero would let the user immediately
+    // hit "Continue" and get a raw throttled error back.
     _otpController.clear();
     setState(() => _step = 0);
   }

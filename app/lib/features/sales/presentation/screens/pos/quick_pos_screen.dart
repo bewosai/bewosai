@@ -208,6 +208,49 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
         labelBuilder: (p) => p.name,
         subtitleBuilder: (p) =>
             '${Formatters.currency(p.salePrice)} · Stock: ${Formatters.amount(p.stockQuantity)}',
+        // Same category/stock/price layout as the Inventory list, so the
+        // user can see what they're picking (and whether it's low on
+        // stock) without leaving the invoice to go check.
+        detailBuilder: (ctx, p) => Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${p.categoryName.isEmpty ? 'Uncategorized' : p.categoryName} · ${p.unitName}',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Row(
+                  children: [
+                    if (p.isLowStock)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 6),
+                        child: StatusBadge(label: 'LOW', color: AppColors.error),
+                      ),
+                    Text(
+                      '${Formatters.amount(p.stockQuantity)} ${p.unitName}',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  Formatters.currency(p.salePrice),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
         onSelected: (p) {
           setState(() {
             item.product = p.id;

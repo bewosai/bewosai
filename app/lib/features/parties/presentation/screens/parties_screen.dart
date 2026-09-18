@@ -67,8 +67,13 @@ class _PartiesScreenState extends State<PartiesScreen> {
 
   List<Party> _filtered(List<Party> parties) {
     var list = parties;
-    if (_filter != 'ALL') {
-      list = list.where((p) => p.partyType == _filter).toList();
+    if (_filter == 'CUSTOMER' || _filter == 'SUPPLIER') {
+      // A 'BOTH' party counts toward both the Customers and Suppliers KPI
+      // cards above — filter the same way so a tab never silently drops a
+      // party that its own summary count says should be there.
+      list = list.where((p) => p.partyType == _filter || p.partyType == 'BOTH').toList();
+    } else if (_filter == 'BOTH') {
+      list = list.where((p) => p.partyType == 'BOTH').toList();
     }
     if (_search.isNotEmpty) {
       final q = _search.toLowerCase();
@@ -386,9 +391,14 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
   late final _addressController = TextEditingController(
     text: widget.party?.address ?? '',
   );
+  // Edited as an always-positive amount + explicit direction rather than a
+  // signed number — entering "-500" to mean "I owe them" isn't obvious, so
+  // the sign is derived from _obDirection at submit time instead.
   late final _openingBalanceController = TextEditingController(
-    text: widget.party?.openingBalance.toString() ?? '0',
+    text: (widget.party?.openingBalance.abs() ?? 0).toString(),
   );
+  late String _obDirection =
+      (widget.party?.openingBalance ?? 0) < 0 ? 'PAYABLE' : 'RECEIVABLE';
   late final _notesController = TextEditingController(
     text: widget.party?.notes ?? '',
   );
@@ -408,7 +418,9 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
       address: _addressController.text.trim(),
       panNumber: '',
       vatNumber: '',
-      openingBalance: double.tryParse(_openingBalanceController.text) ?? 0,
+      openingBalance:
+          (double.tryParse(_openingBalanceController.text) ?? 0).abs() *
+          (_obDirection == 'PAYABLE' ? -1 : 1),
       balance: 0,
       notes: _notesController.text.trim(),
       isActive: true,
@@ -516,6 +528,28 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
                 ),
                 decoration: const InputDecoration(labelText: 'Opening Balance'),
               ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DirectionButton(
+                      label: 'To Receive',
+                      selected: _obDirection == 'RECEIVABLE',
+                      color: AppColors.error,
+                      onTap: () => setState(() => _obDirection = 'RECEIVABLE'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _DirectionButton(
+                      label: 'To Give',
+                      selected: _obDirection == 'PAYABLE',
+                      color: AppColors.success,
+                      onTap: () => setState(() => _obDirection = 'PAYABLE'),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _notesController,
@@ -530,6 +564,42 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Toggle for the opening-balance direction — "To Receive" (they owe us) vs
+/// "To Give" (we owe them) — matching the wording already used on the party
+/// balance card, instead of asking the user to enter a signed amount.
+class _DirectionButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DirectionButton({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        backgroundColor: selected ? color.withValues(alpha: 0.1) : null,
+        side: BorderSide(color: selected ? color : AppColors.navy200),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: selected ? color : AppColors.textSecondary,
         ),
       ),
     );

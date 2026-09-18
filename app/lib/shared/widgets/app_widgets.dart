@@ -125,6 +125,11 @@ class SearchSheet<T> extends StatefulWidget {
   final String clearLabel;
   final VoidCallback? onAddNew;
   final String addNewLabel;
+  /// When set, replaces the plain title/subtitle ListTile for each row with
+  /// a richer custom layout (e.g. the product picker showing category,
+  /// stock and price) — [onSelected]/[labelBuilder] still drive search
+  /// filtering and the tap action either way.
+  final Widget Function(BuildContext, T)? detailBuilder;
 
   const SearchSheet({
     super.key,
@@ -138,6 +143,7 @@ class SearchSheet<T> extends StatefulWidget {
     this.clearLabel = 'Walk-in Customer',
     this.onAddNew,
     this.addNewLabel = 'Add New',
+    this.detailBuilder,
   });
 
   @override
@@ -193,13 +199,23 @@ class _SearchSheetState<T> extends State<SearchSheet<T>> {
                       itemCount: filtered.length,
                       itemBuilder: (ctx, i) {
                         final item = filtered[i];
+                        void onTap() {
+                          widget.onSelected(item);
+                          Navigator.pop(context);
+                        }
+                        if (widget.detailBuilder != null) {
+                          return InkWell(
+                            onTap: onTap,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              child: widget.detailBuilder!(ctx, item),
+                            ),
+                          );
+                        }
                         return ListTile(
                           title: Text(widget.labelBuilder(item)),
                           subtitle: Text(widget.subtitleBuilder(item)),
-                          onTap: () {
-                            widget.onSelected(item);
-                            Navigator.pop(context);
-                          },
+                          onTap: onTap,
                         );
                       },
                     ),

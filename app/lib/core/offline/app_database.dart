@@ -42,7 +42,7 @@ class AppDatabase {
     final path = p.join(dir, 'bewosai_cache.db');
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE cached_products (id INTEGER PRIMARY KEY, business_id TEXT, json TEXT NOT NULL)',
@@ -63,12 +63,19 @@ class AppDatabase {
       // server actually rejects (e.g. its invoice number now collides with
       // one created elsewhere while it sat offline) needs a reason the user
       // can act on, not another silent retry.
+      // v3 -> v4 adds the same sync_error column to the generic outbox: it
+      // was missing it entirely, so a permanent server rejection there
+      // retried forever on every reconnect and jammed every later item of
+      // that entity type instead of being flagged and skipped like Sales.
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute(_genericOutboxSql);
         }
         if (oldVersion < 3) {
           await db.execute('ALTER TABLE outbox_sales ADD COLUMN sync_error TEXT');
+        }
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE outbox ADD COLUMN sync_error TEXT');
         }
       },
     );
@@ -215,9 +222,20 @@ class AppDatabase {
         .map((r) => {
               'temp_id': -(r['id'] as int),
               'created_at': r['created_at'],
+              'sync_error': r['sync_error'],
               ...jsonDecode(r['json'] as String) as Map<String, dynamic>,
             })
         .toList();
+  }
+
+  /// Flags a queued generic-outbox write as rejected by the server for a
+  /// reason the user needs to fix by hand — mirrors [setPendingSaleError] so
+  /// [SyncService] can stop silently retrying it every reconnect while still
+  /// draining everything queued behind it.
+  Future<void> setPendingWriteError(int tempId, String message) async {
+    final db = await _database;
+    if (db == null) return;
+    await db.update('outbox', {'sync_error': message}, where: 'id = ?', whereArgs: [-tempId]);
   }
 
   /// Total queued writes across every entity type for [businessId] — one

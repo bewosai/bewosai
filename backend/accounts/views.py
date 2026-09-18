@@ -308,7 +308,12 @@ def _login_response(user, is_new, remember):
         refresh.set_exp(lifetime=timedelta(days=30))
         refresh.access_token.set_exp(lifetime=timedelta(days=30))
 
-    businesses = Business.objects.filter(staff__user=user, staff__is_active=True, status="ACTIVE")
+    # Match BusinessListCreateView.get_queryset so a business shows up
+    # identically on login as it does in the web/app business switcher —
+    # this used to filter to status="ACTIVE" only, which meant a suspended
+    # or archived business (still visible everywhere else) would silently
+    # vanish from the app right after a fresh email/Google login.
+    businesses = Business.objects.filter(staff__user=user, staff__is_active=True)
 
     return api_response(
         True, "Login successful.", status.HTTP_200_OK,

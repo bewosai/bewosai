@@ -149,13 +149,28 @@ class SyncService {
     var syncedAny = false;
     for (final item in pending) {
       final tempId = item['temp_id'] as int;
+      // Already flagged by a previous pass — won't succeed until the user
+      // fixes and resends it, so don't retry it or let it block items
+      // queued behind it for this entity type.
+      if (item['sync_error'] != null) continue;
       final payload = Map<String, dynamic>.from(item)
         ..remove('temp_id')
-        ..remove('created_at');
+        ..remove('created_at')
+        ..remove('sync_error');
       try {
         await createRaw(payload);
         await AppDatabase.instance.removePendingWrite(tempId);
         syncedAny = true;
+      } on ApiException catch (e) {
+        if (e.isNetworkError) {
+          // Still offline/flaky — stop here so nothing behind it is
+          // replayed out of order, and retry the whole queue next reconnect.
+          break;
+        }
+        // A real rejection from the server won't fix itself on retry —
+        // flag it and keep draining the rest of the queue instead of
+        // blocking every write of this type behind it forever.
+        await AppDatabase.instance.setPendingWriteError(tempId, e.message);
       } catch (_) {
         break;
       }

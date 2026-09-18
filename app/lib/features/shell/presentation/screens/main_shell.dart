@@ -30,6 +30,19 @@ class _MainShellState extends State<MainShell> {
   late int _index = widget.initialIndex.clamp(0, 4);
 
   @override
+  void didUpdateWidget(MainShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // MainShell stays mounted once built (Dashboard is tab 0 of it), so a
+    // later context.go('/dashboard?tab=...') — e.g. the Home screen's
+    // "Purchase" shortcut — only ever changes these props, never recreates
+    // the State. Without this, _index (set once above) never moves and the
+    // shortcut silently does nothing.
+    if (widget.initialIndex != oldWidget.initialIndex) {
+      setState(() => _index = widget.initialIndex.clamp(0, 4));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     // Keying by the calendar + theme + language preference forces the tabs

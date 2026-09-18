@@ -26,6 +26,18 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   );
 
   @override
+  void didUpdateWidget(TransactionsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // This screen lives inside MainShell's IndexedStack and stays mounted
+    // once built, so re-landing here (e.g. the Home screen's "Purchase"
+    // shortcut going to subtab 1 a second time) only updates this prop —
+    // it never recreates _tabController's initialIndex above.
+    if (widget.initialSubTab != oldWidget.initialSubTab) {
+      _tabController.index = widget.initialSubTab.clamp(0, 1);
+    }
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
