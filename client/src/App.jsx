@@ -3,15 +3,18 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import LoadingSpinner from "./components/common/LoadingSpinner";
 
-// Auth pages — kept eager since these are what a fresh, logged-out visitor
-// sees first; no code-splitting win for the one screen everyone loads.
+// Landing/login — kept eager since these are what a fresh, logged-out
+// visitor sees first; no code-splitting win for the one screen everyone loads.
 import LoginPage from "./pages/Login";
-import VerifyOtpPage from "./pages/VerifyOtp";
 import LandingPage from "./pages/LandingPage";
-import CreateBusinessPage from "./pages/CreateBusiness";
-import SelectBusinessPage from "./pages/SelectBusiness";
-import LicenseRequiredPage from "./pages/LicenseRequired";
-import StaffLoginPage from "./pages/StaffLoginPage";
+
+// Rest of the auth flow only runs after that first screen (OTP step,
+// onboarding, staff links), so lazy-load them like the business pages below.
+const VerifyOtpPage = lazy(() => import("./pages/VerifyOtp"));
+const CreateBusinessPage = lazy(() => import("./pages/CreateBusiness"));
+const SelectBusinessPage = lazy(() => import("./pages/SelectBusiness"));
+const LicenseRequiredPage = lazy(() => import("./pages/LicenseRequired"));
+const StaffLoginPage = lazy(() => import("./pages/StaffLoginPage"));
 
 // Business layout + pages — lazy-loaded so a session only downloads the
 // module(s) it actually opens instead of every page's code up front. This

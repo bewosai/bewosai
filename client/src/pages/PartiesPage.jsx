@@ -47,11 +47,19 @@ const TYPE_META = {
 function PartyModal({ initial, onClose, onSaved }) {
   useEscToClose(onClose);
   const { t } = useTranslation();
+  const initialBalance = Number(initial?.opening_balance ?? 0);
   const [form, setForm] = useState({
     name: "", party_type: "CUSTOMER", phone: "", email: "",
-    address: "", opening_balance: "0", notes: "",
+    address: "", notes: "",
     ...initial,
+    // Stored/edited as an always-positive amount + direction rather than a
+    // signed number — entering "-500" to mean "I owe them" isn't obvious,
+    // so the sign is derived from obDirection at submit time instead.
+    opening_balance: Math.abs(initialBalance) || "0",
   });
+  // "To Receive" (they owe us, positive) vs "To Give" (we owe them,
+  // negative) — matches the wording already used on the party balance card.
+  const [obDirection, setObDirection] = useState(initialBalance < 0 ? "PAYABLE" : "RECEIVABLE");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -62,11 +70,15 @@ function PartyModal({ initial, onClose, onSaved }) {
     e.preventDefault();
     if (!form.name.trim()) { setErr("Name is required."); return; }
     setSaving(true);
+    const signedBalance = obDirection === "PAYABLE"
+      ? -Math.abs(Number(form.opening_balance) || 0)
+      : Math.abs(Number(form.opening_balance) || 0);
+    const payload = { ...form, opening_balance: signedBalance };
     try {
       if (initial?.id) {
-        await partiesApi.update(initial.id, form);
+        await partiesApi.update(initial.id, payload);
       } else {
-        await partiesApi.create({ ...form, business: bid });
+        await partiesApi.create({ ...payload, business: bid });
       }
       onSaved();
     } catch (er) {
@@ -115,8 +127,35 @@ function PartyModal({ initial, onClose, onSaved }) {
           </div>
           <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })}
             placeholder={t("address")} className={f} />
-          <input type="number" value={form.opening_balance} onChange={(e) => setForm({ ...form, opening_balance: e.target.value })}
-            placeholder="Opening Balance" className={f} />
+
+          {/* Opening balance: an always-positive amount + explicit direction,
+              so the user never has to guess that a negative number means
+              "I owe them" — this becomes the sign on opening_balance. */}
+          <div>
+            <p className="mb-1.5 text-xs text-navy-400">Opening Balance</p>
+            <div className="flex gap-2">
+              <input type="number" min="0" step="0.01" value={form.opening_balance}
+                onChange={(e) => setForm({ ...form, opening_balance: e.target.value })}
+                placeholder="0.00" className={`${f} flex-1`} />
+              <div className="grid shrink-0 grid-cols-2 gap-1.5">
+                <button type="button" onClick={() => setObDirection("RECEIVABLE")}
+                  className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                    obDirection === "RECEIVABLE" ? "border-red-500 bg-red-500/10 text-red-400" : "border-navy-700 bg-navy-950 text-navy-400 hover:border-navy-600"
+                  }`}
+                >
+                  To Receive
+                </button>
+                <button type="button" onClick={() => setObDirection("PAYABLE")}
+                  className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                    obDirection === "PAYABLE" ? "border-green-500 bg-green-500/10 text-green-400" : "border-navy-700 bg-navy-950 text-navy-400 hover:border-navy-600"
+                  }`}
+                >
+                  To Give
+                </button>
+              </div>
+            </div>
+          </div>
+
           <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
             placeholder={t("note")} rows={2} className={`${f} resize-none`} />
 
@@ -358,7 +397,14 @@ export default function PartiesPage() {
 
   const filtered = useMemo(() => {
     let list = parties;
-    if (typeFilter !== "ALL") list = list.filter((p) => p.party_type === typeFilter);
+    if (typeFilter === "CUSTOMER" || typeFilter === "SUPPLIER") {
+      // A "Both" party counts toward Customers and Suppliers alike (see
+      // stats.customers/suppliers below) — filter the same way so the tab's
+      // own count badge always matches what it actually shows.
+      list = list.filter((p) => p.party_type === typeFilter || p.party_type === "BOTH");
+    } else if (typeFilter === "BOTH") {
+      list = list.filter((p) => p.party_type === "BOTH");
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((p) =>
