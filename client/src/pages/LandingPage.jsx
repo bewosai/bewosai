@@ -109,7 +109,7 @@ const plans = [
     color: "border-navy-700",
     badge: null,
     features: [
-      "1 Business Profile",
+      "Up to 2 Business Profiles",
       "1 User Account",
       "Basic Inventory Management",
       "Customer & Supplier Management",
@@ -128,7 +128,7 @@ const plans = [
     badge: "Most Popular",
     features: [
       "Up to 5 Business Profiles",
-      "Up to 5 Staff Members",
+      "Up to 8 Staff Members",
       "Multi-User Access",
       "Unlimited Transactions & Reports",
       "Multiple Bank Accounts",
