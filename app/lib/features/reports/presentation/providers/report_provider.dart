@@ -28,13 +28,20 @@ class ReportProvider extends ChangeNotifier {
     isLoading = true;
     error = null;
     notifyListeners();
+    // The monthly series is behind the stricter "reports" feature/staff
+    // permission (the summary isn't), and the dashboard doesn't depend on it
+    // — so a refusal there must not blank the whole dashboard with "Could not
+    // load". Started together with the summary, but its failure is swallowed.
+    final monthlyFuture = _useCases.getMonthly().then<List<MonthlyPoint>>(
+      (v) => v,
+      onError: (_) => <MonthlyPoint>[],
+    );
     try {
-      final results = await Future.wait([_useCases.getDashboard(), _useCases.getMonthly()]);
-      dashboard = results[0] as DashboardSummary;
-      monthly = results[1] as List<MonthlyPoint>;
+      dashboard = await _useCases.getDashboard();
     } catch (e) {
       error = e is ApiException ? e.message : e.toString();
     }
+    monthly = await monthlyFuture;
     isLoading = false;
     notifyListeners();
   }
