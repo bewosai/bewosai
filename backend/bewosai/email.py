@@ -201,7 +201,15 @@ def _send(to_email: str, *, subject: str, text: str, html: str, console_fallback
         return _send_via_smtp(to_email, subject, text, html)
 
     console_fallback()
-    return True
+    if settings.DEBUG:
+        return True
+    # Outside local dev, "printed to the server log" isn't delivery — returning
+    # True here made the API report "OTP sent" while no email ever went out.
+    logger.error(
+        "No email provider configured (set SENDGRID_API_KEY, or EMAIL_HOST_USER + "
+        "EMAIL_HOST_PASSWORD) — email to %s was NOT sent.", to_email,
+    )
+    return False
 
 
 def _send_via_sendgrid(to_email: str, subject: str, text: str, html: str, api_key: str) -> bool:
