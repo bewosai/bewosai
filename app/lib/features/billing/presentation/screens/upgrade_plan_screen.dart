@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/formatters.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/billing_provider.dart';
@@ -26,11 +27,7 @@ Color _planColor(String plan) {
   }
 }
 
-String _fmtDate(DateTime? d) {
-  if (d == null) return '—';
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return '${d.day} ${months[d.month - 1]} ${d.year}';
-}
+String _fmtDate(DateTime? d) => Formatters.date(d);
 
 class UpgradePlanScreen extends StatefulWidget {
   const UpgradePlanScreen({super.key});

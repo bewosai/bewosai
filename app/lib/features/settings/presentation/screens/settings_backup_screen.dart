@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/formatters.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/data/services/auth_service.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -141,7 +142,7 @@ class _SettingsBackupScreenState extends State<SettingsBackupScreen> {
                       Expanded(
                         child: Text(
                           _lastVerifiedOk == true
-                              ? 'Verified — synced as of ${DateFormat('dd MMM yyyy, hh:mm a').format(_lastVerified!)}'
+                              ? 'Verified — synced as of ${Formatters.date(_lastVerified)}, ${DateFormat('hh:mm a').format(_lastVerified!)}'
                               : 'Couldn\'t reach the server. Check your internet connection.',
                           style: TextStyle(
                             fontSize: 13,

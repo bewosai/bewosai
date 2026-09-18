@@ -771,7 +771,7 @@ class _CashflowChart extends StatelessWidget {
                       return Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
-                          date != null ? '${date.day}/${date.month}' : '',
+                          date != null ? Formatters.dateShort(date) : '',
                           style: TextStyle(
                             fontSize: 9,
                             color: AppColors.textSecondary,

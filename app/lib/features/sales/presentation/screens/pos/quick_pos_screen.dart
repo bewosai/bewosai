@@ -6,6 +6,7 @@ import '../../../../../core/notifications/notification_service.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/utils/formatters.dart';
 import '../../../../../core/utils/validators.dart';
+import '../../../../../shared/widgets/app_date_picker.dart';
 import '../../../../../shared/widgets/app_widgets.dart';
 import '../../../../auth/presentation/providers/auth_provider.dart';
 import '../../../../banking/presentation/providers/banking_provider.dart';
@@ -294,7 +295,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   /// those before the item actually lands on the invoice, instead of it
   /// appearing with a bare "0" quantity they then have to notice and fix
   /// inline in the cramped line-item row.
-  void _showItemDetailSheet(_LineItem item, Product p) {
+  void _showItemDetailSheet(_LineItem item, Product p, {bool showStock = true}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -303,12 +304,15 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
         initialQty: item.product == p.id && item.qty > 0 ? item.qty : 1,
         initialPrice: item.product == p.id && item.price > 0 ? item.price : p.salePrice,
         initialDiscount: item.product == p.id ? item.discount : 0,
-        onAdd: (qty, price, discount) {
+        initialUnitLabel: item.product == p.id ? item.unitLabel : '',
+        showStock: showStock,
+        onAdd: (qty, price, discount, unitLabel) {
           setState(() {
-            item.product = p.id;
+            // A stand-in product (id 0) must not overwrite the line's real link.
+            if (p.id != 0) item.product = p.id;
             item.nameController.text = p.name;
             item.unitDetail = p.unitDetail;
-            item.unitLabel = p.unitDetail?.name ?? '';
+            item.unitLabel = unitLabel;
             item.basePrice = p.salePrice;
             item.qtyController.text = qty.toString();
             item.priceController.text = price.toString();
@@ -318,6 +322,56 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
         },
       ),
     );
+  }
+
+  /// Re-opens the same detail sheet used when adding, pre-filled from the line,
+  /// so editing and adding always look and behave identically.
+  void _editItem(_LineItem item) {
+    final match = context.read<InventoryProvider>().products.where((p) => p.id == item.product);
+    if (match.isNotEmpty) {
+      _showItemDetailSheet(item, match.first);
+      return;
+    }
+    // The product record isn't loaded (or it's a free-text line): edit from
+    // what the line itself remembers.
+    _showItemDetailSheet(
+      item,
+      Product(
+        id: item.product ?? 0,
+        name: item.nameController.text,
+        categoryName: '',
+        unitName: item.unitLabel,
+        unitDetail: item.unitDetail,
+        description: '',
+        purchasePrice: 0,
+        salePrice: item.basePrice > 0 ? item.basePrice : item.price,
+        stockQuantity: 0,
+        lowStockThreshold: 0,
+        isLowStock: false,
+        barcode: '',
+        isActive: true,
+      ),
+      showStock: false,
+    );
+  }
+
+  /// Removes a line, with a one-tap Undo so an accidental tap costs nothing.
+  void _removeItem(int index) {
+    final removed = _items[index];
+    setState(() => _items.removeAt(index));
+    final name = removed.nameController.text.trim().isEmpty ? 'Item' : removed.nameController.text.trim();
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text('$name removed'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            if (!mounted) return;
+            setState(() => _items.insert(index.clamp(0, _items.length), removed));
+          },
+        ),
+      ));
   }
 
   Future<void> _openAddProductDialog(_LineItem item) async {
@@ -724,8 +778,8 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                               child: InkWell(
                                 onTap: () async {
                                   final base = _reminderAt ?? (_dueDate ?? _saleDate);
-                                  final pickedDate = await showDatePicker(
-                                    context: context,
+                                  final pickedDate = await AppDatePicker.pick(
+                                    context,
                                     initialDate: base,
                                     firstDate: DateTime(2020),
                                     lastDate: DateTime(2100),
@@ -765,9 +819,8 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                         (e) => _LineItemRow(
                           index: e.key + 1,
                           item: e.value,
-                          onPickProduct: () => _pickProduct(e.value),
-                          onRemove: () => setState(() => _items.removeAt(e.key)),
-                          onChanged: () => setState(() {}),
+                          onEdit: () => _editItem(e.value),
+                          onRemove: () => _removeItem(e.key),
                         ),
                       ),
                       if (_items.isEmpty)
@@ -1119,7 +1172,13 @@ class _ItemDetailSheet extends StatefulWidget {
   final double initialQty;
   final double initialPrice;
   final double initialDiscount;
-  final void Function(double qty, double price, double discount) onAdd;
+  /// The unit this line is billed in (e.g. "Piece" vs the product's primary
+  /// "Box"); blank means the primary unit.
+  final String initialUnitLabel;
+  /// False when [product] is only a stand-in built from an existing line (its
+  /// real record isn't loaded), so a made-up "0 in stock" isn't shown.
+  final bool showStock;
+  final void Function(double qty, double price, double discount, String unitLabel) onAdd;
 
   const _ItemDetailSheet({
     required this.product,
@@ -1127,6 +1186,8 @@ class _ItemDetailSheet extends StatefulWidget {
     required this.initialPrice,
     required this.initialDiscount,
     required this.onAdd,
+    this.initialUnitLabel = '',
+    this.showStock = true,
   });
 
   @override
@@ -1143,6 +1204,22 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
   late final _discountController = TextEditingController(
     text: widget.initialDiscount == 0 ? '' : _clean(widget.initialDiscount),
   );
+
+  late String _unitLabel = _resolveUnit();
+
+  // The dropdown asserts its value is exactly one of its items, and a saved
+  // line's unit label can differ in case/spacing (Unit.priceFor compares
+  // case-insensitively for the same reason) — snap to the real unit name.
+  String _resolveUnit() {
+    final unit = widget.product.unitDetail;
+    final wanted = widget.initialUnitLabel.trim().toLowerCase();
+    if (unit != null && unit.hasSecondary) {
+      return wanted == unit.secondaryUnit.trim().toLowerCase() ? unit.secondaryUnit : unit.name;
+    }
+    return widget.initialUnitLabel.isNotEmpty
+        ? widget.initialUnitLabel
+        : (unit?.name ?? widget.product.unitName);
+  }
 
   double get _qty => double.tryParse(_qtyController.text) ?? 0;
   double get _price => double.tryParse(_priceController.text) ?? 0;
@@ -1189,17 +1266,18 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (p.isLowStock) ...[
+                          if (widget.showStock && p.isLowStock) ...[
                             const StatusBadge(label: 'LOW', color: AppColors.error),
                             const SizedBox(width: 6),
                           ],
-                          Flexible(
-                            child: Text(
-                              '${Formatters.amount(p.stockQuantity)} ${p.unitName} in stock',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          if (widget.showStock)
+                            Flexible(
+                              child: Text(
+                                '${Formatters.amount(p.stockQuantity)} ${p.unitName} in stock',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -1211,6 +1289,26 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
                   ],
                 ),
                 const SizedBox(height: 18),
+                // Only for products that have a secondary unit (e.g. Box/Piece):
+                // switching recomputes the price from the product's base price
+                // each time, so toggling back and forth never compounds.
+                if (p.unitDetail?.hasSecondary == true) ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: _unitLabel,
+                    decoration: const InputDecoration(labelText: 'Unit'),
+                    items: [p.unitDetail!.name, p.unitDetail!.secondaryUnit]
+                        .map((label) => DropdownMenuItem(value: label, child: Text(label)))
+                        .toList(),
+                    onChanged: (label) {
+                      if (label == null || label == _unitLabel) return;
+                      setState(() {
+                        _unitLabel = label;
+                        _priceController.text = _clean(p.unitDetail!.priceFor(p.salePrice, label));
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Row(
                   children: [
                     Expanded(
@@ -1274,7 +1372,7 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
                         label: 'Add to Invoice',
                         onPressed: () {
                           if (!(_formKey.currentState?.validate() ?? false)) return;
-                          widget.onAdd(_qty, _price, _discount);
+                          widget.onAdd(_qty, _price, _discount, _unitLabel);
                           Navigator.pop(context);
                         },
                       ),
@@ -1290,188 +1388,115 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
   }
 }
 
-/// One line item, laid out like a row of the printed invoice's item table
-/// (S.N. / Name / Qty / Rate / Amount) — a numbered badge lines it up with
-/// the product name, and Product/Qty/Price/Disc./Amount all share one row —
-/// every column is [Expanded] with a fixed flex ratio (never a fixed pixel
-/// width) so the row always fits without overflowing, the same way the web
-/// item table's grid-cols-12 columns are proportional rather than fixed.
+/// One invoice line as a compact box showing only what matters — name,
+/// quantity x price, any discount and the line total — with edit and delete
+/// side by side. Editing (tap anywhere, or the pencil) opens the same detail
+/// sheet used to add the item, so what you see here is exactly what you set
+/// there.
 class _LineItemRow extends StatelessWidget {
   final int index;
   final _LineItem item;
-  final VoidCallback onPickProduct;
-  final VoidCallback? onRemove;
-  final VoidCallback onChanged;
+  final VoidCallback onEdit;
+  final VoidCallback onRemove;
 
   const _LineItemRow({
     required this.index,
     required this.item,
-    required this.onPickProduct,
+    required this.onEdit,
     required this.onRemove,
-    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final name = item.nameController.text.trim().isEmpty ? 'Item' : item.nameController.text.trim();
+    final unit = item.unitLabel.isEmpty ? '' : ' ${item.unitLabel}';
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.navy50,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 20,
-            height: 20,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.orange.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              '$index',
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: AppColors.orangeDark,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 3,
-            child: InkWell(
-              onTap: onPickProduct,
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Product',
-                  isDense: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onEdit,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.orange.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
                 ),
                 child: Text(
-                  item.nameController.text.isEmpty
-                      ? 'Select product'
-                      : item.nameController.text,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+                  '$index',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.orangeDark),
                 ),
               ),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${Formatters.amount(item.qty)}$unit × ${Formatters.currency(item.price)}',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                    ),
+                    if (item.discount > 0)
+                      Text(
+                        'Discount − ${Formatters.currency(item.discount)}',
+                        style: const TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8, top: 2),
+                    child: Text(
+                      Formatters.currency(item.total),
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Edit',
+                        icon: Icon(Icons.edit_outlined, size: 19, color: AppColors.textSecondary),
+                        onPressed: onEdit,
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 34),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove',
+                        icon: const Icon(Icons.delete_outline, size: 19, color: AppColors.error),
+                        onPressed: onRemove,
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 34),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
           ),
-          if (item.unitDetail?.hasSecondary == true) ...[
-            const SizedBox(width: 4),
-            _UnitToggle(item: item, onChanged: onChanged),
-          ],
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: item.qtyController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(fontSize: 12),
-              decoration: const InputDecoration(labelText: 'Qty', isDense: true),
-              onChanged: (_) => onChanged(),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: item.priceController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(fontSize: 12),
-              decoration: const InputDecoration(labelText: 'Price', isDense: true),
-              onChanged: (_) => onChanged(),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: item.discountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(fontSize: 12),
-              decoration: const InputDecoration(labelText: 'Disc.', isDense: true),
-              onChanged: (_) => onChanged(),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 2,
-            child: Text(
-              Formatters.currency(item.total),
-              textAlign: TextAlign.right,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-            ),
-          ),
-          SizedBox(
-            width: 28,
-            child: onRemove != null
-                ? IconButton(
-                    icon: const Icon(Icons.close, size: 16, color: AppColors.error),
-                    onPressed: onRemove,
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                  )
-                : null,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Dropdown that picks which of the product's units this line is billed in
-/// (e.g. "Box" vs "Piece"), recomputing the suggested price from the
-/// product's true base price each time (see _LineItem.basePrice) so
-/// switching back and forth never compounds a conversion on top of a
-/// previous one. Only rendered when the product actually has a secondary
-/// unit configured — otherwise this column simply isn't there, preserving
-/// the single-line layout for the common single-unit case.
-class _UnitToggle extends StatelessWidget {
-  final _LineItem item;
-  final VoidCallback onChanged;
-
-  const _UnitToggle({required this.item, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final unit = item.unitDetail!;
-    final currentLabel = item.unitLabel.isEmpty ? unit.name : item.unitLabel;
-    return Container(
-      width: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: AppColors.orange.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: currentLabel,
-          isDense: true,
-          isExpanded: true,
-          icon: const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.orangeDark),
-          style: const TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            color: AppColors.orangeDark,
-          ),
-          items: [unit.name, unit.secondaryUnit]
-              .map((label) => DropdownMenuItem(
-                    value: label,
-                    child: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
-                  ))
-              .toList(),
-          onChanged: (newLabel) {
-            if (newLabel == null || newLabel == currentLabel) return;
-            item.unitLabel = newLabel;
-            item.priceController.text = unit.priceFor(item.basePrice, newLabel).toString();
-            onChanged();
-          },
         ),
       ),
     );
@@ -1495,8 +1520,8 @@ class _DatePickerField extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () async {
-        final picked = await showDatePicker(
-          context: context,
+        final picked = await AppDatePicker.pick(
+          context,
           initialDate: date ?? DateTime.now(),
           firstDate: DateTime(2020),
           lastDate: DateTime(2100),

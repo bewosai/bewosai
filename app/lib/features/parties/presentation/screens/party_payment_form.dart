@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/formatters.dart';
 import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../banking/presentation/providers/banking_provider.dart';
@@ -133,7 +134,7 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
             },
             child: InputDecorator(
               decoration: const InputDecoration(labelText: 'Date'),
-              child: Text('${_date.day}/${_date.month}/${_date.year}'),
+              child: Text(Formatters.date(_date)),
             ),
           ),
           const SizedBox(height: 12),
