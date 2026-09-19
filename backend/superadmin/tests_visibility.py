@@ -146,3 +146,34 @@ class LoginDataIsSavedCorrectlyTests(TestCase):
         second = self.sign_in("twice@example.com")
         self.assertEqual(second.login_activities.count(), 2)
         self.assertGreaterEqual(second.last_login_at, first)
+
+
+class InvoiceReachesSuperAdminTests(TestCase):
+    """An invoice saved through the same API the app and website both call
+    shows up in Super Admin's per-user totals and activity."""
+
+    def test_an_invoice_created_from_the_app_is_counted_and_logged(self):
+        from decimal import Decimal
+        from inventory.models import Product
+
+        owner = User.objects.create_user(email="shop@example.com", name="Shop Owner", is_verified=True)
+        business = Business.objects.create(owner=owner, name="Shop")
+        StaffMember.objects.create(user=owner, business=business, role=StaffMember.ROLE_OWNER)
+        product = Product.objects.create(
+            business=business, name="Rice", sale_price=Decimal("100"), purchase_price=Decimal("60"), stock_quantity=Decimal("10"),
+        )
+        api = APIClient(HTTP_X_BUSINESS_ID=str(business.id), HTTP_X_PLATFORM="mobile")
+        api.force_authenticate(owner)
+        res = api.post("/api/sales/", {
+            "invoice_number": "INV-1", "sale_date": "2026-09-19", "payment_method": "CASH", "paid_amount": "200",
+            "items": [{"product": product.id, "product_name": "Rice", "quantity": "2", "unit_price": "100"}],
+        }, format="json")
+        self.assertEqual(res.status_code, 201, res.content)
+
+        admin = User.objects.create_user(email="admin@example.com", name="Admin", is_platform_admin=True)
+        admin_api = APIClient()
+        admin_api.force_authenticate(admin)
+        summary = admin_api.get(f"/api/superadmin/users/{owner.id}/summary/")
+        self.assertEqual(summary.data["total_sales"], 1)
+        activity = admin_api.get(f"/api/superadmin/users/{owner.id}/activity/").data["results"]
+        self.assertTrue(any(a["object_repr"] == "Invoice INV-1" for a in activity), activity)
