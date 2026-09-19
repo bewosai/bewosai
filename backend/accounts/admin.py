@@ -5,7 +5,7 @@ from .models import User, Business, StaffMember, LoginActivity, StaffActivity, F
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ("email", "name", "phone", "account_type", "is_platform_admin", "is_active", "created_at")
+    list_display = ("email", "name", "phone", "account_type", "is_platform_admin", "is_active", "last_login_at", "last_active_at", "created_at")
     list_filter = ("is_platform_admin", "is_active", "is_staff", "account_type")
     search_fields = ("email", "name", "phone")
     ordering = ("-created_at",)
@@ -15,7 +15,9 @@ class UserAdmin(BaseUserAdmin):
         ("Permissions", {
             "fields": ("is_active", "is_staff", "is_superuser", "is_platform_admin", "is_verified"),
         }),
-        ("Important dates", {"fields": ("last_login", "last_login_at", "created_at")}),
+        # last_login is Django's own field, only set by password/session logins — OTP,
+        # Google and staff-link sign-ins fill last_login_at instead, so that's the one shown.
+        ("Important dates", {"fields": ("last_login_at", "last_active_at", "created_at")}),
     )
     add_fieldsets = (
         (None, {
@@ -23,7 +25,7 @@ class UserAdmin(BaseUserAdmin):
             "fields": ("email", "name", "phone", "password1", "password2"),
         }),
     )
-    readonly_fields = ("created_at", "last_login_at")
+    readonly_fields = ("created_at", "last_login_at", "last_active_at")
 
 
 @admin.register(Business)
@@ -61,7 +63,7 @@ class StaffMemberAdmin(admin.ModelAdmin):
 
 @admin.register(LoginActivity)
 class LoginActivityAdmin(admin.ModelAdmin):
-    list_display = ("user", "ip_address", "success", "timestamp", "session_duration")
+    list_display = ("user", "ip_address", "user_agent", "success", "timestamp", "session_duration")
     list_filter = ("success",)
     search_fields = ("user__email",)
     readonly_fields = ("timestamp",)

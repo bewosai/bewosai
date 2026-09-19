@@ -116,3 +116,33 @@ class EveryoneWhoSignsInShowsUpTests(TestCase):
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._token(normal)}")
         self.assertEqual(client.get("/api/superadmin/users/").status_code, 403)
+
+
+class LoginDataIsSavedCorrectlyTests(TestCase):
+    """Behind Render's proxy REMOTE_ADDR is the proxy, not the person."""
+
+    def sign_in(self, email, **headers):
+        _, code = OTPCode.generate(email, ACCOUNT_BUSINESS)
+        res = APIClient(**headers).post("/api/auth/verify-otp/", {"identifier": email, "code": code}, format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+        return User.objects.get(email=email)
+
+    def test_login_saves_time_device_and_the_real_client_ip(self):
+        user = self.sign_in(
+            "ip@example.com", HTTP_X_FORWARDED_FOR="203.0.113.7, 10.0.0.1",
+            REMOTE_ADDR="10.0.0.1", HTTP_USER_AGENT="Dart/3.4 (dart:io)",
+        )
+        self.assertIsNotNone(user.last_login_at)
+        entry = user.login_activities.get()
+        self.assertEqual(entry.ip_address, "203.0.113.7")
+        self.assertEqual(entry.user_agent, "Dart/3.4 (dart:io)")
+
+    def test_a_garbage_forwarded_header_falls_back_instead_of_crashing_the_login(self):
+        user = self.sign_in("bad@example.com", HTTP_X_FORWARDED_FOR="not-an-ip", REMOTE_ADDR="198.51.100.4")
+        self.assertEqual(user.login_activities.get().ip_address, "198.51.100.4")
+
+    def test_every_login_adds_an_entry_and_moves_last_login_forward(self):
+        first = self.sign_in("twice@example.com").last_login_at
+        second = self.sign_in("twice@example.com")
+        self.assertEqual(second.login_activities.count(), 2)
+        self.assertGreaterEqual(second.last_login_at, first)

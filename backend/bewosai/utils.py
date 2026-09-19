@@ -1,7 +1,25 @@
 """Shared request-context helpers used across all apps."""
+import ipaddress
+
 from rest_framework.exceptions import ValidationError
 
 from accounts.models import Business
+
+
+def client_ip(request):
+    """The caller's real IP. On Render (and any proxy/CDN) REMOTE_ADDR is the
+    proxy's own address, so every login was being recorded with the same
+    internal IP — the real client is the first entry of X-Forwarded-For.
+    Validated, because the header is client-supplied text and a garbage value
+    would crash the insert on Postgres' inet column; falls back to REMOTE_ADDR."""
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    first = forwarded.split(",")[0].strip()
+    if first:
+        try:
+            return str(ipaddress.ip_address(first))
+        except ValueError:
+            pass
+    return request.META.get("REMOTE_ADDR") or None
 
 # One-character/common-swap typos of the big email providers. SMTP delivery
 # is fire-and-forget from Django's point of view — send_mail() reports

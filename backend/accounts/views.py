@@ -14,7 +14,7 @@ from bewosai.email import send_otp_email
 from .admin_access import grant_platform_admin_if_listed
 # from bewosai.sms import send_otp_sms  # phone login/signup temporarily disabled (2026-09-16)
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, get_platform, require_feature, require_staff_permission, staff_can
-from bewosai.utils import get_bid, get_business
+from bewosai.utils import client_ip, get_bid, get_business
 from .models import User, Business, FiscalYear, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from .serializers import (
     UserSerializer, BusinessSerializer, FiscalYearSerializer, StaffMemberSerializer, InviteStaffSerializer,
@@ -239,7 +239,7 @@ class VerifyOTPView(APIView):
 
             LoginActivity.objects.create(
                 user=user,
-                ip_address=request.META.get("REMOTE_ADDR"),
+                ip_address=client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
             )
 
@@ -304,7 +304,7 @@ class GoogleLoginView(APIView):
 
             LoginActivity.objects.create(
                 user=user,
-                ip_address=request.META.get("REMOTE_ADDR"),
+                ip_address=client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
             )
 
@@ -714,7 +714,7 @@ class StaffLoginView(APIView):
 
         LoginActivity.objects.create(
             user=user,
-            ip_address=request.META.get("REMOTE_ADDR"),
+            ip_address=client_ip(request),
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
         )
 
