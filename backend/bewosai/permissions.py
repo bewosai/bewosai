@@ -180,7 +180,7 @@ class IsPremiumBusiness(BasePermission):
 
 class HasActiveSubscription(BasePermission):
     """
-    Global gate: once a business's 120-day trial ends with no active license
+    Global gate: once a business's free trial ends with no active license
     and no Super-Admin-granted platform trial (see Business.has_access),
     every business-scoped endpoint is blocked until one is activated. Applied
     via DEFAULT_PERMISSION_CLASSES so no per-view wiring is needed — but it
@@ -189,7 +189,7 @@ class HasActiveSubscription(BasePermission):
     passes straight through untouched.
     """
 
-    message = "Your 120-day trial has ended. Enter a license code to continue."
+    message = "Your free trial has ended. Enter a license code to continue."
 
     # Views that must stay reachable even with no active subscription — the
     # login flow itself, business switching/selection, and the license

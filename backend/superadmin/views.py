@@ -159,7 +159,7 @@ class BusinessActionView(APIView):
         elif action == "set_trial":
             # Grants or revokes an admin-controlled trial window for one
             # platform (web or mobile) — independent of the automatic
-            # 120-day trial and of the license system. See
+            # 90-day trial and of the license system. See
             # Business.has_active_platform_trial / has_access.
             platform = request.data.get("platform")
             if platform not in ("web", "mobile"):

@@ -240,10 +240,9 @@ class Business(models.Model):
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="referrals",
     )
 
-    # 120 days for now while the app is new, so people have real room to try
-    # it out before needing a license — tighten this once there's an
-    # established user base.
-    TRIAL_DAYS = 120
+    # 90 days free, then a license (or a referral reward — each successful
+    # referral adds a month of Premium, see billing.services) is needed.
+    TRIAL_DAYS = 90
     # Businesses created before licensing shipped are grandfathered — their
     # trial would already read as expired since it's computed from
     # created_at, and retroactively locking out every existing business the

@@ -1,4 +1,5 @@
-from datetime import timedelta
+from datetime import date, timedelta
+from unittest import mock
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -314,3 +315,37 @@ class BillingApiTests(TestCase):
         r = self.admin_client.get("/api/superadmin/referrals/stats/")
         self.assertEqual(r.status_code, 200)
         self.assertGreaterEqual(r.data["rewarded"], 1)
+
+
+class NinetyDayTrialThenReferralTests(TestCase):
+    """90 days free; after that a referral's month of Premium keeps the business going."""
+
+    def setUp(self):
+        # Businesses older than LICENSING_STARTS are exempt from the trial, and
+        # these ones are back-dated — so move that line out of the way.
+        patcher = mock.patch.object(Business, "LICENSING_STARTS", date(2000, 1, 1))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.referrer = make_business("ref@example.com", "Referrer")[1]
+        self.newcomer = make_business("new@example.com", "Newcomer")[1]
+
+    def age(self, business, days):
+        Business.objects.filter(pk=business.pk).update(created_at=timezone.now() - timedelta(days=days))
+        business.refresh_from_db()
+
+    def test_the_free_period_is_ninety_days(self):
+        self.assertEqual(Business.TRIAL_DAYS, 90)
+        self.age(self.newcomer, 89)
+        self.assertTrue(self.newcomer.is_trial_active)
+        self.age(self.newcomer, 91)
+        self.assertFalse(self.newcomer.is_trial_active)
+
+    def test_after_the_trial_a_referral_adds_a_month_of_premium_and_access(self):
+        self.age(self.newcomer, 100)                      # trial over
+        self.assertFalse(self.newcomer.has_active_subscription)
+        process_referral(new_business=self.newcomer, referrer_business=self.referrer)
+        self.newcomer.refresh_from_db()
+        self.assertTrue(self.newcomer.has_active_subscription)
+        self.assertEqual(self.newcomer.effective_plan, Business.PLAN_PREMIUM)
+        sub = self.newcomer.active_referral_subscription
+        self.assertEqual((sub.end_date - timezone.localdate()).days, 30)

@@ -600,7 +600,7 @@ function ManageLimitsModal({ biz, onClose, onSaved }) {
 
 /* ── Manage Trial Modal ──────────────────────────────────────────────────── */
 // Grants (or revokes) an admin-controlled trial window per platform,
-// independent of the automatic 120-day trial and of the license system —
+// independent of the automatic 90-day trial and of the license system —
 // see accounts.Business.has_active_platform_trial / superadmin.BusinessActionView's
 // "set_trial" action.
 function TrialPlatformRow({ icon: Icon, label, hint, enabled, onToggle, start, end, onStart, onEnd }) {

@@ -94,7 +94,7 @@ class Announcement(models.Model):
 # A license belongs to a Business, not a bare User account — matching every
 # other permission check in this codebase (IsPremiumBusiness, Feature.premium_only),
 # since one user can own or staff multiple businesses. Every new business gets
-# a 120-day trial computed from Business.created_at (see Business.trial_expiry_date)
+# a 90-day trial computed from Business.created_at (see Business.trial_expiry_date)
 # — no stored trial fields, nothing to drift out of sync.
 
 LICENSE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ2346789"  # no 0/1/I/O — avoids visual confusion
