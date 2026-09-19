@@ -217,6 +217,7 @@ function CommentsCard({ language }) {
 const SECTIONS = [
   { key: "account",       icon: User,           label: { en: "Account", ne: "खाता" } },
   { key: "business",      icon: Building2,      label: { en: "Business", ne: "व्यवसाय" } },
+  { key: "staff",         icon: Users,          label: { en: "Staff", ne: "स्टाफ" } },
   { key: "billing",       icon: Crown,          label: { en: "Billing & Plan", ne: "बिलिङ र योजना" } },
   { key: "appearance",    icon: Palette,        label: { en: "Appearance & Invoices", ne: "रूप र बिजक" } },
   { key: "data",          icon: FileSpreadsheet, label: { en: "Data & Reports", ne: "डेटा र प्रतिवेदन" } },
@@ -681,8 +682,10 @@ export default function SettingsPage() {
 
         {/* Staff — up to 8 people can sign in with their own login link and a
             role (Manager / Cashier / Viewer). Premium-only, matching the app's
-            Settings > Staff entry: explains that and opens Upgrade on Free. */}
-        {section === "business" && (
+            Settings > Staff entry: explains that and opens Upgrade on Free.
+            Its own dropdown entry (not nested under Business) so it's directly
+            selectable instead of buried inside another section's content. */}
+        {section === "staff" && (
         <SettingCard title={language === "ne" ? "स्टाफ" : "Staff"} icon={Users}>
           <button
             onClick={() => navigate(isFeatureEnabled("staff_management") ? "/staff" : "/settings/upgrade")}
