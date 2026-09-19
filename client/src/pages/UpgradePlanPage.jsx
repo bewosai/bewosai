@@ -136,7 +136,9 @@ export default function UpgradePlanPage() {
 
   const whatsappShareUrl = referral?.referral_link
     ? `https://wa.me/?text=${encodeURIComponent(
-        `I'm using Bewosai to manage my business. Join using my referral link and get 1 month Premium free:\n\n${referral.referral_link}`,
+        `I'm using Bewosai to manage my business. Join using my referral link and get 1 month Premium free:\n\n${referral.referral_link}
+
+Or enter my code ${referral.referral_code} when creating your business.`,
       )}`
     : null;
 

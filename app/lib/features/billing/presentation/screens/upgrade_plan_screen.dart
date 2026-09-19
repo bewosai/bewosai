@@ -69,8 +69,10 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen> {
   }
 
   void _shareLink(String link) {
+    final code = context.read<BillingProvider>().referral?.referralCode;
     SharePlus.instance.share(ShareParams(
-      text: "I'm using Bewosai to manage my business. Join using my referral link and get 1 month Premium free:\n\n$link",
+      text: "I'm using Bewosai to manage my business. Join using my referral link and get 1 month Premium free:\n\n$link"
+          "${code == null || code.isEmpty ? '' : '\n\nOr enter my code $code when creating your business.'}",
     ));
   }
 

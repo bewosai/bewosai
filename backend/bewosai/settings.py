@@ -274,6 +274,9 @@ PLATFORM_ADMIN_EMAILS = [
     e.strip().lower() for e in config("PLATFORM_ADMIN_EMAILS", default="").split(",") if e.strip()
 ]
 
+# Where the website lives — referral links point here (the backend has no pages).
+FRONTEND_URL = config("FRONTEND_URL", default="https://bewosaiapp.vercel.app").rstrip("/")
+
 SENDGRID_API_KEY = config("SENDGRID_API_KEY", default="")
 SENDGRID_FROM_EMAIL = config("SENDGRID_FROM_EMAIL", default="noreply@bewosai.com")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Bewosai <noreply@bewosai.com>")

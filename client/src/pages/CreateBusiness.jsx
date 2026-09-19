@@ -11,6 +11,10 @@ const BUSINESS_TYPE_PRESETS = [
   "Electronics", "Hardware", "Service", "Manufacturing", "Other",
 ];
 
+function rememberedReferral() {
+  try { return localStorage.getItem("pending_referral") || ""; } catch { return ""; }
+}
+
 export default function CreateBusinessPage() {
   const { addBusiness, businesses } = useAuth();
   const navigate = useNavigate();
@@ -18,7 +22,7 @@ export default function CreateBusinessPage() {
   // A shared referral link (e.g. /create-business?ref=CODE) pre-fills the
   // code but still leaves it editable — see billing app / UpgradePlanPage
   // for where a business's own code comes from.
-  const [form, setForm] = useState({ name: "", business_type: "", phone: "", referral_code: searchParams.get("ref") || "" });
+  const [form, setForm] = useState({ name: "", business_type: "", phone: "", referral_code: searchParams.get("ref") || rememberedReferral() });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [customType, setCustomType] = useState(false);
@@ -30,6 +34,7 @@ export default function CreateBusinessPage() {
     try {
       const { data } = await authApi.createBusiness(form);
       addBusiness(data);
+      try { localStorage.removeItem("pending_referral"); } catch { /* nothing to clear */ }
       navigate("/dashboard");
     } catch (err) {
       setError(err.response?.data?.name?.[0] || "Failed to create business.");

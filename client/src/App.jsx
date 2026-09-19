@@ -12,6 +12,7 @@ import LandingPage from "./pages/LandingPage";
 // onboarding, staff links), so lazy-load them like the business pages below.
 const VerifyOtpPage = lazy(() => import("./pages/VerifyOtp"));
 const CreateBusinessPage = lazy(() => import("./pages/CreateBusiness"));
+const ReferralLanding = lazy(() => import("./pages/ReferralLanding"));
 const SelectBusinessPage = lazy(() => import("./pages/SelectBusiness"));
 const LicenseRequiredPage = lazy(() => import("./pages/LicenseRequired"));
 const StaffLoginPage = lazy(() => import("./pages/StaffLoginPage"));
@@ -66,6 +67,7 @@ export default function App() {
       {/* Public */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
+      <Route path="/r/:code" element={<ReferralLanding />} />
       <Route path="/verify-otp" element={<VerifyOtpPage />} />
       {/* Not wrapped in GuestOnly: clicking a staff login link should
           switch the session on this device even if someone else (or a

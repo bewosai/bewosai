@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -105,7 +106,7 @@ class ReferralMeView(APIView):
 
         return Response({
             "referral_code": business.referral_code,
-            "referral_link": request.build_absolute_uri(f"/r/{business.referral_code}"),
+            "referral_link": f"{settings.FRONTEND_URL}/r/{business.referral_code}",
             "total_referrals": rewards.count(),
             "rewards": ReferralSerializer(
                 Referral.objects.filter(referrer_business=business).order_by("-registered_at")[:50], many=True,

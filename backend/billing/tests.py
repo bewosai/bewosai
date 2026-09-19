@@ -349,3 +349,16 @@ class NinetyDayTrialThenReferralTests(TestCase):
         self.assertEqual(self.newcomer.effective_plan, Business.PLAN_PREMIUM)
         sub = self.newcomer.active_referral_subscription
         self.assertEqual((sub.end_date - timezone.localdate()).days, 30)
+
+
+class ReferralLinkTests(TestCase):
+    def test_the_shared_link_points_at_the_website_not_the_backend(self):
+        from django.conf import settings
+
+        user, business = make_business("linker@example.com", "Linker")
+        api = APIClient(HTTP_X_BUSINESS_ID=str(business.id))
+        api.force_authenticate(user)
+        data = api.get("/api/billing/referral/").data
+        self.assertEqual(data["referral_link"], f"{settings.FRONTEND_URL}/r/{business.referral_code}")
+        self.assertNotIn("onrender.com", data["referral_link"])
+        self.assertTrue(data["referral_link"].startswith("https://"))
