@@ -73,6 +73,19 @@ class TokenStorage {
     await prefs.remove(AppConstants.keyCurrentBusiness);
   }
 
+  /// Which business this device last had selected — survives logout (see
+  /// [clear]), so the next login can auto-restore it instead of asking
+  /// again, the same way the website remembers it in localStorage.
+  Future<int?> get lastBusinessId async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(AppConstants.keyLastBusinessId);
+  }
+
+  Future<void> saveLastBusinessId(int id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(AppConstants.keyLastBusinessId, id);
+  }
+
   /// Full logout: wipes tokens and every cached value.
   Future<void> clear() async {
     await _secure.delete(key: AppConstants.keyAccessToken);

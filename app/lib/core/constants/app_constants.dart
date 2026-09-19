@@ -49,6 +49,10 @@ class AppConstants {
   static const String keyUser = 'user_data';
   static const String keyBusinesses = 'businesses_data';
   static const String keyCurrentBusiness = 'current_business';
+  // Deliberately NOT wiped by TokenStorage.clear() (full logout) — mirrors
+  // the website's `last_business_id` in localStorage, so the next login on
+  // this device auto-restores the same business instead of asking again.
+  static const String keyLastBusinessId = 'last_business_id';
 
   static const String defaultCurrency = 'Rs.';
 

@@ -14,16 +14,15 @@ import '../../domain/usecases/business_usecases.dart';
 
 /// App-wide auth state machine.
 ///
-/// Splash.bootstrap()
-///   no token              → loggedOut      → LoginScreen
-///   token + business      → ready          → Dashboard
-///   token, no business    → needsBusiness  → SelectBusinessScreen
-///     (auto-select if exactly 1 business)
-///
-/// LoginScreen email → OTP
-///   verifyOtp success
-///     1 business  → selectBusiness → ready → Dashboard
-///     0 or many   → needsBusiness → SelectBusinessScreen
+/// Splash.bootstrap() / LoginScreen email → OTP verifyOtp success both end up
+/// at [_autoSelectOrPrompt]:
+///   exactly 1 business                        → selectBusiness → ready → Dashboard
+///   several, one matches the last-used ID     → selectBusiness → ready → Dashboard
+///     (TokenStorage.lastBusinessId — survives logout, like the website's
+///     localStorage `last_business_id` — so a returning user with more than
+///     one business lands straight on the one they were last in, not a
+///     picker, every single time they log in)
+///   0, or several with no match (new device)  → needsBusiness  → SelectBusinessScreen
 ///
 /// Root Consumer watches [status] — screens must NOT push Dashboard.
 ///
@@ -113,14 +112,31 @@ class AuthProvider extends ChangeNotifier {
           );
         } catch (_) {}
       }
-      // Exactly one → go straight to dashboard.
-      if (businesses.length == 1) {
-        await selectBusiness(businesses.first);
-      } else {
-        status = AuthStatus.needsBusiness;
-      }
+      await _autoSelectOrPrompt();
     }
     notifyListeners();
+  }
+
+  /// Picks a business without asking, when there's an obvious one to pick:
+  /// exactly one, or — with several — whichever this device last had
+  /// selected (survives logout; see TokenStorage.lastBusinessId). Only
+  /// shows the picker when neither applies, e.g. a new device or a business
+  /// that's no longer accessible.
+  Future<void> _autoSelectOrPrompt() async {
+    if (businesses.length == 1) {
+      await selectBusiness(businesses.first);
+      return;
+    }
+    final lastId = await _storage.lastBusinessId;
+    if (lastId != null) {
+      final match = businesses.where((b) => b.id == lastId);
+      if (match.isNotEmpty) {
+        await selectBusiness(match.first);
+        return;
+      }
+    }
+    currentBusiness = null;
+    status = AuthStatus.needsBusiness;
   }
 
   // ── OTP auth ──────────────────────────────────────────────────────────────
@@ -187,12 +203,7 @@ class AuthProvider extends ChangeNotifier {
       } catch (_) {}
     }
 
-    if (businesses.length == 1) {
-      await selectBusiness(businesses.first);
-    } else {
-      currentBusiness = null;
-      status = AuthStatus.needsBusiness;
-    }
+    await _autoSelectOrPrompt();
   }
 
   // ── Business selection / CRUD ─────────────────────────────────────────────
@@ -210,6 +221,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> selectBusiness(Business business) async {
     currentBusiness = business;
     await _storage.saveCurrentBusiness(business.toRawJson());
+    await _storage.saveLastBusinessId(business.id);
     status = AuthStatus.ready;
     notifyListeners();
   }
