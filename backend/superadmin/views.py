@@ -47,9 +47,21 @@ class PlatformStatsView(APIView):
         premium_count = Business.objects.filter(plan=Business.PLAN_PREMIUM).count()
         new_this_month = Business.objects.filter(created_at__gte=last_30).count()
         new_users_this_month = User.objects.filter(created_at__gte=last_30).count()
-        logins_last_30 = LoginActivity.objects.filter(
-            timestamp__gte=last_30, success=True
+        recent_logins = LoginActivity.objects.filter(timestamp__gte=last_30, success=True)
+        logins_last_30 = recent_logins.count()
+        # The Flutter app's HTTP client identifies itself as Dart (or okhttp on
+        # some Android builds); anything else is a browser, i.e. the website.
+        app_logins = recent_logins.filter(
+            models.Q(user_agent__icontains="dart") | models.Q(user_agent__icontains="okhttp")
         ).count()
+
+        # Real row counts across every business — everything the app and the
+        # website have saved, since both write to this one database.
+        from sales.models import Sale
+        from purchases.models import Purchase
+        from expenses.models import Expense
+        from inventory.models import Product
+        from parties.models import Party
 
         return Response({
             "total_users": total_users,
@@ -61,6 +73,13 @@ class PlatformStatsView(APIView):
             "new_businesses_this_month": new_this_month,
             "new_users_this_month": new_users_this_month,
             "logins_last_30_days": logins_last_30,
+            "app_logins_last_30_days": app_logins,
+            "web_logins_last_30_days": logins_last_30 - app_logins,
+            "total_sales": Sale.objects.filter(is_deleted=False).count(),
+            "total_purchases": Purchase.objects.filter(is_deleted=False).count(),
+            "total_expenses": Expense.objects.filter(is_deleted=False).count(),
+            "total_products": Product.objects.filter(is_deleted=False).count(),
+            "total_parties": Party.objects.filter(is_deleted=False).count(),
         })
 
 

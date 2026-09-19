@@ -11,7 +11,7 @@ import {
   Trash2, MessageSquare, Bell, Search, RefreshCw, Loader,
   TrendingUp, AlertTriangle, ToggleLeft, ToggleRight, Crown,
   SlidersHorizontal, Monitor, Smartphone, KeyRound, LayoutDashboard, Clock,
-  Ticket, Gift, Activity,
+  Ticket, Gift, Activity, Receipt, Package,
 } from "lucide-react";
 import LicensesTab from "./superadmin/LicensesTab";
 import CouponsTab from "./superadmin/CouponsTab";
@@ -832,6 +832,13 @@ function OverviewTab({ stats }) {
     { label: "New This Month", value: stats.new_businesses_this_month ?? stats.new_this_month, icon: TrendingUp, color: "text-purple-400", bg: "bg-purple-500/10" },
     { label: "New Users (Month)", value: stats.new_users_this_month, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
     { label: "Logins (30 days)", value: stats.logins_last_30_days, icon: CalendarDays, color: "text-green-400", bg: "bg-green-500/10" },
+    { label: "App Logins (30 days)", value: stats.app_logins_last_30_days, icon: CalendarDays, color: "text-orange-400", bg: "bg-orange-500/10" },
+    { label: "Website Logins (30 days)", value: stats.web_logins_last_30_days, icon: CalendarDays, color: "text-blue-400", bg: "bg-blue-500/10" },
+    { label: "Invoices Saved", value: stats.total_sales, icon: Receipt, color: "text-green-400", bg: "bg-green-500/10" },
+    { label: "Purchases Saved", value: stats.total_purchases, icon: Receipt, color: "text-yellow-400", bg: "bg-yellow-500/10" },
+    { label: "Expenses Saved", value: stats.total_expenses, icon: Receipt, color: "text-red-400", bg: "bg-red-500/10" },
+    { label: "Products", value: stats.total_products, icon: Package, color: "text-purple-400", bg: "bg-purple-500/10" },
+    { label: "Parties", value: stats.total_parties, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
   ];
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

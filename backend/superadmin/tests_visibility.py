@@ -177,3 +177,25 @@ class InvoiceReachesSuperAdminTests(TestCase):
         self.assertEqual(summary.data["total_sales"], 1)
         activity = admin_api.get(f"/api/superadmin/users/{owner.id}/activity/").data["results"]
         self.assertTrue(any(a["object_repr"] == "Invoice INV-1" for a in activity), activity)
+
+
+class PlatformStatsShowEverythingTests(TestCase):
+    def test_overview_counts_saved_data_and_splits_app_from_website_logins(self):
+        from accounts.models import LoginActivity
+        from parties.models import Party
+
+        owner = User.objects.create_user(email="o@example.com", name="O")
+        business = Business.objects.create(owner=owner, name="Shop")
+        Party.objects.create(business=business, name="Ram")
+        LoginActivity.objects.create(user=owner, user_agent="Dart/3.4 (dart:io)")
+        LoginActivity.objects.create(user=owner, user_agent="Mozilla/5.0 Chrome/120")
+        LoginActivity.objects.create(user=owner, user_agent="Mozilla/5.0 Chrome/120")
+
+        admin = User.objects.create_user(email="admin@example.com", name="Admin", is_platform_admin=True)
+        api = APIClient()
+        api.force_authenticate(admin)
+        data = api.get("/api/superadmin/stats/").data
+        self.assertEqual((data["app_logins_last_30_days"], data["web_logins_last_30_days"]), (1, 2))
+        self.assertEqual(data["total_parties"], 1)
+        for key in ("total_sales", "total_purchases", "total_expenses", "total_products"):
+            self.assertEqual(data[key], 0, key)
