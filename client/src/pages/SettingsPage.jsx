@@ -4,6 +4,7 @@ import { useAppSettings } from "../context/AppSettingsContext";
 import { useTranslation } from "../utils/translations";
 import { useAuth } from "../context/AuthContext";
 import { auth as authApi, support as supportApi } from "../api";
+import { formatDateOnly } from "../utils/dates";
 import {
   Sun, Moon, Globe, Eye, EyeOff, Calendar, Building2,
   Upload, Save, Bell, Shield, Palette, User, Check, FileText, BarChart3, ChevronRight, ChevronDown,
@@ -202,7 +203,7 @@ function CommentsCard({ language }) {
                 {c.admin_reply && (
                   <p className="mt-1.5 text-xs text-green-400">↳ {c.admin_reply}</p>
                 )}
-                <p className="mt-1 text-[10px] text-navy-600">{new Date(c.created_at).toLocaleDateString()}</p>
+                <p className="mt-1 text-[10px] text-navy-600">{formatDateOnly(c.created_at)}</p>
               </div>
             );
           })}

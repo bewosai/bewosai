@@ -7,9 +7,12 @@ export const formatCurrency = (value) => {
   }).format(num);
 };
 
+import { formatDateOnly } from "./dates";
+
 export const formatDate = (date) => {
   if (!date) return "-";
-  return new Date(date).toLocaleDateString();
+  // Reads the Nepal calendar day, not the browser's own — see utils/dates.js.
+  return formatDateOnly(date);
 };
 
 export const formatNumber = (value) => {

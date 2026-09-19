@@ -5,6 +5,18 @@ import { KeyRound, Check, AlertCircle, LogOut } from "lucide-react";
 import { licenses as licensesApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useLicense } from "../context/LicenseContext";
+import { nepalYMD } from "../utils/dates";
+
+const FULL_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+// The Nepal calendar day, not the browser's own — see utils/dates.js.
+const formatExpiryDate = (d) => {
+  if (!d) return "—";
+  const { y, mo, d: day } = nepalYMD(d);
+  return `${FULL_MONTHS[mo - 1]} ${day}, ${y}`;
+};
 
 const CODE_LENGTH = 5;
 
@@ -64,9 +76,7 @@ export default function LicenseRequiredPage() {
                 <p className="mt-2 text-sm text-navy-400">
                   Premium access is active until{" "}
                   <span className="font-semibold text-white">
-                    {new Date(activated.expiry_date).toLocaleDateString(undefined, {
-                      day: "numeric", month: "long", year: "numeric",
-                    })}
+                    {formatExpiryDate(activated.expiry_date)}
                   </span>
                   .
                 </p>

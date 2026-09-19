@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { superadmin as adminApi } from "../../api";
 import { Badge, PaginationFooter } from "../SuperAdminPage";
 import { RefreshCw, Search, Loader, LogIn, Activity as ActivityIcon, CheckCircle2, XCircle } from "lucide-react";
+import { formatNepalDateTime } from "../../utils/dates";
 
 const PAGE_SIZE = 50;
 const ACTION_COLORS = { CREATED: "green", DELETED: "red" };
 
 function fmtDateTime(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  // Nepal time, not the browser's own — see utils/dates.js.
+  return formatNepalDateTime(d);
 }
 
 function SubTabButton({ active, onClick, icon: Icon, label }) {

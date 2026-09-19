@@ -2,6 +2,7 @@
  * AD ↔ BS (Bikram Sambat) date conversion.
  * Reference: BS 2081 Baishakh 1 = AD 2024 April 13
  */
+import { nepalYMD } from "./dates";
 
 // Days in each BS month per year [Baishakh … Chaitra].
 // Source: medic/bikram-sambat (github.com/medic/bikram-sambat), cross-checked
@@ -45,9 +46,25 @@ function daysInBSMonth(year, month) {
   return BS_MONTH_DAYS[year]?.[month - 1] ?? 30;
 }
 
-/** Convert AD Date → BS { year, month, day } */
+/** Convert AD Date (or a date-only/timestamp string) → BS { year, month, day }.
+ *
+ * A `Date` object here is always a synthetic calendar placeholder — every
+ * caller in this codebase builds one with `new Date(y, m-1, d)` (e.g. the
+ * date picker's own grid, or `parseISO`), so its *local* fields already are
+ * the intended Y/M/D; there is no real-world instant to convert.
+ *
+ * A string is different: it's real data from the server (a date-only value
+ * or a full timestamp), so it goes through dates.js's nepalYMD, which reads
+ * the Nepal calendar day rather than the browser's local one — a UTC
+ * timestamp read with plain getFullYear()/getMonth() would give the wrong
+ * BS date for anyone outside Nepal's own timezone, or within ~6 hours of
+ * midnight even inside it. Pass the raw string, not `new Date(str)`, when
+ * converting a real timestamp for exactly this reason. */
 export function adToBS(adDate) {
-  const input = new Date(adDate.getFullYear(), adDate.getMonth(), adDate.getDate());
+  const { y, mo, d } = adDate instanceof Date
+    ? { y: adDate.getFullYear(), mo: adDate.getMonth() + 1, d: adDate.getDate() }
+    : nepalYMD(adDate);
+  const input = new Date(y, mo - 1, d);
   const diffMs = input - REF_AD;
   let diffDays = Math.round(diffMs / 86400000);
 

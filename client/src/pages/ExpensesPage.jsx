@@ -9,15 +9,16 @@ import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext"
 import { expenses as expensesApi } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
 import { useEscToClose } from "../hooks/useEscToClose";
-import { todayStr, monthStr } from "../utils/dates";
+import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
 
 const today = () => todayStr();
 
 function formatDate(dateStr, dateMode, language) {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
-  if (dateMode === "BS") return formatBS(adToBS(d), language);
-  return d.toLocaleDateString("en-GB");
+  // adToBS reads the Nepal calendar day; formatDateOnly does the same for AD —
+  // never the browser's own local day (see utils/dates.js).
+  if (dateMode === "BS") return formatBS(adToBS(dateStr), language);
+  return formatDateOnly(dateStr);
 }
 
 const CATEGORIES = ["Daily", "Purchase", "Utility", "Staff", "Other"];

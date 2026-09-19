@@ -50,3 +50,38 @@ export function timeAgo(value, now = Date.now()) {
   if (days < 30) return `${days} day${days > 1 ? "s" : ""} ago`;
   return formatNepalDateTime(value);
 }
+
+
+// A bare "YYYY-MM-DD" (a Django DateField — sale_date, expiry_date, ...) has no
+// time or timezone of its own — parsing it with `new Date(str)` reads it as UTC
+// midnight, which then renders as the *previous* day in any browser west of UTC.
+// Extracted separately from a real timestamp (a DateTimeField), which does need
+// converting to Nepal time to know which calendar day it falls on there.
+// Anchored end-to-end: a timestamp ("2026-09-17T20:00:00Z") starts with the
+// same shape and must NOT take this branch, or its time component (which can
+// push it into the next Nepal day) is silently dropped.
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** { y, mo, d } for [input] on the Nepal calendar — a date-only string is read
+ * literally; anything else (a Date, or a full timestamp string) is converted to
+ * Nepal time first. This is the one safe way to ask "which calendar day is this"
+ * anywhere in the app. */
+export function nepalYMD(input) {
+  if (typeof input === "string") {
+    const m = input.match(DATE_ONLY_RE);
+    if (m) return { y: +m[1], mo: +m[2], d: +m[3] };
+  }
+  const date = input instanceof Date ? input : new Date(input);
+  const parts = Object.fromEntries(nepalDate.formatToParts(date).map((p) => [p.type, p.value]));
+  return { y: +parts.year, mo: +parts.month, d: +parts.day };
+}
+
+const AD_MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "18 Sep 2026" for a date-only value or a timestamp, safe from the
+ * date-only + toLocaleDateString timezone bug described above. */
+export function formatDateOnly(input) {
+  if (!input) return "—";
+  const { y, mo, d } = nepalYMD(input);
+  return `${String(d).padStart(2, "0")} ${AD_MONTHS_EN[mo - 1]} ${y}`;
+}

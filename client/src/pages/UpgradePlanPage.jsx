@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { formatDateOnly } from "../utils/dates";
 import { billing as billingApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PageHeader from "../components/shared/PageHeader";
@@ -17,8 +18,8 @@ const PLAN_META = {
 };
 
 function fmtDate(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  // The Nepal calendar day, not the browser's own — see utils/dates.js.
+  return formatDateOnly(d);
 }
 
 /* ─── Free / Premium / Premium Plus comparison — informational only, no

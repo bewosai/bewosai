@@ -16,18 +16,19 @@ import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
 import { priceForUnit } from "../utils/calculations";
 import BillTemplate from "../components/invoice/BillTemplate";
 import PrintPreviewModal from "../components/invoice/PrintPreviewModal";
-import { todayStr, monthStr } from "../utils/dates";
+import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
 
 const today = () => todayStr();
 
 function formatDate(dateStr, dateMode, language) {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
+  // adToBS reads the Nepal calendar day; formatDateOnly does the same for AD —
+  // never the browser's own local day (see utils/dates.js).
   if (dateMode === "BS") {
-    const bs = adToBS(d);
+    const bs = adToBS(dateStr);
     return formatBS(bs, language);
   }
-  return d.toLocaleDateString("en-GB");
+  return formatDateOnly(dateStr);
 }
 
 const PAYMENT_METHODS = [

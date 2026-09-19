@@ -5,7 +5,7 @@ import {
   Plus, Copy, Check, X, RefreshCw, Search, Loader,
   Ban, Clock, KeyRound,
 } from "lucide-react";
-import { todayStr } from "../../utils/dates";
+import { todayStr, formatDateOnly } from "../../utils/dates";
 
 const PAGE_SIZE = 50;
 
@@ -15,8 +15,8 @@ const STATUS_OPTIONS = ["PENDING", "ACTIVE", "EXPIRED", "REVOKED"];
 const STATUS_COLORS = { PENDING: "gray", ACTIVE: "green", EXPIRED: "orange", REVOKED: "red" };
 
 function fmtDate(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  // The Nepal calendar day, not the browser's own — see utils/dates.js.
+  return formatDateOnly(d);
 }
 
 /* ── Generate License modal ─────────────────────────────────────────────── */

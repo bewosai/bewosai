@@ -3,7 +3,7 @@ import { sales } from "../api/index";
 import { useTranslation } from "../utils/translations";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { RotateCcw, Plus, Loader, X, AlertCircle } from "lucide-react";
-import { todayStr } from "../utils/dates";
+import { todayStr, formatDateOnly } from "../utils/dates";
 
 const today = () => todayStr();
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500 transition";
@@ -195,7 +195,7 @@ function ReturnModal({ onClose, onSaved }) {
 
 export default function SalesReturnPage() {
   const { t, language } = useTranslation();
-  const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString("en-GB") : "";
+  const formatDate = (dateStr) => formatDateOnly(dateStr);
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);

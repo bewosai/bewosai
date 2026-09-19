@@ -17,7 +17,7 @@ import SearchBar from "../components/common/SearchBar";
 import StatusBadge from "../components/common/StatusBadge";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import DatePicker from "../components/common/DatePicker";
-import { todayStr, monthStr } from "../utils/dates";
+import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
 
 const today = () => todayStr();
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500 transition";
@@ -238,9 +238,8 @@ function PaymentRow({ pay, onDelete }) {
   const dateStr = pay.date;
   const dateDisplay = (() => {
     if (!dateStr) return "";
-    const d = new Date(dateStr);
-    if (dateMode === "BS") return formatBS(adToBS(d), language);
-    return d.toLocaleDateString("en-GB");
+    if (dateMode === "BS") return formatBS(adToBS(dateStr), language);
+    return formatDateOnly(dateStr);
   })();
 
   const methodLabel = PAYMENT_METHODS.find(m => m.value === pay.payment_method)?.label || pay.payment_method;

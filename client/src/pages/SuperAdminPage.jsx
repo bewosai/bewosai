@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "../utils/translations";
 import { useNavigate } from "react-router-dom";
 import { adToBS, formatBS } from "../utils/nepaliDate";
-import { formatNepalDateTime, timeAgo } from "../utils/dates";
+import { formatNepalDateTime, formatDateOnly, timeAgo } from "../utils/dates";
 import {
   Users, Building2, ShieldCheck, CheckCircle2, XCircle, X,
   CalendarDays, ChevronLeft, ChevronRight, Plus, Edit2,
@@ -185,7 +185,8 @@ function UserDetailModal({ user: u, onClose, onAction }) {
     adminApi.userSummary(u.id).then(r => setSummary(r.data)).catch(() => setSummary(null));
   }, [u.id]);
 
-  const joinedBS = adToBS(new Date(u.created_at));
+  // Raw string, not a Date wrapper — see the comment on the activity list below.
+  const joinedBS = adToBS(u.created_at);
   const [actionError, setActionError] = useState("");
 
   const doAction = async (action) => {
@@ -347,7 +348,7 @@ function UserDetailModal({ user: u, onClose, onAction }) {
             <p className="py-2 text-center text-xs text-navy-500">Never logged in.</p>
           ) : (
             <div>
-              <p className="text-sm text-white">{new Date(activity[0].timestamp).toLocaleString()}</p>
+              <p className="text-sm text-white">{formatNepalDateTime(activity[0].timestamp)}</p>
               {activity[0].device && (
                 <p className="mt-0.5 text-xs text-navy-500">{activity[0].device}{activity[0].ip ? ` · ${activity[0].ip}` : ""}</p>
               )}
@@ -358,12 +359,15 @@ function UserDetailModal({ user: u, onClose, onAction }) {
         {activity.length > 0 && (
           <div className="mt-4 space-y-1 max-h-44 overflow-y-auto">
             {activity.slice(0, 10).map(a => {
-              const d = new Date(a.timestamp);
-              const bs = adToBS(d);
+              // The raw string, not a Date wrapper — adToBS treats a Date as a
+              // local calendar placeholder and a string as real server data;
+              // a.timestamp is real data and must go through the latter path
+              // to land on the correct Nepal day regardless of browser timezone.
+              const bs = adToBS(a.timestamp);
               return (
                 <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-navy-800 bg-navy-950 px-3 py-1.5 text-xs">
                   <div className="min-w-0">
-                    <p className="truncate text-navy-300">{d.toLocaleString()}</p>
+                    <p className="truncate text-navy-300">{formatNepalDateTime(a.timestamp)}</p>
                     {a.device && <p className="truncate text-[10px] text-navy-500">{a.device}{a.ip ? ` · ${a.ip}` : ""}</p>}
                   </div>
                   <span className="shrink-0 text-orange-300 text-[10px]">{formatBS(bs, language)}</span>
@@ -398,7 +402,7 @@ function UserDetailModal({ user: u, onClose, onAction }) {
                     <span className="truncate text-navy-200">{a.object_repr}</span>
                     {a.business_name && <span className="shrink-0 text-navy-500">· {a.business_name}</span>}
                   </div>
-                  <span className="shrink-0 text-navy-500">{new Date(a.created_at).toLocaleDateString()}</span>
+                  <span className="shrink-0 text-navy-500">{formatDateOnly(a.created_at)}</span>
                 </div>
               ))}
             </div>
@@ -789,7 +793,7 @@ function TicketModal({ ticket, onClose, onSaved }) {
           </div>
           <p className="text-sm font-semibold text-white">{ticket.subject}</p>
           <p className="text-sm text-navy-300">{ticket.message}</p>
-          <p className="text-[10px] text-navy-500">{new Date(ticket.created_at).toLocaleString()}</p>
+          <p className="text-[10px] text-navy-500">{formatNepalDateTime(ticket.created_at)}</p>
         </div>
         <div>
           <label className="mb-1 block text-xs font-semibold text-navy-400">Admin Reply</label>
@@ -984,7 +988,7 @@ function BusinessesTab({ onCountChange }) {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-navy-400">{new Date(biz.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 text-navy-400">{formatDateOnly(biz.created_at)}</td>
                     <td className="px-4 py-3"><Badge label={biz.status} color={biz.status === "ACTIVE" ? "green" : "red"} /></td>
                     <td className="px-4 py-3"><Badge label={biz.plan} color={biz.plan === "PREMIUM" ? "yellow" : "gray"} /></td>
                     <td className="px-4 py-3">
@@ -1368,7 +1372,7 @@ function AnnouncementsTab({ announcements, onRefresh }) {
                       <Badge label={ann.is_active ? "Active" : "Inactive"} color={ann.is_active ? "green" : "gray"} />
                     </div>
                     <p className="text-xs text-navy-400 line-clamp-2">{ann.body}</p>
-                    <p className="mt-1 text-[10px] text-navy-500">{new Date(ann.created_at).toLocaleString()}</p>
+                    <p className="mt-1 text-[10px] text-navy-500">{formatNepalDateTime(ann.created_at)}</p>
                   </div>
                   <div className="flex shrink-0 gap-1">
                     <button onClick={() => doToggle(ann)} title={ann.is_active ? "Deactivate" : "Activate"}
@@ -1557,7 +1561,7 @@ function TicketsTab({ tickets, onRefresh }) {
                     <Badge label={ticket.status?.replace("_", " ").toUpperCase()} color={statusColors[ticket.status] || "gray"} />
                     <p className="text-sm font-medium text-white truncate">{ticket.subject}</p>
                   </div>
-                  <p className="text-xs text-navy-400">{ticket.user_email} · {new Date(ticket.created_at).toLocaleDateString()}</p>
+                  <p className="text-xs text-navy-400">{ticket.user_email} · {formatDateOnly(ticket.created_at)}</p>
                   {ticket.admin_reply && (
                     <p className="mt-1 text-xs text-green-400 truncate">↳ {ticket.admin_reply}</p>
                   )}

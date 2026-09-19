@@ -31,16 +31,15 @@ function toDatetimeLocal(iso) {
 
 function formatDate(dateStr, dateMode, language) {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
   if (dateMode === "BS") {
-    const bs = adToBS(d);
+    const bs = adToBS(dateStr);
     return formatBS(bs, language);
   }
-  return d.toLocaleDateString("en-GB");
+  return formatDateOnly(dateStr);
 }
 
 import { PAYMENT_METHODS as PM_CONSTS, SALE_STATUS } from "../constants";
-import { todayStr, monthStr } from "../utils/dates";
+import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
 
 // Sale.payment_method only accepts these values on the backend (see
 // backend/sales/models.py METHOD_CHOICES) — the other PM_CONSTS entries

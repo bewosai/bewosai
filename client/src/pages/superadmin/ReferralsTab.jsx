@@ -2,14 +2,15 @@ import { useState, useEffect, useCallback } from "react";
 import { superadmin as adminApi } from "../../api";
 import { Badge, PaginationFooter } from "../SuperAdminPage";
 import { RefreshCw, Search, Loader, Trophy, Users2, CheckCircle2, XCircle } from "lucide-react";
+import { formatNepalDateTime } from "../../utils/dates";
 
 const PAGE_SIZE = 50;
 const STATUS_OPTIONS = ["REGISTERED", "VERIFIED", "REWARDED", "REJECTED", "EXPIRED"];
 const STATUS_COLORS = { REGISTERED: "gray", VERIFIED: "blue", REWARDED: "green", REJECTED: "red", EXPIRED: "orange" };
 
 function fmtDateTime(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  // Nepal time, not the browser's own — see utils/dates.js.
+  return formatNepalDateTime(d);
 }
 
 function StatCard({ icon: Icon, label, value, color = "text-white" }) {

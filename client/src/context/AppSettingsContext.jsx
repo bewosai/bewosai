@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { adToBS, formatBS } from "../utils/nepaliDate";
+import { nepalYMD } from "../utils/dates";
 
 const AppSettingsContext = createContext(null);
 
@@ -59,26 +60,34 @@ export function usePrivateAmount() {
 }
 
 /** Format a date string/Date according to the selected date mode */
+const AD_MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export function useDateFormat() {
   const { dateMode, language } = useAppSettings();
   return (dateInput, opts = {}) => {
     if (!dateInput) return "";
-    const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
-    if (isNaN(d)) return String(dateInput);
+    // The Nepal calendar day (see utils/dates.nepalYMD) — a date-only value
+    // ("2026-09-18", a Django DateField) is read literally; a timestamp is
+    // converted to Nepal time first. Never the browser's own local day: that
+    // depends on the viewer's timezone and can be a full day off from either.
+    let y, mo, d;
+    try {
+      ({ y, mo, d } = nepalYMD(dateInput));
+    } catch {
+      return String(dateInput);
+    }
 
     if (dateMode === "BS") {
       try {
-        const bs = adToBS(d);
+        const bs = adToBS(dateInput);
         return formatBS(bs, language);
       } catch {
         // fallback to AD if conversion fails
       }
     }
-    // AD format
-    return d.toLocaleDateString("en-IN", {
-      year: "numeric",
-      month: opts.short ? "short" : "2-digit",
-      day: "2-digit",
-    });
+    // AD format — same day-month-year order the previous en-IN locale produced.
+    return opts.short
+      ? `${String(d).padStart(2, "0")} ${AD_MONTHS_SHORT[mo - 1]} ${y}`
+      : `${String(d).padStart(2, "0")}/${String(mo).padStart(2, "0")}/${y}`;
   };
 }

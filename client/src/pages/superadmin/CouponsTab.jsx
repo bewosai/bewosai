@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { superadmin as adminApi } from "../../api";
 import { Badge, ConfirmDialog, PaginationFooter } from "../SuperAdminPage";
 import { Plus, Copy, Check, X, RefreshCw, Search, Loader, Ban, Ticket } from "lucide-react";
-import { todayStr } from "../../utils/dates";
+import { todayStr, formatDateOnly } from "../../utils/dates";
 
 const PAGE_SIZE = 50;
 
@@ -24,8 +24,8 @@ const DURATION_PRESETS = [
 ];
 
 function fmtDate(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  // The Nepal calendar day, not the browser's own — see utils/dates.js.
+  return formatDateOnly(d);
 }
 
 function addDays(dateStr, days) {

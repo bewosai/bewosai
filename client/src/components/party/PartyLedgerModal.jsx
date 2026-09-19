@@ -1,4 +1,4 @@
-import { formatCurrency } from "../../utils/format";
+import { formatCurrency, formatDate } from "../../utils/format";
 
 export default function PartyLedgerModal({ open, onClose, ledger, loading }) {
   if (!open) return null;
@@ -130,9 +130,7 @@ export default function PartyLedgerModal({ open, onClose, ledger, loading }) {
                             {tx.refNo || "No reference"}
                           </p>
                           <p className="text-xs text-emerald-200/60">
-                            {tx.date
-                              ? new Date(tx.date).toLocaleString()
-                              : "-"}
+                            {formatDate(tx.date)}
                           </p>
                           {tx.note ? (
                             <p className="mt-1 text-sm text-emerald-200/80">
