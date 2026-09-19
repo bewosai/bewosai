@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Business, StaffMember, LoginActivity, StaffActivity
+from .models import User, Business, StaffMember, LoginActivity, StaffActivity, FiscalYear, OTPCode
 
 
 @admin.register(User)
@@ -73,3 +73,28 @@ class StaffActivityAdmin(admin.ModelAdmin):
     list_filter = ("action",)
     search_fields = ("user__email", "module")
     readonly_fields = ("timestamp",)
+
+
+@admin.register(FiscalYear)
+class FiscalYearAdmin(admin.ModelAdmin):
+    list_display = ("business", "label", "start_date", "end_date", "status", "closed_by", "closed_at")
+    list_filter = ("status",)
+    search_fields = ("business__name", "label")
+    readonly_fields = ("closed_at",)
+
+
+@admin.register(OTPCode)
+class OTPCodeAdmin(admin.ModelAdmin):
+    # code_hash is a hash, never the plaintext code — safe to display, but
+    # nothing here should ever be hand-created or edited (that's exactly how
+    # someone could forge a working code for an account they don't own).
+    list_display = ("identifier", "account_type", "is_used", "attempts", "expires_at", "created_at")
+    list_filter = ("account_type", "is_used")
+    search_fields = ("identifier",)
+    readonly_fields = [f.name for f in OTPCode._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
