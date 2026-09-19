@@ -1123,7 +1123,14 @@ function UsersTab({ onCountChange }) {
       onCountChange?.(total);
     } catch (e) {
       // Say so: an empty table used to look exactly like "no users".
-      setLoadError(e.response?.data?.detail || e.response?.data?.error || "Couldn't load users. Check your connection and try again.");
+      const status = e.response?.status;
+      setLoadError(
+        status === 403 ? "This account isn't a Super Admin, so the server won't list users. Ask an existing admin to grant it, then sign out and back in."
+        : status === 401 ? "Your session has expired. Sign out and sign in again."
+        : status >= 500 ? "The server hit an error (it may be restarting). Wait a minute and press Retry."
+        : !e.response ? "Couldn't reach the server. It may be waking up — wait a moment and press Retry."
+        : (e.response?.data?.detail || e.response?.data?.error || "Couldn't load users."),
+      );
       if (!silent) { setRows([]); setCount(0); }
     } finally {
       setLoading(false);
@@ -1578,7 +1585,7 @@ function TicketsTab({ tickets, onRefresh }) {
 
 /* ── Main SuperAdminPage ──────────────────────────────────────────────────── */
 export default function SuperAdminPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   // Full, unpaginated business list — only ever used to power the business
@@ -1598,13 +1605,15 @@ export default function SuperAdminPage() {
   const load = async (showSpinner = true) => {
     if (showSpinner) setLoading(true); else setRefreshing(true);
     try {
-      const [s, b, a, tk, f] = await Promise.allSettled([
+      const [s, b, a, tk, f, u] = await Promise.allSettled([
         adminApi.stats(),
         adminApi.businesses({ page_size: 1000 }),
         adminApi.announcements({ page_size: 1000 }),
         adminApi.tickets({ page_size: 1000 }),
         adminApi.features(),
+        adminApi.users({ page_size: 1 }),
       ]);
+      if (u.status === "fulfilled") setUserCount(u.value.data?.count ?? null);
       if (s.status === "fulfilled") setStats(s.value.data);
       if (b.status === "fulfilled") {
         const results = b.value.data?.results ?? b.value.data ?? [];
@@ -1621,8 +1630,15 @@ export default function SuperAdminPage() {
   };
 
   useEffect(() => {
-    if (!user?.is_platform_admin) { navigate("/dashboard"); return; }
-    load();
+    if (user?.is_platform_admin) { load(); return; }
+    // The saved copy of the account can be out of date (made an admin after this
+    // browser signed in) — ask the server before sending them away.
+    let cancelled = false;
+    refreshUser().then(fresh => {
+      if (cancelled) return;
+      if (!fresh?.is_platform_admin) navigate("/dashboard");
+    });
+    return () => { cancelled = true; };
   }, [user]);
 
   const openTicketCount = tickets.filter(t => t.status === "OPEN").length;

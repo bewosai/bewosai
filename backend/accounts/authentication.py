@@ -3,6 +3,8 @@ from datetime import timedelta
 from django.utils import timezone
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from .admin_access import grant_platform_admin_if_listed
+
 # Refreshing the timestamp on every request would be a write per API call; once
 # every few minutes is plenty for "last seen" / "online now".
 ACTIVITY_WRITE_INTERVAL = timedelta(minutes=5)
@@ -19,6 +21,11 @@ class TrackedJWTAuthentication(JWTAuthentication):
         result = super().authenticate(request)
         if result is not None:
             user = result[0]
+            # A listed email that was already signed in when it was added to
+            # PLATFORM_ADMIN_EMAILS becomes admin on its next request — no need to
+            # sign out and back in. Verified accounts only.
+            if user.is_verified and not user.is_platform_admin:
+                grant_platform_admin_if_listed(user)
             now = timezone.now()
             last = user.last_active_at
             if last is None or now - last >= ACTIVITY_WRITE_INTERVAL:

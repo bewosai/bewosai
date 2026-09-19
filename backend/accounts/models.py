@@ -284,7 +284,7 @@ class Business(models.Model):
         """Computed from created_at rather than stored — nothing to drift
         out of sync, and every business (including ones created before this
         field existed) gets a well-defined trial window for free."""
-        created = self.created_at.date() if self.created_at else timezone.localdate()
+        created = timezone.localtime(self.created_at).date() if self.created_at else timezone.localdate()
         return created + timedelta(days=self.TRIAL_DAYS)
 
     @property
@@ -303,7 +303,7 @@ class Business(models.Model):
 
     @property
     def is_grandfathered(self):
-        created = self.created_at.date() if self.created_at else timezone.localdate()
+        created = timezone.localtime(self.created_at).date() if self.created_at else timezone.localdate()
         return created < self.LICENSING_STARTS
 
     @property

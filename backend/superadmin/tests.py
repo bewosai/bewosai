@@ -35,8 +35,21 @@ class TrialTests(TestCase):
     def test_new_business_gets_exactly_the_configured_trial_length(self):
         business, _ = make_business(email="newtrial@example.com", created_days_ago=0)
         self.assertEqual(
-            business.trial_expiry_date, business.created_at.date() + timedelta(days=Business.TRIAL_DAYS),
+            business.trial_expiry_date, timezone.localtime(business.created_at).date() + timedelta(days=Business.TRIAL_DAYS),
         )
+
+    def test_trial_counts_from_the_nepal_date_a_business_was_created(self):
+        # 18:45 UTC on 18 Sep is 00:30 on 19 Sep in Nepal. The trial must start
+        # from the 19th; using the UTC date (the 18th) would cost every business
+        # created between midnight and 5:45 AM a day of its trial.
+        from datetime import datetime, timezone as dt_timezone
+
+        business, _ = make_business(email="night@example.com", created_days_ago=0)
+        Business.objects.filter(pk=business.pk).update(
+            created_at=datetime(2026, 9, 18, 18, 45, tzinfo=dt_timezone.utc)
+        )
+        business.refresh_from_db()
+        self.assertEqual(business.trial_expiry_date, date(2026, 9, 19) + timedelta(days=Business.TRIAL_DAYS))
 
     def test_trial_active_within_window(self):
         business, _ = make_business(email="active@example.com", created_days_ago=Business.TRIAL_DAYS - 1)

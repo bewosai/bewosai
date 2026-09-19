@@ -119,3 +119,32 @@ class OtpThrottlingTests(_ClearThrottleCache):
         self.assertEqual(res.status_code, 429)
         self.assertNotIn("Request was throttled", res.data["message"])
         self.assertIn("try again in", res.data["message"])
+
+
+class AlreadySignedInTests(_ClearThrottleCache):
+    """Added to PLATFORM_ADMIN_EMAILS while already signed in: admin on the next request."""
+
+    def bearer(self, user):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(user).access_token}")
+        return client
+
+    @override_settings(PLATFORM_ADMIN_EMAILS=["boss@example.com"])
+    def test_a_signed_in_verified_account_becomes_admin_on_its_next_request(self):
+        user = User.objects.create_user(email="boss@example.com", name="Boss", is_verified=True)
+        self.assertFalse(user.is_platform_admin)
+        res = self.bearer(user).get("/api/superadmin/stats/")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(User.objects.get(pk=user.pk).is_platform_admin)
+
+    @override_settings(PLATFORM_ADMIN_EMAILS=["boss@example.com"])
+    def test_an_unverified_account_is_not_granted_this_way(self):
+        user = User.objects.create_user(email="boss@example.com", name="Boss", is_verified=False)
+        self.assertEqual(self.bearer(user).get("/api/superadmin/stats/").status_code, 403)
+        self.assertFalse(User.objects.get(pk=user.pk).is_platform_admin)
+
+    @override_settings(PLATFORM_ADMIN_EMAILS=["boss@example.com"])
+    def test_an_unlisted_account_is_never_granted(self):
+        user = User.objects.create_user(email="other@example.com", name="Other", is_verified=True)
+        self.assertEqual(self.bearer(user).get("/api/superadmin/stats/").status_code, 403)

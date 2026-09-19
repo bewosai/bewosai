@@ -182,6 +182,21 @@ export function AuthProvider({ children }) {
     selectBusiness(newBiz);
   }, [selectBusiness]);
 
+  /** Re-reads the signed-in account from the server. The copy saved at sign-in
+   * goes stale when something changes it afterwards — e.g. an account made a
+   * Super Admin while it was already signed in. Returns the fresh user, or null
+   * if it couldn't be fetched. */
+  const refreshUser = useCallback(async () => {
+    try {
+      const { data } = await authApi.me();
+      localStorage.setItem("user", JSON.stringify(data));
+      setUser(data);
+      return data;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     const refresh = localStorage.getItem("refresh");
     const lastBusinessId = localStorage.getItem("last_business_id");
@@ -199,7 +214,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user, businesses, currentBusiness,
       loading, isLoggedIn,
-      sendOtp, verifyOtp, setAccountType, logout, selectBusiness,
+      sendOtp, verifyOtp, setAccountType, logout, selectBusiness, refreshUser,
       addBusiness, updateBusinessInList, replaceBusiness, loginWithStaffLink,
     }}>
       {children}

@@ -11,6 +11,7 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import date, timedelta
 from bewosai.email import send_otp_email
+from .admin_access import grant_platform_admin_if_listed
 # from bewosai.sms import send_otp_sms  # phone login/signup temporarily disabled (2026-09-16)
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, get_platform, require_feature, require_staff_permission, staff_can
 from bewosai.utils import get_bid, get_business
@@ -59,18 +60,6 @@ def _first_error(errors):
         text = str(messages[0]) if isinstance(messages, list) else str(messages)
         return f"{field}: {text}" if field != "non_field_errors" else text
     return "Invalid request."
-
-
-def _grant_platform_admin_if_listed(user):
-    """Makes `user` a platform admin if their (already verified) email is in
-    settings.PLATFORM_ADMIN_EMAILS. Called only after the email has been proved
-    — a correct emailed code or a verified Google account — never on a bare
-    claim of an address."""
-    email = (user.email or "").strip().lower()
-    if email and email in settings.PLATFORM_ADMIN_EMAILS and not user.is_platform_admin:
-        user.is_platform_admin = True
-        user.save(update_fields=["is_platform_admin"])
-        logger.warning("Granted platform admin to %s via PLATFORM_ADMIN_EMAILS", email)
 
 
 class SendOTPView(APIView):
@@ -246,7 +235,7 @@ class VerifyOTPView(APIView):
             user.last_login_at = timezone.now()
             user.is_verified = True
             user.save(update_fields=["last_login_at", "is_verified"])
-            _grant_platform_admin_if_listed(user)
+            grant_platform_admin_if_listed(user)
 
             LoginActivity.objects.create(
                 user=user,
@@ -311,7 +300,7 @@ class GoogleLoginView(APIView):
             user.last_login_at = timezone.now()
             user.is_verified = True
             user.save(update_fields=["last_login_at", "is_verified"])
-            _grant_platform_admin_if_listed(user)
+            grant_platform_admin_if_listed(user)
 
             LoginActivity.objects.create(
                 user=user,
