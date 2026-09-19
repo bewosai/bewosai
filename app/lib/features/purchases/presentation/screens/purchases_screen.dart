@@ -375,7 +375,9 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
   bool _loaded = false;
   File? _billImageFile;
   String? _billImageUrl;
-  final List<_PurchaseItemRow> _items = [_PurchaseItemRow()];
+  // Starts empty: an item only lands here once picked and confirmed in the
+  // item-detail sheet (see _pickProduct / _showItemDetailSheet).
+  final List<_PurchaseItemRow> _items = [];
 
   @override
   void initState() {
@@ -422,7 +424,6 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
           row.discountController.text = it.discountAmount.toString();
           _items.add(row);
         }
-        if (_items.isEmpty) _items.add(_PurchaseItemRow());
       } else {
         final businessTaxRate = context.read<AuthProvider>().currentBusiness?.defaultTaxRate;
         if (businessTaxRate != null) {
@@ -600,20 +601,131 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
         items: products,
         labelBuilder: (p) => p.name,
         subtitleBuilder: (p) => Formatters.currency(p.purchasePrice),
-        onSelected: (p) {
-          setState(() {
-            item.product = p.id;
-            item.nameController.text = p.name;
-            item.unitDetail = p.unitDetail;
-            item.unitLabel = p.unitDetail?.name ?? '';
-            item.basePrice = p.purchasePrice;
-            item.priceController.text = p.purchasePrice.toString();
-          });
-        },
+        // Same category/stock/price layout as the invoice screen's picker.
+        detailBuilder: (ctx, p) => Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 3),
+                  Text(
+                    p.categoryName.isEmpty ? 'Uncategorized' : p.categoryName,
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Row(
+                  children: [
+                    if (p.isLowStock)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 6),
+                        child: StatusBadge(label: 'LOW', color: AppColors.error),
+                      ),
+                    Text(
+                      '${Formatters.amount(p.stockQuantity)} ${p.unitName}',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  Formatters.currency(p.purchasePrice),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+        onSelected: (p) => _showItemDetailSheet(item, p),
         onAddNew: () => _openAddProductDialog(item),
         addNewLabel: 'Add New Product',
       ),
     );
+  }
+
+  /// Shown right after a product is picked (or newly created) — its own
+  /// detail (category, stock, cost) plus editable Quantity/Cost/Discount and
+  /// a live total, so the item only lands on the bill once reviewed.
+  void _showItemDetailSheet(_PurchaseItemRow item, Product p, {bool showStock = true}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _PurchaseItemDetailSheet(
+        product: p,
+        initialQty: item.product == p.id && item.qty > 0 ? item.qty : 1,
+        initialCost: item.product == p.id && item.price > 0 ? item.price : p.purchasePrice,
+        initialDiscount: item.product == p.id ? item.discount : 0,
+        initialUnitLabel: item.product == p.id ? item.unitLabel : '',
+        showStock: showStock,
+        onAdd: (qty, cost, discount, unitLabel) {
+          setState(() {
+            if (p.id != 0) item.product = p.id;
+            item.nameController.text = p.name;
+            item.unitDetail = p.unitDetail;
+            item.unitLabel = unitLabel;
+            item.basePrice = p.purchasePrice;
+            item.qtyController.text = qty.toString();
+            item.priceController.text = cost.toString();
+            item.discountController.text = discount.toString();
+            if (!_items.contains(item)) _items.add(item);
+          });
+        },
+      ),
+    );
+  }
+
+  /// Re-opens the detail sheet pre-filled from the line, so editing and
+  /// adding look and behave identically.
+  void _editItem(_PurchaseItemRow item) {
+    final match = context.read<InventoryProvider>().products.where((p) => p.id == item.product);
+    if (match.isNotEmpty) {
+      _showItemDetailSheet(item, match.first);
+      return;
+    }
+    _showItemDetailSheet(
+      item,
+      Product(
+        id: item.product ?? 0,
+        name: item.nameController.text,
+        categoryName: '',
+        unitName: item.unitLabel,
+        unitDetail: item.unitDetail,
+        description: '',
+        purchasePrice: item.basePrice > 0 ? item.basePrice : item.price,
+        salePrice: 0,
+        stockQuantity: 0,
+        lowStockThreshold: 0,
+        isLowStock: false,
+        barcode: '',
+        isActive: true,
+      ),
+      showStock: false,
+    );
+  }
+
+  /// Removes a line, with a one-tap Undo.
+  void _removeItem(int index) {
+    final removed = _items[index];
+    setState(() => _items.removeAt(index));
+    final name = removed.nameController.text.trim().isEmpty ? 'Item' : removed.nameController.text.trim();
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text('$name removed'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            if (!mounted) return;
+            setState(() => _items.insert(index.clamp(0, _items.length), removed));
+          },
+        ),
+      ));
   }
 
   Future<void> _openAddProductDialog(_PurchaseItemRow item) async {
@@ -700,16 +812,8 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                 );
                 if (!dialogContext.mounted) return;
                 if (created != null) {
-                  setState(() {
-                    item.product = created.id;
-                    item.nameController.text = created.name;
-                    item.unitDetail = created.unitDetail;
-                    item.unitLabel = created.unitDetail?.name ?? '';
-                    item.basePrice = created.purchasePrice;
-                    item.priceController.text = created.purchasePrice
-                        .toString();
-                  });
                   Navigator.pop(dialogContext);
+                  if (mounted) _showItemDetailSheet(item, created);
                 } else {
                   setDialogState(() => saving = false);
                   showAppSnackBar(
@@ -879,125 +983,23 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                     title: 'Items',
                     children: [
                       ..._items.asMap().entries.map(
-                        (e) => Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppColors.navy50,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          // Product/Qty/Cost/Disc./Amount all in one row —
-                          // every column is Expanded with a fixed flex ratio
-                          // (never a pixel width) so the row can't overflow.
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 20,
-                                height: 20,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: AppColors.orange.withValues(alpha: 0.15),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                  '${e.key + 1}',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.orangeDark,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                flex: 3,
-                                child: InkWell(
-                                  onTap: () => _pickProduct(e.value),
-                                  child: InputDecorator(
-                                    decoration: const InputDecoration(
-                                      labelText: 'Product',
-                                      isDense: true,
-                                    ),
-                                    child: Text(
-                                      e.value.nameController.text.isEmpty
-                                          ? 'Select product'
-                                          : e.value.nameController.text,
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (e.value.unitDetail?.hasSecondary == true) ...[
-                                const SizedBox(width: 4),
-                                _PurchaseUnitToggle(
-                                  item: e.value,
-                                  onChanged: () => setState(() {}),
-                                ),
-                              ],
-                              const SizedBox(width: 6),
-                              Expanded(
-                                flex: 2,
-                                child: TextField(
-                                  controller: e.value.qtyController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  style: const TextStyle(fontSize: 12),
-                                  decoration: const InputDecoration(labelText: 'Qty', isDense: true),
-                                  onChanged: (_) => setState(() {}),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                flex: 2,
-                                child: TextField(
-                                  controller: e.value.priceController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  style: const TextStyle(fontSize: 12),
-                                  decoration: const InputDecoration(labelText: 'Cost', isDense: true),
-                                  onChanged: (_) => setState(() {}),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                flex: 2,
-                                child: TextField(
-                                  controller: e.value.discountController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  style: const TextStyle(fontSize: 12),
-                                  decoration: const InputDecoration(labelText: 'Disc.', isDense: true),
-                                  onChanged: (_) => setState(() {}),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  Formatters.currency(e.value.total),
-                                  textAlign: TextAlign.right,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 28,
-                                child: _items.length > 1
-                                    ? IconButton(
-                                        icon: const Icon(Icons.close, size: 16, color: AppColors.error),
-                                        onPressed: () => setState(() => _items.removeAt(e.key)),
-                                        padding: EdgeInsets.zero,
-                                        visualDensity: VisualDensity.compact,
-                                      )
-                                    : null,
-                              ),
-                            ],
-                          ),
+                        (e) => _PurchaseLineItemRow(
+                          index: e.key + 1,
+                          item: e.value,
+                          onEdit: () => _editItem(e.value),
+                          onRemove: () => _removeItem(e.key),
                         ),
                       ),
+                      if (_items.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            'No items yet — tap "Add Item" to choose a product.',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          ),
+                        ),
                       OutlinedButton.icon(
-                        onPressed: () =>
-                            setState(() => _items.add(_PurchaseItemRow())),
+                        onPressed: () => _pickProduct(_PurchaseItemRow()),
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add Item'),
                       ),
@@ -1342,46 +1344,321 @@ class _BillImagePicker extends StatelessWidget {
 /// Dropdown picking which of the product's units a purchase line is billed
 /// in — see quick_pos_screen.dart's `_UnitToggle` for the full rationale
 /// (identical mechanism, purchase side).
-class _PurchaseUnitToggle extends StatelessWidget {
+/// One purchase line as a compact box — name, quantity x cost, any discount
+/// and the line total — with edit and delete side by side. Editing opens the
+/// same detail sheet used to add the item.
+class _PurchaseLineItemRow extends StatelessWidget {
+  final int index;
   final _PurchaseItemRow item;
-  final VoidCallback onChanged;
+  final VoidCallback onEdit;
+  final VoidCallback onRemove;
 
-  const _PurchaseUnitToggle({required this.item, required this.onChanged});
+  const _PurchaseLineItemRow({
+    required this.index,
+    required this.item,
+    required this.onEdit,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final unit = item.unitDetail!;
-    final currentLabel = item.unitLabel.isEmpty ? unit.name : item.unitLabel;
+    final name = item.nameController.text.trim().isEmpty ? 'Item' : item.nameController.text.trim();
+    final unit = item.unitLabel.isEmpty ? '' : ' ${item.unitLabel}';
     return Container(
-      width: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: AppColors.orange.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.navy50,
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: currentLabel,
-          isDense: true,
-          isExpanded: true,
-          icon: const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.orangeDark),
-          style: const TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            color: AppColors.orangeDark,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onEdit,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.orange.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '$index',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.orangeDark),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${Formatters.amount(item.qty)}$unit × ${Formatters.currency(item.price)}',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                    ),
+                    if (item.discount > 0)
+                      Text(
+                        'Discount − ${Formatters.currency(item.discount)}',
+                        style: const TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8, top: 2),
+                    child: Text(
+                      Formatters.currency(item.total),
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Edit',
+                        icon: Icon(Icons.edit_outlined, size: 19, color: AppColors.textSecondary),
+                        onPressed: onEdit,
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 34),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove',
+                        icon: const Icon(Icons.delete_outline, size: 19, color: AppColors.error),
+                        onPressed: onRemove,
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 34),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
           ),
-          items: [unit.name, unit.secondaryUnit]
-              .map((label) => DropdownMenuItem(
-                    value: label,
-                    child: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
-                  ))
-              .toList(),
-          onChanged: (newLabel) {
-            if (newLabel == null || newLabel == currentLabel) return;
-            item.unitLabel = newLabel;
-            item.priceController.text = unit.priceFor(item.basePrice, newLabel).toString();
-            onChanged();
-          },
+        ),
+      ),
+    );
+  }
+}
+
+/// Reviews/edits Quantity, Cost and Discount against the product's own detail
+/// before it's added to the bill, with a live running total — mirrors the
+/// invoice screen's _ItemDetailSheet, with "Cost" in place of "Price".
+class _PurchaseItemDetailSheet extends StatefulWidget {
+  final Product product;
+  final double initialQty;
+  final double initialCost;
+  final double initialDiscount;
+  final String initialUnitLabel;
+  final bool showStock;
+  final void Function(double qty, double cost, double discount, String unitLabel) onAdd;
+
+  const _PurchaseItemDetailSheet({
+    required this.product,
+    required this.initialQty,
+    required this.initialCost,
+    required this.initialDiscount,
+    required this.onAdd,
+    this.initialUnitLabel = '',
+    this.showStock = true,
+  });
+
+  @override
+  State<_PurchaseItemDetailSheet> createState() => _PurchaseItemDetailSheetState();
+}
+
+class _PurchaseItemDetailSheetState extends State<_PurchaseItemDetailSheet> {
+  static String _clean(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+
+  final _formKey = GlobalKey<FormState>();
+  late final _qtyController = TextEditingController(text: _clean(widget.initialQty));
+  late final _costController = TextEditingController(text: _clean(widget.initialCost));
+  late final _discountController = TextEditingController(
+    text: widget.initialDiscount == 0 ? '' : _clean(widget.initialDiscount),
+  );
+  late String _unitLabel = _resolveUnit();
+
+  // The dropdown asserts its value is exactly one of its items, and a saved
+  // line's unit label can differ in case/spacing — snap to the real unit name.
+  String _resolveUnit() {
+    final unit = widget.product.unitDetail;
+    final wanted = widget.initialUnitLabel.trim().toLowerCase();
+    if (unit != null && unit.hasSecondary) {
+      return wanted == unit.secondaryUnit.trim().toLowerCase() ? unit.secondaryUnit : unit.name;
+    }
+    return widget.initialUnitLabel.isNotEmpty
+        ? widget.initialUnitLabel
+        : (unit?.name ?? widget.product.unitName);
+  }
+
+  double get _qty => double.tryParse(_qtyController.text) ?? 0;
+  double get _cost => double.tryParse(_costController.text) ?? 0;
+  double get _discount => double.tryParse(_discountController.text) ?? 0;
+  double get _total => (_qty * _cost) - _discount;
+
+  @override
+  void dispose() {
+    _qtyController.dispose();
+    _costController.dispose();
+    _discountController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.product;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SheetHeader(title: p.name),
+                const SizedBox(height: 8),
+                Text(
+                  p.categoryName.isEmpty ? 'Uncategorized' : p.categoryName,
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.showStock && p.isLowStock) ...[
+                            const StatusBadge(label: 'LOW', color: AppColors.error),
+                            const SizedBox(width: 6),
+                          ],
+                          if (widget.showStock)
+                            Flexible(
+                              child: Text(
+                                '${Formatters.amount(p.stockQuantity)} ${p.unitName} in stock',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      Formatters.currency(p.purchasePrice),
+                      style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary, fontSize: 13),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                if (p.unitDetail?.hasSecondary == true) ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: _unitLabel,
+                    decoration: const InputDecoration(labelText: 'Unit'),
+                    items: [p.unitDetail!.name, p.unitDetail!.secondaryUnit]
+                        .map((label) => DropdownMenuItem(value: label, child: Text(label)))
+                        .toList(),
+                    onChanged: (label) {
+                      if (label == null || label == _unitLabel) return;
+                      setState(() {
+                        _unitLabel = label;
+                        _costController.text = _clean(p.unitDetail!.priceFor(p.purchasePrice, label));
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _qtyController,
+                        autofocus: true,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(labelText: 'Quantity *'),
+                        validator: (v) =>
+                            Validators.required(v, 'Quantity') ?? Validators.positiveNumber(v, 'Quantity'),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _costController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(labelText: 'Cost *'),
+                        validator: (v) =>
+                            Validators.required(v, 'Cost') ?? Validators.positiveNumber(v, 'Cost'),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _discountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Discount'),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+                    Text(
+                      Formatters.currency(_total),
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: PrimaryButton(
+                        label: 'Add to Bill',
+                        onPressed: () {
+                          if (!(_formKey.currentState?.validate() ?? false)) return;
+                          widget.onAdd(_qty, _cost, _discount, _unitLabel);
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
