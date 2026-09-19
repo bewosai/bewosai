@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { useTranslation } from "../utils/translations";
 import { useAuth } from "../context/AuthContext";
+import { useFeatures } from "../context/FeatureContext";
 import { auth as authApi, support as supportApi } from "../api";
 import { formatDateOnly } from "../utils/dates";
 import {
   Sun, Moon, Globe, Eye, EyeOff, Calendar, Building2,
   Upload, Save, Bell, Shield, Palette, User, Check, FileText, BarChart3, ChevronRight, ChevronDown,
   FileSpreadsheet, Crown, Archive, Loader, AlertCircle, MessageSquare, Send,
-  Mail, Phone, Copy, RotateCcw, Trash2,
+  Mail, Phone, Copy, RotateCcw, Trash2, Users,
 } from "lucide-react";
 import PhoneInput from "../components/common/PhoneInput";
 import ConfirmDialog from "../components/common/ConfirmDialog";
@@ -278,6 +279,7 @@ export default function SettingsPage() {
           setTheme, setLanguage, setDateMode, setCurrency } = useAppSettings();
   const { t } = useTranslation();
   const { currentBusiness, user, updateBusinessInList } = useAuth();
+  const { isFeatureEnabled } = useFeatures();
   const navigate = useNavigate();
   const [section, setSection] = useState("account");
   const [saved, setSaved] = useState(false);
@@ -674,6 +676,30 @@ export default function SettingsPage() {
               </label>
             )}
           </div>
+        </SettingCard>
+        )}
+
+        {/* Staff — up to 8 people can sign in with their own login link and a
+            role (Manager / Cashier / Viewer). Premium-only, matching the app's
+            Settings > Staff entry: explains that and opens Upgrade on Free. */}
+        {section === "business" && (
+        <SettingCard title={language === "ne" ? "स्टाफ" : "Staff"} icon={Users}>
+          <button
+            onClick={() => navigate(isFeatureEnabled("staff_management") ? "/staff" : "/settings/upgrade")}
+            className="flex w-full items-center justify-between rounded-xl border border-navy-800 bg-navy-950 px-4 py-3 text-left transition hover:border-orange-500/50"
+          >
+            <div>
+              <p className="text-sm font-medium text-white">
+                {language === "ne" ? "स्टाफ व्यवस्थापन गर्नुहोस्" : "Manage Staff"}
+              </p>
+              <p className="text-xs text-navy-500 mt-0.5">
+                {isFeatureEnabled("staff_management")
+                  ? (language === "ne" ? "स्टाफ आमन्त्रण गर्नुहोस्, भूमिका सेट गर्नुहोस्, लगइन लिङ्क साझा गर्नुहोस्" : "Invite staff, set their role, share their login link")
+                  : (language === "ne" ? "प्रिमियम — ८ जनासम्म स्टाफ थप्नुहोस्। अपग्रेड गर्न ट्याप गर्नुहोस्" : "Premium — add up to 8 staff members. Click to upgrade")}
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-navy-500 shrink-0" />
+          </button>
         </SettingCard>
         )}
 
