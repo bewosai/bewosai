@@ -104,13 +104,20 @@ class AdminUserSerializer(UserSerializer):
     login_count = serializers.IntegerField(read_only=True, default=0)
     last_login_ip = serializers.CharField(read_only=True, default=None, allow_null=True)
     last_login_device = serializers.SerializerMethodField()
+    last_login_platform = serializers.SerializerMethodField()
     is_online = serializers.SerializerMethodField()
 
     class Meta(UserSerializer.Meta):
         fields = UserSerializer.Meta.fields + (
-            "last_login_at", "last_active_at", "login_count", "last_login_ip", "last_login_device", "is_online",
+            "last_login_at", "last_active_at", "login_count", "last_login_ip", "last_login_device",
+            "last_login_platform", "is_online",
         )
         read_only_fields = fields
+
+    def get_last_login_platform(self, obj):
+        from .views import platform_label  # local import: views imports this module
+
+        return platform_label(getattr(obj, "last_login_via", None), getattr(obj, "last_login_ua", None))
 
     def get_last_login_device(self, obj):
         ua = getattr(obj, "last_login_ua", None)

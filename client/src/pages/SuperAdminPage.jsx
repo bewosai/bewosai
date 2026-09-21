@@ -368,7 +368,7 @@ function UserDetailModal({ user: u, onClose, onAction }) {
                 <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-navy-800 bg-navy-950 px-3 py-1.5 text-xs">
                   <div className="min-w-0">
                     <p className="truncate text-navy-300">{formatNepalDateTime(a.timestamp)}</p>
-                    {a.device && <p className="truncate text-[10px] text-navy-500">{a.device}{a.ip ? ` · ${a.ip}` : ""}</p>}
+                    {a.device && <p className="truncate text-[10px] text-navy-500">{a.platform === "app" ? "App · " : a.platform === "web" ? "Website · " : ""}{a.device}{a.ip ? ` · ${a.ip}` : ""}</p>}
                   </div>
                   <span className="shrink-0 text-orange-300 text-[10px]">{formatBS(bs, language)}</span>
                   <span className={`shrink-0 rounded px-1.5 py-0.5 ${a.success ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
@@ -1259,7 +1259,11 @@ function UsersTab({ onCountChange }) {
                     <td className="px-4 py-3 whitespace-nowrap">
                       {u.last_login_at ? (
                         <>
-                          <p className="text-xs text-navy-300" title={formatNepalDateTime(u.last_login_at)}>{timeAgo(u.last_login_at, now)}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs text-navy-300" title={formatNepalDateTime(u.last_login_at)}>{timeAgo(u.last_login_at, now)}</p>
+                            {u.last_login_platform === "app" && <Badge label="App" color="orange" />}
+                            {u.last_login_platform === "web" && <Badge label="Website" color="blue" />}
+                          </div>
                           <p className="text-[10px] text-navy-500">{[u.last_login_device, u.last_login_ip].filter(Boolean).join(" · ")}</p>
                         </>
                       ) : <span className="text-xs text-navy-600">Never signed in</span>}

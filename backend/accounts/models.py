@@ -461,9 +461,16 @@ class StaffMember(models.Model):
 
 
 class LoginActivity(models.Model):
+    PLATFORM_APP = "app"
+    PLATFORM_WEB = "web"
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="login_activities")
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
+    # Which client signed in, from the X-Platform header both frontends send.
+    # Blank on rows from before this was recorded — superadmin falls back to
+    # sniffing user_agent for those.
+    platform = models.CharField(max_length=10, blank=True, default="")
     timestamp = models.DateTimeField(auto_now_add=True)
     success = models.BooleanField(default=True)
     logout_time = models.DateTimeField(null=True, blank=True)

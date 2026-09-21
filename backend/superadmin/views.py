@@ -51,8 +51,12 @@ class PlatformStatsView(APIView):
         logins_last_30 = recent_logins.count()
         # The Flutter app's HTTP client identifies itself as Dart (or okhttp on
         # some Android builds); anything else is a browser, i.e. the website.
+        # Logins now record the platform outright (X-Platform header); older
+        # rows have it blank, so those still go by the user agent.
         app_logins = recent_logins.filter(
-            models.Q(user_agent__icontains="dart") | models.Q(user_agent__icontains="okhttp")
+            models.Q(platform=LoginActivity.PLATFORM_APP)
+            | models.Q(platform="", user_agent__icontains="dart")
+            | models.Q(platform="", user_agent__icontains="okhttp")
         ).count()
 
         # Real row counts across every business — everything the app and the
@@ -194,6 +198,13 @@ class BusinessActionView(APIView):
 
 # ── User management ────────────────────────────────────────────────────────────
 
+def _client_of(login_qs):
+    """Subquery: which client (app/website) the newest login in `login_qs` came
+    from. Only annotates each user row for display — the list is never filtered
+    by it (see tests_visibility)."""
+    return Subquery(login_qs.values("platform")[:1])
+
+
 class UserManagementView(APIView):
     permission_classes = [IsPlatformAdmin]
 
@@ -214,6 +225,7 @@ class UserManagementView(APIView):
             login_count=Count("login_activities", filter=Q(login_activities__success=True)),
             last_login_ip=Subquery(latest_login.values("ip_address")[:1]),
             last_login_ua=Subquery(latest_login.values("user_agent")[:1]),
+            last_login_via=_client_of(latest_login),
         )
         if search:
             qs = qs.filter(Q(email__icontains=search) | Q(name__icontains=search) | Q(phone__icontains=search))
@@ -355,6 +367,18 @@ def _device_label(user_agent):
     return f"{os_label} · {browser}" if browser else os_label
 
 
+def platform_label(stored, user_agent):
+    """'app' or 'web' for a login: the recorded platform when there is one, else
+    a guess from the user agent (rows from before the platform was recorded).
+    None when there's nothing to go on."""
+    if stored in (LoginActivity.PLATFORM_APP, LoginActivity.PLATFORM_WEB):
+        return stored
+    if not user_agent:
+        return None
+    ua = user_agent.lower()
+    return LoginActivity.PLATFORM_APP if ("dart" in ua or "okhttp" in ua) else LoginActivity.PLATFORM_WEB
+
+
 class LoginActivityView(APIView):
     permission_classes = [IsPlatformAdmin]
 
@@ -382,6 +406,7 @@ class LoginActivityView(APIView):
                 "ip": la.ip_address,
                 "user_agent": la.user_agent,
                 "device": _device_label(la.user_agent),
+                "platform": platform_label(la.platform, la.user_agent),
                 "success": la.success,
                 "timestamp": la.timestamp,
                 "logout_time": la.logout_time,

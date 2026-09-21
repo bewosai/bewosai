@@ -54,6 +54,11 @@ def api_response(success, message, status_code, **extra):
 #     return None
 
 
+def _login_platform(request):
+    """'app' for the Flutter app, 'web' for everything else (the website)."""
+    return LoginActivity.PLATFORM_APP if get_platform(request) == "mobile" else LoginActivity.PLATFORM_WEB
+
+
 def _first_error(errors):
     """Flatten DRF's {field: [messages]} error dict into one readable string."""
     for field, messages in errors.items():
@@ -206,42 +211,51 @@ class VerifyOTPView(APIView):
             logger.warning("Invalid OTP attempt for %s", identifier)
             return api_response(False, "Incorrect code. Please check and try again.", status.HTTP_400_BAD_REQUEST)
 
-        with transaction.atomic():
-            # Phone login/signup temporarily disabled (2026-09-16) — identifier
-            # is always an email now; the phone lookup/create branch below is
-            # kept commented out (not deleted) for easy restore.
-            # if is_phone:
-            #     user = User.objects.filter(phone=identifier).first()
-            # else:
-            user = User.objects.filter(email=identifier).first()
-            is_new = user is None
-            if is_new:
-                # account_type is a placeholder here; the user picks it via set-account-type
+        try:
+            with transaction.atomic():
+                # Phone login/signup temporarily disabled (2026-09-16) — identifier
+                # is always an email now; the phone lookup/create branch below is
+                # kept commented out (not deleted) for easy restore.
                 # if is_phone:
-                #     user = User.objects.create_user(
-                #         phone=identifier,
-                #         name=name,
-                #         account_type=ACCOUNT_BUSINESS,
-                #         is_verified=True,
-                #     )
+                #     user = User.objects.filter(phone=identifier).first()
                 # else:
-                user = User.objects.create_user(
-                    email=identifier,
-                    name=name or identifier.split("@")[0].capitalize(),
-                    account_type=ACCOUNT_BUSINESS,
-                    is_verified=True,
+                user = User.objects.filter(email=identifier).first()
+                is_new = user is None
+                if is_new:
+                    # account_type is a placeholder here; the user picks it via set-account-type
+                    # if is_phone:
+                    #     user = User.objects.create_user(
+                    #         phone=identifier,
+                    #         name=name,
+                    #         account_type=ACCOUNT_BUSINESS,
+                    #         is_verified=True,
+                    #     )
+                    # else:
+                    user = User.objects.create_user(
+                        email=identifier,
+                        name=name or identifier.split("@")[0].capitalize(),
+                        account_type=ACCOUNT_BUSINESS,
+                        is_verified=True,
+                    )
+
+                user.last_login_at = timezone.now()
+                user.is_verified = True
+                user.save(update_fields=["last_login_at", "is_verified"])
+                grant_platform_admin_if_listed(user)
+
+                LoginActivity.objects.create(
+                    user=user,
+                    ip_address=client_ip(request),
+                    user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                    platform=_login_platform(request),
                 )
-
-            user.last_login_at = timezone.now()
-            user.is_verified = True
-            user.save(update_fields=["last_login_at", "is_verified"])
-            grant_platform_admin_if_listed(user)
-
-            LoginActivity.objects.create(
-                user=user,
-                ip_address=client_ip(request),
-                user_agent=request.META.get("HTTP_USER_AGENT", ""),
-            )
+        except Exception:
+            # The code was already marked used above. If saving the login then fails
+            # (a server-side fault, not the user's), give the code back so they can
+            # retry it — otherwise a crash here burns a correct code and the retry
+            # is told "Incorrect code".
+            OTPCode.objects.filter(pk=otp.pk).update(is_used=False)
+            raise
 
         logger.info("User %s logged in via OTP (new_user=%s)", identifier, is_new)
 
@@ -306,6 +320,7 @@ class GoogleLoginView(APIView):
                 user=user,
                 ip_address=client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                platform=_login_platform(request),
             )
 
         logger.info("User %s logged in via Google (new_user=%s)", email, is_new)
@@ -716,6 +731,7 @@ class StaffLoginView(APIView):
             user=user,
             ip_address=client_ip(request),
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            platform=_login_platform(request),
         )
 
         logger.info("Staff member (user %s) logged in via login link", user.id)

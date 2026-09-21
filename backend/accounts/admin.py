@@ -63,8 +63,8 @@ class StaffMemberAdmin(admin.ModelAdmin):
 
 @admin.register(LoginActivity)
 class LoginActivityAdmin(admin.ModelAdmin):
-    list_display = ("user", "ip_address", "user_agent", "success", "timestamp", "session_duration")
-    list_filter = ("success",)
+    list_display = ("user", "platform", "ip_address", "user_agent", "success", "timestamp", "session_duration")
+    list_filter = ("success", "platform")
     search_fields = ("user__email",)
     readonly_fields = ("timestamp",)
 
