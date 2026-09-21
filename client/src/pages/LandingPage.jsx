@@ -8,6 +8,10 @@ import {
   ArrowRight, CheckCircle2, Download, Smartphone, Mail, Phone,
 } from "lucide-react";
 
+// Direct download of the Android app (APK). Override with VITE_APK_URL in the
+// Vercel project's environment variables when the file moves.
+const APK_URL = import.meta.env.VITE_APK_URL || "https://files.catbox.moe/jx914a.apk";
+
 const features = [
   {
     icon: ShoppingCart,
@@ -276,12 +280,21 @@ export default function LandingPage() {
                   it like any other app, even without internet.
                 </p>
                 <div className="mt-8 flex flex-wrap gap-4">
-                  <button
-                    onClick={handleInstall}
+                  <a
+                    href={APK_URL}
+                    download
+                    rel="noopener"
                     className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400"
                   >
+                    <Smartphone className="h-5 w-5" />
+                    Download Android APK
+                  </a>
+                  <button
+                    onClick={handleInstall}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-navy-700 px-6 py-3.5 text-sm font-medium text-white transition hover:border-orange-500 hover:text-orange-400"
+                  >
                     <Download className="h-5 w-5" />
-                    {installed ? "App Installed" : "Download App"}
+                    {installed ? "App Installed" : "Install from Browser"}
                   </button>
                   <Link
                     to="/login"
@@ -295,8 +308,13 @@ export default function LandingPage() {
               <div className="space-y-4 rounded-2xl border border-navy-800 bg-navy-950/60 p-5 text-sm text-navy-300">
                 <p className="font-semibold text-white">How to install</p>
                 <p>
+                  <span className="font-semibold text-orange-400">Android app (APK):</span>{" "}
+                  Tap "Download Android APK", open the file, and allow "Install unknown apps" if
+                  your phone asks.
+                </p>
+                <p>
                   <span className="font-semibold text-orange-400">Android / Desktop Chrome:</span>{" "}
-                  Tap "Download App" above and confirm Install.
+                  Tap "Install from Browser" above and confirm Install.
                 </p>
                 <p>
                   <span className="font-semibold text-orange-400">iPhone (Safari):</span>{" "}

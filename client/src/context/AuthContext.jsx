@@ -7,6 +7,23 @@ function stored(key) {
   try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
 }
 
+/** The message to show for a failed sign-in call. Prefers what the backend said;
+ * otherwise says what actually went wrong — a server that's asleep or restarting
+ * (the free host wakes on the first request and can take a minute) is not the
+ * same as a wrong code, and used to show the same generic line. */
+function signInError(err, fallback) {
+  const data = err.response?.data;
+  const fromServer = data?.message || data?.detail;
+  if (typeof fromServer === "string" && fromServer) return fromServer;
+  if (!err.response) {
+    return "Couldn't reach the server. It may be waking up — wait a few seconds and try again.";
+  }
+  if (err.response.status >= 500) {
+    return "The server is busy or restarting. Wait a moment and try again.";
+  }
+  return fallback;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => stored("user"));
   const [businesses, setBusinesses] = useState(() => stored("businesses") || []);
@@ -29,7 +46,7 @@ export function AuthProvider({ children }) {
     } catch (err) {
       return {
         ok: false,
-        error: err.response?.data?.message || err.response?.data?.detail || "Failed to send OTP.",
+        error: signInError(err, "Failed to send OTP."),
         userExists: err.response?.data?.user_exists || false,
       };
     } finally {
@@ -82,7 +99,7 @@ export function AuthProvider({ children }) {
         businesses: data.businesses,
       };
     } catch (err) {
-      return { ok: false, error: err.response?.data?.message || err.response?.data?.detail || "OTP verification failed." };
+      return { ok: false, error: signInError(err, "OTP verification failed.") };
     } finally {
       setLoading(false);
     }
