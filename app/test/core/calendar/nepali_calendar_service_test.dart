@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nepali_utils/nepali_utils.dart';
 import 'package:bewosai_app/core/calendar/nepali_calendar_service.dart';
 
 void main() {
@@ -58,6 +59,34 @@ void main() {
         }
         prev = cur;
         day = day.add(const Duration(days: 1));
+      }
+    });
+
+    test('Ashwin 2083: 17 Sep 2026 is Ashwin 1 and 21 Sep 2026 is Ashwin 5 (Hamro Patro)', () {
+      for (final c in [
+        (DateTime(2026, 9, 17), 1),
+        (DateTime(2026, 9, 21), 5),
+        (DateTime(2026, 9, 22), 6),
+      ]) {
+        final bs = NepaliCalendarService.toNepali(c.$1);
+        expect([bs.year, bs.month, bs.day], [2083, 6, c.$2], reason: '${c.$1}');
+      }
+    });
+
+    test('a UTC-flagged or local DateTime for the same calendar day converts the same', () {
+      // The result must depend only on the year/month/day, never on the device
+      // timezone (the old package call did — one day off on some phones).
+      for (final d in [DateTime(2026, 9, 21), DateTime.utc(2026, 9, 21), DateTime(2026, 9, 21, 23, 59)]) {
+        final bs = NepaliCalendarService.toNepali(d);
+        expect([bs.year, bs.month, bs.day], [2083, 6, 5], reason: '$d');
+      }
+    });
+
+    test('every Baisakh 1 in the supported range converts to day 1 of month 1', () {
+      for (var y = 2001; y <= 2098; y++) {
+        final ad = NepaliCalendarService.toGregorian(NepaliDateTime(y, 1, 1));
+        final bs = NepaliCalendarService.toNepali(ad);
+        expect([bs.year, bs.month, bs.day], [y, 1, 1], reason: 'BS $y');
       }
     });
 
