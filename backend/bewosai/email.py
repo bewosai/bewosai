@@ -1,6 +1,7 @@
 """
 Email sender for Bewosai.
 Priority order: SendGrid API key → Gmail SMTP → console (dev fallback).
+If SendGrid is set but fails, SMTP is tried next when it is configured too.
 
 To use Gmail SMTP, set in .env:
   EMAIL_HOST_USER=your@gmail.com
@@ -11,7 +12,9 @@ To use SendGrid instead, set:
   SENDGRID_FROM_EMAIL=your@gmail.com
 """
 import logging
+from html import escape
 from django.conf import settings
+from django.utils import timezone
 from django.core.mail import send_mail as django_send_mail
 
 logger = logging.getLogger(__name__)
@@ -80,7 +83,7 @@ def _otp_html(otp_code: str, email: str) -> str:
             <td style="background:#f8fafc;padding:20px 40px;
                        border-top:1px solid #e2e8f0;text-align:center;">
               <p style="margin:0;color:#94a3b8;font-size:12px;">
-                &copy; 2025 Bewosai &middot; All rights reserved
+                &copy; {timezone.now().year} Bewosai &middot; All rights reserved
               </p>
             </td>
           </tr>
@@ -109,6 +112,8 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
 
 
 def _fiscal_year_reminder_html(business_name: str, label: str) -> str:
+    # The business name is typed by a user — escape it before it goes into HTML.
+    business_name, label = escape(business_name), escape(label)
     return f"""
 <!DOCTYPE html>
 <html>
@@ -151,7 +156,7 @@ def _fiscal_year_reminder_html(business_name: str, label: str) -> str:
             <td style="background:#f8fafc;padding:20px 40px;
                        border-top:1px solid #e2e8f0;text-align:center;">
               <p style="margin:0;color:#94a3b8;font-size:12px;">
-                &copy; 2025 Bewosai &middot; All rights reserved
+                &copy; {timezone.now().year} Bewosai &middot; All rights reserved
               </p>
             </td>
           </tr>
@@ -190,12 +195,40 @@ def send_fiscal_year_reminder_email(to_email: str, business_name: str, label: st
     )
 
 
+def email_provider() -> str:
+    """Which provider _send will try first: 'sendgrid', 'smtp', or 'none'."""
+    if getattr(settings, "SENDGRID_API_KEY", "").strip():
+        return "sendgrid"
+    if getattr(settings, "EMAIL_HOST_USER", "").strip():
+        return "smtp"
+    return "none"
+
+
+def send_test_email(to_email: str) -> bool:
+    """A real email through the same path as the login code — for `manage.py check_email`."""
+    return _send(
+        to_email,
+        subject="Bewosai email test",
+        text="This is a test from Bewosai. If you can read this, login codes will reach you.\n\n— Bewosai Team",
+        html="<p>This is a test from <b>Bewosai</b>. If you can read this, login codes will reach you.</p>",
+        console_fallback=lambda: print(f"[BEWOSAI EMAIL TEST — no provider configured] would send to {to_email}"),
+    )
+
+
 def _send(to_email: str, *, subject: str, text: str, html: str, console_fallback) -> bool:
     api_key = getattr(settings, "SENDGRID_API_KEY", "").strip()
     host_user = getattr(settings, "EMAIL_HOST_USER", "").strip()
 
     if api_key:
-        return _send_via_sendgrid(to_email, subject, text, html, api_key)
+        if _send_via_sendgrid(to_email, subject, text, html, api_key):
+            return True
+        # SendGrid refused or was unreachable (daily limit reached, plan ended,
+        # key revoked, outage). If SMTP is also set up, try that rather than
+        # failing the login outright.
+        if host_user:
+            logger.warning("SendGrid failed for %s — falling back to SMTP", to_email)
+            return _send_via_smtp(to_email, subject, text, html)
+        return False
 
     if host_user:
         return _send_via_smtp(to_email, subject, text, html)
