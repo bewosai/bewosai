@@ -15,8 +15,8 @@ const WEEKDAYS_NE = ["आ", "सो", "मं", "बु", "बि", "शु", "�
 // BS_MONTH_DAYS in nepaliDate.js only has real data for these years —
 // clamping BS navigation to this range keeps every rendered day accurate
 // instead of silently falling back to a guessed 30-day month outside it.
-const BS_MIN_YEAR = 2077;
-const BS_MAX_YEAR = 2090;
+const BS_MIN_YEAR = 2000; // matches BS_MONTH_DAYS in utils/nepaliDate.js
+const BS_MAX_YEAR = 2099;
 
 function localISO(d) {
   const pad = (n) => String(n).padStart(2, "0");

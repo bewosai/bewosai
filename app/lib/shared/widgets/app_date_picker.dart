@@ -85,10 +85,10 @@ class _NepaliDatePickerDialogState extends State<_NepaliDatePickerDialog> {
       m = 12;
       y -= 1;
     }
-    if (y < 2000 || y > 2099) return null;
+    if (y < NepaliCalendarService.firstBsYear || y > NepaliCalendarService.lastBsYear) return null;
     final first = NepaliCalendarService.toGregorian(NepaliDateTime(y, m, 1));
     final last = first.add(
-      Duration(days: NepaliDateTime(y, m, 1).totalDays - 1),
+      Duration(days: NepaliCalendarService.daysInMonth(y, m) - 1),
     );
     if (last.isBefore(widget.firstDate) || first.isAfter(widget.lastDate)) {
       return null;
@@ -117,9 +117,9 @@ class _NepaliDatePickerDialogState extends State<_NepaliDatePickerDialog> {
   Widget build(BuildContext context) {
     final today = NepaliCalendarService.toNepali(NepalTime.now());
     final monthStart = NepaliDateTime(_displayYear, _displayMonth, 1);
-    final daysInMonth = monthStart.totalDays;
-    final leadingBlanks =
-        monthStart.weekday - 1; // Nepali weekday: Sun=1..Sat=7
+    final daysInMonth = NepaliCalendarService.daysInMonth(_displayYear, _displayMonth);
+    // Sun=1..Sat=7, from our own table (the package's weekday would use its own).
+    final leadingBlanks = NepaliCalendarService.firstWeekday(_displayYear, _displayMonth) - 1;
     final weekdayLabels = _lang == Language.nepali
         ? ['आ', 'सो', 'मं', 'बु', 'बि', 'शु', 'श']
         : ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
