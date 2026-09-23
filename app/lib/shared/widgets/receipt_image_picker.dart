@@ -97,6 +97,6 @@ Future<String?> pickReceiptImagePath(BuildContext context) async {
     ),
   );
   if (source == null) return null;
-  final picked = await ImagePicker().pickImage(source: source, imageQuality: 80);
+  final picked = await ImagePicker().pickImage(source: source, imageQuality: 80, maxWidth: 1600, maxHeight: 1600);
   return picked?.path;
 }

@@ -227,12 +227,18 @@ export default function ReminderBell() {
                         <button
                           key={s.id}
                           onClick={() => goTo(`/sales?view=${s.id}`)}
-                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-xs text-navy-300 hover:bg-navy-800/60"
+                          className="flex w-full flex-col gap-0.5 rounded-lg px-2 py-1 text-left text-xs text-navy-300 hover:bg-navy-800/60"
                         >
-                          <span className="truncate">
-                            {s.invoice_number} · {s.customer_name || s.party_name || "Cash Sales"}
+                          <span className="flex w-full items-center justify-between gap-2">
+                            <span className="truncate">
+                              {s.invoice_number} · {s.customer_name || s.party_name || "Cash Sales"}
+                            </span>
+                            <span className="shrink-0 font-semibold text-blue-300">Rs. {parseFloat(s.due_amount).toFixed(0)}</span>
                           </span>
-                          <span className="shrink-0 font-semibold text-blue-300">Rs. {parseFloat(s.due_amount).toFixed(0)}</span>
+                          {/* Why this reminder was set — see SalesPage.jsx's "Reminder note" field. */}
+                          {s.reminder_note && (
+                            <span className="truncate text-[11px] italic text-navy-500">{s.reminder_note}</span>
+                          )}
                         </button>
                       ))}
                     </div>

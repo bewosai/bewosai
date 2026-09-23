@@ -89,4 +89,48 @@ void main() {
       expect(Validators.otp('123456'), isNull);
     });
   });
+
+  group('Validators.discount', () {
+    test('empty input is fine (no discount)', () {
+      expect(Validators.discount('', 100), isNull);
+      expect(Validators.discount(null, 100), isNull);
+      expect(Validators.discount('   ', 100), isNull);
+    });
+
+    test('accepts anything from 0 up to the amount it discounts', () {
+      expect(Validators.discount('0', 100), isNull);
+      expect(Validators.discount('40.5', 100), isNull);
+      expect(Validators.discount('100', 100), isNull); // the whole line
+      expect(Validators.discount('100.004', 100), isNull); // a rounding hair over
+    });
+
+    test('rejects negative, non-numeric and too-large discounts', () {
+      expect(Validators.discount('-1', 100), "Discount can't be negative");
+      expect(Validators.discount('abc', 100), 'Discount must be a number');
+      expect(Validators.discount('100.01', 100), "Can't be more than 100.00");
+      expect(Validators.discount('5', 0), "Can't be more than 0.00"); // nothing entered yet
+    });
+  });
+
+  group('Validators.cappedDiscount', () {
+    test('passes a sensible value through', () {
+      expect(Validators.cappedDiscount('25', 100), 25);
+      expect(Validators.cappedDiscount(' 12.5 ', 100), 12.5);
+    });
+
+    test('caps at the amount, floors at zero', () {
+      expect(Validators.cappedDiscount('250', 100), 100);
+      expect(Validators.cappedDiscount('-40', 100), 0);
+    });
+
+    test('treats empty or unparseable input as no discount', () {
+      expect(Validators.cappedDiscount('', 100), 0);
+      expect(Validators.cappedDiscount(null, 100), 0);
+      expect(Validators.cappedDiscount('abc', 100), 0);
+    });
+
+    test('a negative gross (bad quantity) never throws', () {
+      expect(Validators.cappedDiscount('10', -50), 0);
+    });
+  });
 }

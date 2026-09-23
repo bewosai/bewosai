@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from bewosai.validators import IMAGE_VALIDATORS
 from .models import Category, Unit, Product, StockMovement
 
 
@@ -43,6 +44,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "barcode", "hs_code", "image", "is_active", "created_at",
         )
         read_only_fields = ("id", "created_at", "is_low_stock", "selling_price")
+        extra_kwargs = {"image": {"validators": IMAGE_VALIDATORS}}
 
 
 class StockMovementSerializer(serializers.ModelSerializer):

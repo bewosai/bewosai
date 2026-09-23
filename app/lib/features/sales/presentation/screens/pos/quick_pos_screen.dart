@@ -50,7 +50,7 @@ class _LineItem {
 
   double get qty => double.tryParse(qtyController.text) ?? 0;
   double get price => double.tryParse(priceController.text) ?? 0;
-  double get discount => double.tryParse(discountController.text) ?? 0;
+  double get discount => Validators.cappedDiscount(discountController.text, qty * price);
   double get total => (qty * price) - discount;
 
   void dispose() {
@@ -89,6 +89,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
   bool _isPendingEdit = false;
   bool _reminderEnabled = false;
   DateTime? _reminderAt;
+  final _reminderNoteController = TextEditingController();
 
   // Starts empty: an item only lands here once picked and confirmed in the
   // item-detail sheet (see _pickProduct / _showItemDetailSheet), so there's
@@ -139,6 +140,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     _vatEnabled = sale.taxRate > 0;
     _reminderEnabled = sale.reminderEnabled;
     _reminderAt = sale.reminderAt;
+    _reminderNoteController.text = sale.reminderNote;
     if (sale.taxRate > 0) {
       _taxRateController.text = sale.taxRate == sale.taxRate.roundToDouble()
           ? sale.taxRate.toStringAsFixed(0)
@@ -186,6 +188,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     _paidController.dispose();
     _cashAmountController.dispose();
     _notesController.dispose();
+    _reminderNoteController.dispose();
     super.dispose();
   }
 
@@ -354,6 +357,54 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       ),
       showStock: false,
     );
+  }
+
+  bool get _hasContent =>
+      _items.isNotEmpty ||
+      _customer != null ||
+      _discountValue > 0 ||
+      _notesController.text.trim().isNotEmpty ||
+      (double.tryParse(_paidController.text) ?? 0) > 0;
+
+  /// Empties the invoice for a fresh start. Only offered for a new invoice —
+  /// clearing one that's being edited would wipe what's saved (Back is the way out).
+  Future<void> _confirmClear() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear invoice?'),
+        content: const Text('All items and details on this invoice will be removed.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final removed = List<_LineItem>.of(_items);
+    setState(() {
+      _items.clear();
+      _customer = null;
+      _discountPctController.text = '0';
+      _discountIsAmount = false;
+      _paidController.text = '0';
+      _cashAmountController.text = '0';
+      _notesController.clear();
+      _paymentMethod = 'CASH';
+      _bankAccountId = null;
+      _creditSale = false;
+      _dueDate = null;
+      _reminderEnabled = false;
+      _reminderAt = null;
+      _reminderNoteController.clear();
+      _saleDate = NepalTime.now();
+    });
+    // Dispose after the frame that stops showing them, not during it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final i in removed) {
+        i.dispose();
+      }
+    });
   }
 
   /// Removes a line, with a one-tap Undo so an accidental tap costs nothing.
@@ -635,6 +686,7 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
       notes: _notesController.text.trim(),
       reminderEnabled: _reminderEnabled,
       reminderAt: _reminderEnabled ? _reminderAt : null,
+      reminderNote: _reminderEnabled ? _reminderNoteController.text.trim() : '',
       items: _items
           .where((i) => i.qty > 0)
           .map(
@@ -659,11 +711,12 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     setState(() => _saving = false);
     if (result != null) {
       if (_reminderEnabled && _reminderAt != null) {
+        final note = _reminderNoteController.text.trim();
+        final who = result.customerName.isNotEmpty ? result.customerName : 'Customer';
         await NotificationService.instance.scheduleReminder(
           id: result.id,
           title: 'Payment Reminder',
-          body: '${result.customerName.isNotEmpty ? result.customerName : 'Customer'} '
-              'owes ${Formatters.currency(result.dueAmount)}',
+          body: '$who owes ${Formatters.currency(result.dueAmount)}${note.isEmpty ? '' : ' — $note'}',
           scheduledDate: _reminderAt!,
         );
         if (!mounted) return;
@@ -673,7 +726,8 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
             title: const Text('Reminder Set'),
             content: Text(
               'Reminder set for ${Formatters.date(_reminderAt)} at '
-              '${TimeOfDay.fromDateTime(_reminderAt!).format(ctx)}',
+              '${TimeOfDay.fromDateTime(_reminderAt!).format(ctx)}'
+              '${note.isEmpty ? '' : '\n\n"$note"'}',
             ),
             actions: [
               TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
@@ -703,7 +757,15 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_editId != null ? 'Edit Invoice' : 'New Invoice'),
-        actions: const [HomeLogoButton()],
+        actions: [
+          if (_editId == null && _hasContent)
+            IconButton(
+              tooltip: 'Clear invoice',
+              icon: const Icon(Icons.delete_sweep_outlined),
+              onPressed: _confirmClear,
+            ),
+          const HomeLogoButton(),
+        ],
       ),
       body: ResponsiveBody(
         child: !_loaded
@@ -821,6 +883,21 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                             ),
                         ],
                       ),
+                      // What this reminder is actually for — a bare due-amount
+                      // notification with no context is easy to ignore or
+                      // misread days later ("owes Rs 2,000" — for what, again?).
+                      if (_reminderEnabled) ...[
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _reminderNoteController,
+                          decoration: const InputDecoration(
+                            labelText: 'Reminder note (optional)',
+                            hintText: 'e.g. Promised to pay by Friday',
+                            isDense: true,
+                          ),
+                          maxLength: 200,
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -856,81 +933,78 @@ class _QuickPosScreenState extends State<QuickPosScreen> {
                   ),
                   const SizedBox(height: 16),
                   AppSectionCard(
+                    title: 'Discount & Tax',
                     children: [
-                      Row(
+                      // A % vs a flat Rs amount look identical while typing (both are
+                      // just a number), so the two modes are laid out as a clearly
+                      // separated toggle above the field, not squeezed onto the same
+                      // line as the field itself — and Wrap (not Row) so long text or a
+                      // narrow/small phone folds the second chip below instead of
+                      // clipping or overflowing it off the edge of the screen.
+                      Text('Discount as', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
-                          Text(
-                            'Discount as',
-                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                          ),
-                          const SizedBox(width: 10),
                           ChoiceChip(
                             label: const Text('% of total'),
                             selected: !_discountIsAmount,
                             selectedColor: AppColors.orangeLight,
                             onSelected: (_) => _setDiscountMode(false),
                           ),
-                          const SizedBox(width: 8),
                           ChoiceChip(
-                            label: const Text('Amount (Rs)'),
+                            label: const Text('Flat Amount (Rs)'),
                             selected: _discountIsAmount,
                             selectedColor: AppColors.orangeLight,
                             onSelected: (_) => _setDiscountMode(true),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _discountPctController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: _discountIsAmount ? 'Discount amount' : 'Discount percent',
+                          prefixText: _discountIsAmount ? 'Rs ' : null,
+                          suffixText: _discountIsAmount ? null : '%',
+                          // Whichever mode is picked, show the other one's equivalent too,
+                          // so "20%" and "Rs 200 off a Rs 1000 subtotal" are never ambiguous.
+                          helperText: _subtotal > 0 && _discountAmount > 0
+                              ? _discountIsAmount
+                                  ? '= ${(_discountAmount / _subtotal * 100).toStringAsFixed(1)}% of Rs ${_subtotal.toStringAsFixed(0)}'
+                                  : '= ${Formatters.currency(_discountAmount)} off Rs ${_subtotal.toStringAsFixed(0)}'
+                              : null,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const Divider(height: 28),
+                      // VAT gets its own row — a toggle on the left, its rate field
+                      // (only shown once VAT is on) on the right, each with room to
+                      // breathe instead of being crammed in next to the discount field.
                       Row(
                         children: [
                           Expanded(
-                            child: TextField(
-                              controller: _discountPctController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              decoration: InputDecoration(
-                                labelText: _discountIsAmount ? 'Discount (Rs)' : 'Discount (%)',
-                              ),
-                              onChanged: (_) => setState(() {}),
-                            ),
+                            child: Text('Apply VAT', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                           ),
-                          const SizedBox(width: 16),
-                          if (_vatEnabled)
-                            SizedBox(
-                              width: 72,
-                              child: TextField(
-                                controller: _taxRateController,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                ),
-                                decoration: const InputDecoration(
-                                  labelText: 'VAT %',
-                                ),
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'VAT',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              Switch(
-                                value: _vatEnabled,
-                                activeThumbColor: AppColors.orange,
-                                onChanged: (v) =>
-                                    setState(() => _vatEnabled = v),
-                              ),
-                            ],
+                          Switch(
+                            value: _vatEnabled,
+                            activeThumbColor: AppColors.orange,
+                            onChanged: (v) => setState(() => _vatEnabled = v),
                           ),
                         ],
                       ),
+                      if (_vatEnabled) ...[
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: _taxRateController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(labelText: 'VAT rate', suffixText: '%'),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
                       TextField(
                         controller: _notesController,
                         decoration: const InputDecoration(
@@ -1235,7 +1309,7 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
 
   double get _qty => double.tryParse(_qtyController.text) ?? 0;
   double get _price => double.tryParse(_priceController.text) ?? 0;
-  double get _discount => double.tryParse(_discountController.text) ?? 0;
+  double get _discount => Validators.cappedDiscount(_discountController.text, _qty * _price);
   double get _total => (_qty * _price) - _discount;
 
   @override
@@ -1352,6 +1426,9 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
                   controller: _discountController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Discount'),
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  // Re-checked as quantity/price change too, since the cap moves with them.
+                  validator: (v) => Validators.discount(v, _qty * _price),
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 18),

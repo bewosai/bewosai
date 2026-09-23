@@ -1,7 +1,9 @@
 from decimal import Decimal
+from django.db import transaction
 from django.db.models import Sum, F
 from django.db.models.functions import Greatest
 from rest_framework import serializers
+from bewosai.validators import check_discounts
 from bewosai.utils import require_business, sync_bank_transaction
 from inventory.models import Product
 from .models import Sale, SaleItem, SaleReturn, SaleReturnItem, Quotation
@@ -50,7 +52,7 @@ class SaleSerializer(serializers.ModelSerializer):
             "party_pan", "party_address",
             "sale_date", "due_date", "subtotal", "discount", "tax_rate", "tax_amount", "total",
             "paid_amount", "due_amount", "payment_method", "bank_account", "cash_amount", "status", "sale_type",
-            "reminder_enabled", "reminder_at",
+            "reminder_enabled", "reminder_at", "reminder_note",
             "notes", "items", "created_at",
         )
         read_only_fields = ("id", "tax_amount", "total", "due_amount", "created_at",
@@ -75,6 +77,10 @@ class SaleSerializer(serializers.ModelSerializer):
             product = item.get("product")
             if product is not None and product.business_id != business.id:
                 raise serializers.ValidationError({"items": "Invalid product for this business."})
+        check_discounts(
+            data.get("items"), data.get("discount"),
+            fallback_subtotal=self.instance.subtotal if self.instance is not None else None,
+        )
         return data
 
     @staticmethod
@@ -192,14 +198,22 @@ class SaleReturnSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleReturn
-        fields = ("id", "original_sale", "invoice_number", "return_date", "reason", "amount", "items", "created_at")
-        read_only_fields = ("id", "created_at", "invoice_number")
+        fields = (
+            "id", "original_sale", "invoice_number", "return_date", "reason", "amount",
+            "refund_method", "bank_account", "refunded_amount", "items", "created_at",
+        )
+        read_only_fields = ("id", "created_at", "invoice_number", "refunded_amount")
 
     def validate(self, data):
         business = require_business(self.context["request"])
         original_sale = data.get("original_sale")
         if original_sale is not None and original_sale.business_id != business.id:
             raise serializers.ValidationError({"original_sale": "Invalid sale for this business."})
+        bank_account = data.get("bank_account")
+        if bank_account is not None and bank_account.business_id != business.id:
+            raise serializers.ValidationError({"bank_account": "Invalid account for this business."})
+        if data.get("refund_method") == SaleReturn.METHOD_BANK and not bank_account:
+            raise serializers.ValidationError({"bank_account": "Select which account paid this refund."})
         for item in data.get("items", []):
             sale_item = item.get("sale_item")
             product = item.get("product")
@@ -222,24 +236,53 @@ class SaleReturnSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop("items", [])
-        sale_return = SaleReturn.objects.create(**validated_data)
+        original_sale = validated_data["original_sale"]
 
-        for item_data in items_data:
-            item = SaleReturnItem(sale_return=sale_return, **item_data)
-            item.save()                     # computes item.total = qty*price
+        # A return first reduces what the customer still owes on this invoice
+        # (parties.balances.party_balances already subtracts the full return
+        # `amount` from their balance — see SaleReturn's own docstring on
+        # why this must NOT also touch original_sale.due_amount, which would
+        # double-count it). Only the part beyond what was actually due is
+        # real money that has to be handed back right now.
+        due_before = original_sale.due_amount if original_sale.due_amount > 0 else Decimal("0")
+        refunded_amount = max(Decimal("0"), validated_data["amount"] - due_before)
+        validated_data["refunded_amount"] = refunded_amount
 
-            # Restore stock for linked products, converted into primary-unit
-            # terms the same way the original sale was (via
-            # Unit.base_quantity_for) — item.quantity is whatever unit the
-            # returned line was originally billed in (e.g. "Piece"), which
-            # isn't necessarily the primary unit stock_quantity is tracked
-            # in (e.g. "Box").
-            if item.product_id:
-                product = item.product
-                unit_label = item.sale_item.unit_label if item.sale_item_id else ""
-                base_qty = product.unit.base_quantity_for(item.quantity, unit_label) if product.unit_id else item.quantity
-                Product.objects.filter(pk=item.product_id).update(
-                    stock_quantity=F("stock_quantity") + base_qty
+        with transaction.atomic():
+            sale_return = SaleReturn.objects.create(**validated_data)
+
+            for item_data in items_data:
+                item = SaleReturnItem(sale_return=sale_return, **item_data)
+                item.save()                     # computes item.total = qty*price
+
+                # Restore stock for linked products, converted into primary-unit
+                # terms the same way the original sale was (via
+                # Unit.base_quantity_for) — item.quantity is whatever unit the
+                # returned line was originally billed in (e.g. "Piece"), which
+                # isn't necessarily the primary unit stock_quantity is tracked
+                # in (e.g. "Box").
+                if item.product_id:
+                    product = item.product
+                    unit_label = item.sale_item.unit_label if item.sale_item_id else ""
+                    base_qty = product.unit.base_quantity_for(item.quantity, unit_label) if product.unit_id else item.quantity
+                    Product.objects.filter(pk=item.product_id).update(
+                        stock_quantity=F("stock_quantity") + base_qty
+                    )
+
+            # A bank refund needs a real BankTransaction so the account's balance
+            # and Bank Statement reflect the money actually leaving it — a cash
+            # refund has nowhere to sync to (there's no "cash" bank account) but
+            # is picked up directly by the Cash Flow/Cash In Hand/Dashboard cash
+            # figures instead (see reports.views._ACTUAL_CASH's sibling logic there).
+            if refunded_amount > 0 and sale_return.refund_method == SaleReturn.METHOD_BANK:
+                sync_bank_transaction(
+                    reference=f"SALERETURN-{sale_return.id}",
+                    bank_account=sale_return.bank_account,
+                    transaction_type="DEBIT",
+                    amount=refunded_amount,
+                    date=sale_return.return_date,
+                    description=f"Refund for return on {original_sale.invoice_number}",
+                    created_by=sale_return.created_by,
                 )
 
         return sale_return
@@ -262,4 +305,6 @@ class QuotationSerializer(serializers.ModelSerializer):
         customer = data.get("customer")
         if customer is not None and customer.business_id != business.id:
             raise serializers.ValidationError({"customer": "Invalid customer for this business."})
+        subtotal = data.get("subtotal", self.instance.subtotal if self.instance is not None else None)
+        check_discounts(None, data.get("discount"), fallback_subtotal=subtotal)
         return data

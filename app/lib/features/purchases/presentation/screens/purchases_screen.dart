@@ -351,7 +351,7 @@ class _PurchaseItemRow {
 
   double get qty => double.tryParse(qtyController.text) ?? 0;
   double get price => double.tryParse(priceController.text) ?? 0;
-  double get discount => double.tryParse(discountController.text) ?? 0;
+  double get discount => Validators.cappedDiscount(discountController.text, qty * price);
   double get total => (qty * price) - discount;
 }
 
@@ -576,7 +576,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
       ),
     );
     if (source == null) return;
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 80);
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 80, maxWidth: 1600, maxHeight: 1600);
     if (picked == null || !mounted) return;
     setState(() {
       _billImageFile = File(picked.path);
@@ -1510,7 +1510,7 @@ class _PurchaseItemDetailSheetState extends State<_PurchaseItemDetailSheet> {
 
   double get _qty => double.tryParse(_qtyController.text) ?? 0;
   double get _cost => double.tryParse(_costController.text) ?? 0;
-  double get _discount => double.tryParse(_discountController.text) ?? 0;
+  double get _discount => Validators.cappedDiscount(_discountController.text, _qty * _cost);
   double get _total => (_qty * _cost) - _discount;
 
   @override
@@ -1620,6 +1620,8 @@ class _PurchaseItemDetailSheetState extends State<_PurchaseItemDetailSheet> {
                   controller: _discountController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Discount'),
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  validator: (v) => Validators.discount(v, _qty * _cost),
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 18),

@@ -15,6 +15,25 @@ class Validators {
     return null;
   }
 
+  /// A discount typed against something worth [gross] (a line's quantity × price,
+  /// or an invoice subtotal). Only validates non-empty input; null means fine.
+  static String? discount(String? value, double gross) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+    final n = double.tryParse(text);
+    if (n == null) return 'Discount must be a number';
+    if (n < 0) return "Discount can't be negative";
+    if (n > gross + 0.005) return "Can't be more than ${gross.toStringAsFixed(2)}";
+    return null;
+  }
+
+  /// The discount as it should count: never negative, never more than [gross],
+  /// so a typo can't push a total below zero. Unparseable input counts as 0.
+  static double cappedDiscount(String? value, double gross) {
+    final n = double.tryParse((value ?? '').trim()) ?? 0;
+    return n.clamp(0.0, gross < 0 ? 0.0 : gross).toDouble();
+  }
+
   // Domain is one or more "label." segments (supports subdomains like
   // user@mail.example.co) followed by a final 2+ letter TLD.
   static final _emailRegex = RegExp(r'^[\w.\-+]+@([\w\-]+\.)+[a-zA-Z]{2,}$');

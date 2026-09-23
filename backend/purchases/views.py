@@ -113,6 +113,28 @@ class PurchaseReturnListCreateView(_RequirePurchases, generics.ListCreateAPIView
         serializer.save(business=biz, created_by=self.request.user)
 
 
+# The staff-permission module each kind of deleted record belongs to. Restoring or
+# permanently deleting one needs "delete" on that module (the same permission that
+# let someone delete it), and the bin only lists what the viewer may see.
+_RECYCLE_MODULE = {
+    "sale": "sales", "quotation": "sales", "purchase": "purchases", "expense": "expenses",
+    "product": "inventory", "party": "parties", "payment": "payments",
+    "bank_account": "banking", "bank_transaction": "banking",
+}
+
+
+def _recycle_denied(request, business, record_type, method):
+    """A 403 Response if the user may not act on this kind of record, else None."""
+    from bewosai.permissions import staff_can
+    module = _RECYCLE_MODULE.get(record_type)
+    if module and not staff_can(request.user, business, module, method):
+        return Response(
+            {"error": "Your account doesn't have access to this. Ask the business owner to enable it for you."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
 class RecycleBinView(APIView):
     """Lists all soft-deleted records across models for the current business."""
 
@@ -193,6 +215,8 @@ class RecycleBinView(APIView):
                 "deleted_at": txn.deleted_at,
             })
 
+        from bewosai.permissions import staff_can
+        result = [r for r in result if staff_can(request.user, biz, _RECYCLE_MODULE[r["type"]], "GET")]
         result.sort(key=lambda x: x["deleted_at"] or timezone.now(), reverse=True)
         return Response(result)
 
@@ -209,6 +233,9 @@ class RecycleBinRestoreView(APIView):
         biz = get_business(request)
         if not biz:
             return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
+        denied = _recycle_denied(request, biz, record_type, "DELETE")
+        if denied:
+            return denied
 
         try:
             if record_type == "sale":
@@ -271,6 +298,9 @@ class RecycleBinPermanentDeleteView(APIView):
         biz = get_business(request)
         if not biz:
             return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
+        denied = _recycle_denied(request, biz, record_type, "DELETE")
+        if denied:
+            return denied
 
         try:
             if record_type == "sale":

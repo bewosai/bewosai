@@ -7,6 +7,7 @@ import {
   Trash2, Edit2, Upload, AlertTriangle, Loader, RefreshCw, Search,
 } from "lucide-react";
 import { todayStr } from "../utils/dates";
+import { prepareImage } from "../utils/image";
 
 const today = () => todayStr();
 
@@ -66,11 +67,18 @@ function AccountModal({ editData, accounts = [], onClose, onSaved }) {
   const [error, setError] = useState("");
   const fileRef = useRef();
 
-  const handleFile = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setQrFile(f);
-    setQrPreview(URL.createObjectURL(f));
+  const handleFile = async (e) => {
+    const picked = e.target.files?.[0];
+    if (!picked) return;
+    try {
+      const f = await prepareImage(picked);
+      setError("");
+      setQrFile(f);
+      setQrPreview(URL.createObjectURL(f));
+    } catch (err) {
+      setError(err.message);
+      e.target.value = "";
+    }
   };
 
   const handleSubmit = async (e) => {

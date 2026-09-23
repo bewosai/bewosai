@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/notifications/notification_service.dart';
 import '../../../../core/offline/app_database.dart';
 import '../../../../core/offline/connectivity_service.dart';
 import '../../../../core/offline/sync_service.dart';
@@ -31,12 +32,29 @@ class SaleProvider extends ChangeNotifier {
     try {
       final pending = await _pendingSales();
       sales = [...pending, ...await _useCases.listSales()];
+      _cancelSettledReminders();
     } catch (e) {
       sales = await _pendingSales();
       if (sales.isEmpty) error = e is ApiException ? e.message : e.toString();
     }
     isLoading = false;
     notifyListeners();
+  }
+
+  /// A payment reminder is a local, on-device alarm keyed by the sale's id
+  /// (see NotificationService) — nothing cancels it automatically when the
+  /// balance it's chasing is actually cleared anywhere other than the exact
+  /// screen that turns the reminder off (Quick POS's own edit form). Paying
+  /// off a due invoice from the Party Ledger, or from another device, left
+  /// the original reminder to fire anyway, saying a customer still owes
+  /// money they've already paid. Run on every successful list refresh so it
+  /// self-heals regardless of how the invoice got settled.
+  void _cancelSettledReminders() {
+    for (final sale in sales) {
+      if (sale.reminderEnabled && !sale.pendingSync && (sale.dueAmount <= 0 || sale.status != 'CONFIRMED')) {
+        NotificationService.instance.cancel(sale.id);
+      }
+    }
   }
 
   Future<List<Sale>> _pendingSales() async {
@@ -213,11 +231,15 @@ class SaleProvider extends ChangeNotifier {
   Future<bool> delete(int id) => _guard(() async {
         await _useCases.deleteSale(id);
         sales = sales.where((s) => s.id != id).toList();
+        // Nothing about following up on this invoice's balance makes sense
+        // once it's deleted — same "stale reminder" reasoning as _cancelSettledReminders.
+        await NotificationService.instance.cancel(id);
         return true;
       });
 
   Future<bool> cancel(int id) => _guard(() async {
         await _useCases.cancelSale(id);
+        await NotificationService.instance.cancel(id);
         sales = sales.map((s) => s.id == id
             ? Sale(
                 id: s.id, invoiceNumber: s.invoiceNumber, customer: s.customer,

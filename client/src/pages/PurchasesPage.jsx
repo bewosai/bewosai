@@ -17,6 +17,7 @@ import { priceForUnit } from "../utils/calculations";
 import BillTemplate from "../components/invoice/BillTemplate";
 import PrintPreviewModal from "../components/invoice/PrintPreviewModal";
 import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
+import { prepareImage } from "../utils/image";
 
 const today = () => todayStr();
 
@@ -47,6 +48,10 @@ const STATUS_COLORS = {
 };
 
 const EMPTY_ITEM = { product: "", product_name: "", quantity: 0, unit_label: "", unit_price: 0, discount_amount: 0 };
+// A line's discount as it counts: never negative, never more than the line itself
+// (quantity × price). Anything typed beyond that is flagged red and capped.
+const lineGross = (it) => (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0);
+const itemDiscount = (it) => Math.min(Math.max(0, parseFloat(it.discount_amount) || 0), lineGross(it));
 const EMPTY_FORM = {
   supplier: "",
   supplier_name: "",
@@ -300,7 +305,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
     setShowQuickAddSupplier(false);
   };
 
-  const subtotal = form.items.reduce((s, it) => s + (it.quantity * it.unit_price) - (parseFloat(it.discount_amount) || 0), 0);
+  const subtotal = form.items.reduce((s, it) => s + lineGross(it) - itemDiscount(it), 0);
   const discountPercent = Math.min(100, Math.max(0, parseFloat(form.discount) || 0));
   const discountAmount = subtotal * discountPercent / 100;
   const taxableAmount = Math.max(0, subtotal - discountAmount);
@@ -333,6 +338,8 @@ function PurchaseModal({ onClose, onSaved, editData }) {
     }
     setSaving(true);
     try {
+      // Send each line's discount as it counts (capped), matching the totals shown.
+      const sentItems = form.items.map(it => ({ ...it, discount_amount: itemDiscount(it) }));
       let payload;
       const baseData = {
         ...form,
@@ -345,7 +352,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
         subtotal: subtotal.toFixed(2),
         total: grandTotal.toFixed(2),
         due_amount: balanceDue.toFixed(2),
-        items: JSON.stringify(form.items),
+        items: JSON.stringify(sentItems),
       };
       if (billImage) {
         payload = new FormData();
@@ -354,7 +361,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
         });
         payload.append("bill_image", billImage);
       } else {
-        payload = { ...baseData, items: form.items };
+        payload = { ...baseData, items: sentItems };
       }
       if (editData?.id) {
         await purchasesApi.update(editData.id, payload);
@@ -468,7 +475,8 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                 <div className="col-span-1"></div>
               </div>
               {form.items.map((item, i) => {
-                const rowTotal = (item.quantity * item.unit_price) - (parseFloat(item.discount_amount) || 0);
+                const rowTotal = lineGross(item) - itemDiscount(item);
+                const discountTooBig = (parseFloat(item.discount_amount) || 0) > lineGross(item) + 0.005;
                 const prod = products.find(p => String(p.id) === String(item.product));
                 const unitDetail = prod?.unit_detail;
                 const hasSecondaryUnit = !!(unitDetail?.secondary_unit && unitDetail?.conversion_factor);
@@ -521,9 +529,10 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                     </div>
                     <div className="col-span-1">
                       <input type="number" min="0"
-                        className="w-full rounded-md bg-navy-800 border border-navy-700 px-2 py-1.5 text-xs text-white text-right focus:border-orange-500 focus:outline-none"
+                        title={discountTooBig ? `Discount can't be more than the line amount (Rs ${lineGross(item).toFixed(2)}) — it will be capped.` : undefined}
+                        className={`w-full rounded-md bg-navy-800 border px-2 py-1.5 text-xs text-white text-right focus:outline-none ${discountTooBig ? "border-red-500 focus:border-red-500" : "border-navy-700 focus:border-orange-500"}`}
                         value={item.discount_amount}
-                        onChange={e => setItem(i, "discount_amount", parseFloat(e.target.value) || 0)}
+                        onChange={e => setItem(i, "discount_amount", Math.max(0, parseFloat(e.target.value) || 0))}
                       />
                     </div>
                     <div className="col-span-1 text-right text-xs text-white font-medium">{rowTotal.toFixed(0)}</div>
@@ -578,9 +587,18 @@ function PurchaseModal({ onClose, onSaved, editData }) {
               <div>
                 <label className="mb-1 block text-xs font-semibold text-navy-400">Bill Image (optional)</label>
                 <input ref={billImageRef} type="file" accept="image/*" className="hidden"
-                  onChange={e => {
-                    const f = e.target.files?.[0];
-                    if (f) { setBillImage(f); setBillPreview(URL.createObjectURL(f)); }
+                  onChange={async e => {
+                    const picked = e.target.files?.[0];
+                    if (!picked) return;
+                    try {
+                      const f = await prepareImage(picked);
+                      setError("");
+                      setBillImage(f);
+                      setBillPreview(URL.createObjectURL(f));
+                    } catch (err) {
+                      setError(err.message);
+                      if (billImageRef.current) billImageRef.current.value = "";
+                    }
                   }} />
                 {billPreview ? (
                   <div className="flex items-center gap-2">

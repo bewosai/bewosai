@@ -15,7 +15,7 @@ from sales.models import Sale, SaleItem, SaleReturn, SaleReturnItem
 from expenses.models import Expense
 from inventory.models import Product
 from parties.models import PartyPayment
-from purchases.models import Purchase
+from purchases.models import Purchase, PurchaseReturn
 from banking.models import BankAccount
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,20 @@ _RETURN_COGS_QTY = Case(
     output_field=DecimalField(),
 )
 
+# The actual cash that changed hands on a Sale/Purchase: all of paid_amount
+# for a plain CASH payment, but only cash_amount — not the whole paid_amount —
+# for a SPLIT one, since the rest of a SPLIT payment went to the bank account
+# instead. Every cash figure (Dashboard's Cash Balance, the Cash Flow report,
+# the Cash In Hand ledger) filtering on payment_method="CASH" alone silently
+# dropped a SPLIT sale/purchase's cash portion entirely — this is the
+# corrected replacement for a plain Sum("paid_amount")/Sum("cash_amount").
+_ACTUAL_CASH = Case(
+    When(payment_method="CASH", then=F("paid_amount")),
+    When(payment_method="SPLIT", then=F("cash_amount")),
+    default=0,
+    output_field=DecimalField(),
+)
+
 
 def _sale_returns_total(business, date_from, date_to):
     """Revenue given back via SaleReturn within a date range, keyed by return_date."""
@@ -73,6 +87,34 @@ def _sale_returns_cogs(business, date_from, date_to):
     return SaleReturnItem.objects.filter(
         sale_return__business=business, sale_return__return_date__range=[date_from, date_to],
     ).aggregate(total=Sum(_RETURN_COGS_QTY * _RETURN_UNIT_COST))["total"] or 0
+
+
+# Which dashboard figures come from which module. A staff member only sees the
+# ones they may view; the rest are zeroed/emptied and named in "restricted" so
+# the screen can hide those cards rather than show a misleading 0.
+_DASHBOARD_MODULE_FIELDS = {
+    "sales": ("sales_today", "sales_month", "collection_today", "top_items", "recent_sales"),
+    "purchases": ("purchases_today",),
+    "expenses": ("expenses_today", "expenses_month"),
+    "parties": ("total_receivable", "total_payable"),
+    "inventory": ("low_stock_count",),
+    # Profit and the cash position are what "sensitive financial data" means.
+    "reports": ("cash_balance", "cogs_month", "gross_profit_month", "profit_month"),
+}
+
+
+def _limit_dashboard(payload, user, business):
+    from bewosai.permissions import staff_can
+
+    restricted = []
+    for module, fields in _DASHBOARD_MODULE_FIELDS.items():
+        if staff_can(user, business, module, "GET"):
+            continue
+        restricted.append(module)
+        for field in fields:
+            payload[field] = [] if isinstance(payload[field], list) else 0
+    payload["restricted"] = restricted
+    return payload
 
 
 class DashboardSummaryView(APIView):
@@ -151,21 +193,37 @@ class DashboardSummaryView(APIView):
             stock_quantity__lte=F("low_stock_threshold"),
         ).count()
 
+        # CASH in full, plus the cash portion of a SPLIT payment — see _ACTUAL_CASH.
         cash_in = Sale.objects.filter(
-            business=biz, payment_method="CASH", status="CONFIRMED", is_deleted=False
-        ).aggregate(total=Sum("paid_amount"))["total"] or 0
+            business=biz, status="CONFIRMED", is_deleted=False, payment_method__in=["CASH", "SPLIT"],
+        ).aggregate(total=Sum(_ACTUAL_CASH))["total"] or 0
         cash_in_payments = PartyPayment.objects.filter(
             party__business=biz, payment_type="IN", payment_method="CASH", is_deleted=False
         ).aggregate(total=Sum("amount"))["total"] or 0
         cash_out_expenses = Expense.objects.filter(
             business=biz, payment_method="CASH", is_deleted=False
         ).aggregate(total=Sum("amount"))["total"] or 0
+        # Cash actually spent on purchases was missing entirely — a business
+        # paying suppliers in cash saw its Cash Balance overstated by exactly
+        # that amount, since nothing here ever subtracted it.
+        cash_out_purchases = Purchase.objects.filter(
+            business=biz, is_deleted=False, payment_method__in=["CASH", "SPLIT"],
+        ).aggregate(total=Sum(_ACTUAL_CASH))["total"] or 0
         cash_out_payments = PartyPayment.objects.filter(
             party__business=biz, payment_type="OUT", payment_method="CASH", is_deleted=False
         ).aggregate(total=Sum("amount"))["total"] or 0
+        # A return's refunded_amount is real money only once it exceeds what
+        # was still due on the original invoice/bill (see SaleReturn's own
+        # docstring) — a return that just reduced a due balance moves nothing.
+        cash_out_sale_returns = SaleReturn.objects.filter(
+            business=biz, refund_method="CASH",
+        ).aggregate(total=Sum("refunded_amount"))["total"] or 0
+        cash_in_purchase_returns = PurchaseReturn.objects.filter(
+            business=biz, refund_method="CASH",
+        ).aggregate(total=Sum("refunded_amount"))["total"] or 0
         cash_balance = (
-            float(cash_in) + float(cash_in_payments)
-            - float(cash_out_expenses) - float(cash_out_payments)
+            float(cash_in) + float(cash_in_payments) + float(cash_in_purchase_returns)
+            - float(cash_out_expenses) - float(cash_out_purchases) - float(cash_out_payments) - float(cash_out_sale_returns)
         )
 
         top_items = list(
@@ -203,7 +261,7 @@ class DashboardSummaryView(APIView):
         net_sales_month = float(sales_month) - float(sales_returns_month)
         net_cogs_month = float(cogs_month) - float(returns_cogs_month)
 
-        return Response({
+        payload = {
             "sales_today": float(sales_today),
             "sales_month": float(sales_month),
             "purchases_today": float(purchases_today),
@@ -219,7 +277,8 @@ class DashboardSummaryView(APIView):
             "profit_month": net_sales_month - net_cogs_month - float(expenses_month),
             "top_items": top_items,
             "recent_sales": SaleSerializer(recent_sales, many=True).data,
-        })
+        }
+        return Response(_limit_dashboard(payload, request.user, biz))
 
 
 class SalesReportView(_RequireReports, APIView):
@@ -606,31 +665,48 @@ class CashFlowView(_RequireReports, APIView):
         date_to   = request.query_params.get("date_to",   timezone.localdate().isoformat())
         from parties.models import PartyPayment
 
+        # Actual cash only, per this view's own name/docstring — a bank-paid
+        # sale/purchase/expense/payment used to be counted here too, since
+        # none of these five queries filtered by payment_method at all, so
+        # "Cash In Hand" and this "Cash Flow" total could disagree for the
+        # same period. Sale/Purchase also count SPLIT's cash portion, not
+        # just plain CASH — see _ACTUAL_CASH.
         cash_in_sales = Sale.objects.filter(
             business=biz, sale_date__range=[date_from, date_to],
-            status="CONFIRMED", is_deleted=False,
-        ).aggregate(total=Sum("paid_amount"))["total"] or 0
+            status="CONFIRMED", is_deleted=False, payment_method__in=["CASH", "SPLIT"],
+        ).aggregate(total=Sum(_ACTUAL_CASH))["total"] or 0
 
         cash_in_payments = PartyPayment.objects.filter(
             party__business=biz, date__range=[date_from, date_to],
-            payment_type="IN", is_deleted=False,
+            payment_type="IN", payment_method="CASH", is_deleted=False,
         ).aggregate(total=Sum("amount"))["total"] or 0
 
         cash_out_expenses = Expense.objects.filter(
-            business=biz, date__range=[date_from, date_to], is_deleted=False,
+            business=biz, date__range=[date_from, date_to], is_deleted=False, payment_method="CASH",
         ).aggregate(total=Sum("amount"))["total"] or 0
 
         cash_out_purchases = Purchase.objects.filter(
-            business=biz, purchase_date__range=[date_from, date_to], is_deleted=False,
-        ).aggregate(total=Sum("paid_amount"))["total"] or 0
+            business=biz, purchase_date__range=[date_from, date_to], is_deleted=False, payment_method__in=["CASH", "SPLIT"],
+        ).aggregate(total=Sum(_ACTUAL_CASH))["total"] or 0
 
         cash_out_payments = PartyPayment.objects.filter(
             party__business=biz, date__range=[date_from, date_to],
-            payment_type="OUT", is_deleted=False,
+            payment_type="OUT", payment_method="CASH", is_deleted=False,
         ).aggregate(total=Sum("amount"))["total"] or 0
 
-        total_in  = float(cash_in_sales) + float(cash_in_payments)
-        total_out = float(cash_out_expenses) + float(cash_out_purchases) + float(cash_out_payments)
+        # A return's refunded_amount is only ever the part paid back as real
+        # money (beyond what it reduced from the due balance) — see
+        # SaleReturn's docstring. A supplier refunding us is cash IN; us
+        # refunding a customer is cash OUT.
+        cash_in_purchase_returns = PurchaseReturn.objects.filter(
+            business=biz, return_date__range=[date_from, date_to], refund_method="CASH",
+        ).aggregate(total=Sum("refunded_amount"))["total"] or 0
+        cash_out_sale_returns = SaleReturn.objects.filter(
+            business=biz, return_date__range=[date_from, date_to], refund_method="CASH",
+        ).aggregate(total=Sum("refunded_amount"))["total"] or 0
+
+        total_in  = float(cash_in_sales) + float(cash_in_payments) + float(cash_in_purchase_returns)
+        total_out = float(cash_out_expenses) + float(cash_out_purchases) + float(cash_out_payments) + float(cash_out_sale_returns)
 
         return Response({
             "date_from": date_from,
@@ -638,12 +714,14 @@ class CashFlowView(_RequireReports, APIView):
             "cash_in": {
                 "sales_collection": float(cash_in_sales),
                 "party_payments": float(cash_in_payments),
+                "purchase_returns": float(cash_in_purchase_returns),
                 "total": round(total_in, 2),
             },
             "cash_out": {
                 "expenses": float(cash_out_expenses),
                 "purchases": float(cash_out_purchases),
                 "party_payments": float(cash_out_payments),
+                "sales_returns": float(cash_out_sale_returns),
                 "total": round(total_out, 2),
             },
             "net_cash_flow": round(total_in - total_out, 2),
@@ -691,48 +769,67 @@ class StockReportView(_RequireReports, APIView):
 
 
 class CashInHandView(_RequireReports, APIView):
-    """Cash-in-hand ledger: running balance of all CASH-payment-method transactions."""
+    """Cash-in-hand ledger: running balance of every transaction that actually
+    moved physical cash — CASH-method ones in full, plus a SPLIT one's cash
+    portion (not its bank portion)."""
 
     @staticmethod
     def _cash_entries(biz, date_range=None, date_lt=None):
+        # CASH in full, plus the cash portion (cash_amount, not the whole
+        # paid_amount) of a SPLIT sale/purchase — see _ACTUAL_CASH's docstring.
+        # A SPLIT row used to be left out of this ledger entirely.
         sales_qs = Sale.objects.filter(
             business=biz, status="CONFIRMED", is_deleted=False,
-            payment_method="CASH", paid_amount__gt=0,
-        ).select_related("customer")
+            payment_method__in=["CASH", "SPLIT"],
+        ).exclude(payment_method="CASH", paid_amount=0).exclude(payment_method="SPLIT", cash_amount=0).select_related("customer")
         purchases_qs = Purchase.objects.filter(
             business=biz, status="CONFIRMED", is_deleted=False,
-            payment_method="CASH", paid_amount__gt=0,
-        ).select_related("supplier")
+            payment_method__in=["CASH", "SPLIT"],
+        ).exclude(payment_method="CASH", paid_amount=0).exclude(payment_method="SPLIT", cash_amount=0).select_related("supplier")
         expenses_qs = Expense.objects.filter(
             business=biz, is_deleted=False, payment_method="CASH",
         ).select_related("category")
         payments_qs = PartyPayment.objects.filter(
             party__business=biz, payment_method="CASH", is_deleted=False,
         ).select_related("party")
+        # Only the part of a return actually paid back as cash (beyond what it
+        # reduced from the due balance) — see SaleReturn's own docstring.
+        sale_returns_qs = SaleReturn.objects.filter(
+            business=biz, refund_method="CASH", refunded_amount__gt=0,
+        ).select_related("original_sale__customer")
+        purchase_returns_qs = PurchaseReturn.objects.filter(
+            business=biz, refund_method="CASH", refunded_amount__gt=0,
+        ).select_related("original_purchase__supplier")
 
         if date_range:
             sales_qs = sales_qs.filter(sale_date__range=date_range)
             purchases_qs = purchases_qs.filter(purchase_date__range=date_range)
             expenses_qs = expenses_qs.filter(date__range=date_range)
             payments_qs = payments_qs.filter(date__range=date_range)
+            sale_returns_qs = sale_returns_qs.filter(return_date__range=date_range)
+            purchase_returns_qs = purchase_returns_qs.filter(return_date__range=date_range)
         elif date_lt:
             sales_qs = sales_qs.filter(sale_date__lt=date_lt)
             purchases_qs = purchases_qs.filter(purchase_date__lt=date_lt)
             expenses_qs = expenses_qs.filter(date__lt=date_lt)
             payments_qs = payments_qs.filter(date__lt=date_lt)
+            sale_returns_qs = sale_returns_qs.filter(return_date__lt=date_lt)
+            purchase_returns_qs = purchase_returns_qs.filter(return_date__lt=date_lt)
 
         entries = []
         for s in sales_qs:
+            cash_amount = s.paid_amount if s.payment_method == "CASH" else s.cash_amount
             entries.append({
                 "date": str(s.sale_date), "type": "SALE", "ref": s.invoice_number,
                 "party": s.customer.name if s.customer else "Cash Sales",
-                "debit": float(s.paid_amount), "credit": 0.0,
+                "debit": float(cash_amount), "credit": 0.0,
             })
         for p in purchases_qs:
+            cash_amount = p.paid_amount if p.payment_method == "CASH" else p.cash_amount
             entries.append({
                 "date": str(p.purchase_date), "type": "PURCHASE", "ref": p.bill_number,
                 "party": p.supplier.name if p.supplier else "Supplier",
-                "debit": 0.0, "credit": float(p.paid_amount),
+                "debit": 0.0, "credit": float(cash_amount),
             })
         for e in expenses_qs:
             entries.append({
@@ -747,6 +844,20 @@ class CashInHandView(_RequireReports, APIView):
                 "ref": f"PMT-{pay.id}", "party": pay.party.name,
                 "debit": float(pay.amount) if is_in else 0.0,
                 "credit": 0.0 if is_in else float(pay.amount),
+            })
+        for sr in sale_returns_qs:
+            # Cash out — refunding a customer beyond what they still owed.
+            entries.append({
+                "date": str(sr.return_date), "type": "SALE_RETURN", "ref": f"SR-{sr.id}",
+                "party": sr.original_sale.customer.name if sr.original_sale.customer_id else "Cash Sales",
+                "debit": 0.0, "credit": float(sr.refunded_amount),
+            })
+        for pr in purchase_returns_qs:
+            # Cash in — the supplier refunding us beyond what we still owed them.
+            entries.append({
+                "date": str(pr.return_date), "type": "PURCHASE_RETURN", "ref": f"PR-{pr.id}",
+                "party": pr.original_purchase.supplier.name if pr.original_purchase.supplier_id else "Supplier",
+                "debit": float(pr.refunded_amount), "credit": 0.0,
             })
         return entries
 

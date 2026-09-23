@@ -10,6 +10,7 @@ import { expenses as expensesApi } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
 import { useEscToClose } from "../hooks/useEscToClose";
 import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
+import { prepareImage } from "../utils/image";
 
 const today = () => todayStr();
 
@@ -65,11 +66,18 @@ function ExpenseModal({ onClose, onSaved, editData, categories }) {
   const [receiptPreview, setReceiptPreview] = useState(editData?.receipt_image_url || null);
   const receiptRef = useRef(null);
 
-  const handleReceiptChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setReceiptImage(file);
-    setReceiptPreview(URL.createObjectURL(file));
+  const handleReceiptChange = async (e) => {
+    const picked = e.target.files?.[0];
+    if (!picked) return;
+    try {
+      const file = await prepareImage(picked);
+      setError("");
+      setReceiptImage(file);
+      setReceiptPreview(URL.createObjectURL(file));
+    } catch (err) {
+      setError(err.message);
+      if (receiptRef.current) receiptRef.current.value = "";
+    }
   };
 
   const handleSubmit = async () => {

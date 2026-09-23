@@ -1,7 +1,9 @@
 from decimal import Decimal
+from django.db import transaction
 from django.db.models import F, Sum
 from django.db.models.functions import Greatest
 from rest_framework import serializers
+from bewosai.validators import IMAGE_VALIDATORS, check_discounts
 from bewosai.utils import require_business, sync_bank_transaction
 from inventory.models import Product
 from .models import Purchase, PurchaseItem, PurchaseReturn, PurchaseReturnItem
@@ -54,6 +56,7 @@ class PurchaseSerializer(serializers.ModelSerializer):
                   "is_deleted", "items", "created_at"]
         read_only_fields = ["tax_amount", "total", "due_amount", "created_at", "bill_image_url",
                             "supplier_name", "supplier_phone", "supplier_pan", "supplier_address"]
+        extra_kwargs = {"bill_image": {"validators": IMAGE_VALIDATORS}}
 
     def validate(self, data):
         business = require_business(self.context["request"])
@@ -74,6 +77,10 @@ class PurchaseSerializer(serializers.ModelSerializer):
             product = item.get("product")
             if product is not None and product.business_id != business.id:
                 raise serializers.ValidationError({"items": "Invalid product for this business."})
+        check_discounts(
+            data.get("items"), data.get("discount"),
+            fallback_subtotal=self.instance.subtotal if self.instance is not None else None,
+        )
         return data
 
     @staticmethod
@@ -187,15 +194,20 @@ class PurchaseReturnSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PurchaseReturn
-        fields = ["id", "original_purchase", "original_purchase_number",
-                  "return_date", "reason", "amount", "items", "created_at"]
-        read_only_fields = ["id", "created_at", "original_purchase_number"]
+        fields = ["id", "original_purchase", "original_purchase_number", "return_date", "reason", "amount",
+                  "refund_method", "bank_account", "refunded_amount", "items", "created_at"]
+        read_only_fields = ["id", "created_at", "original_purchase_number", "refunded_amount"]
 
     def validate(self, data):
         business = require_business(self.context["request"])
         original_purchase = data.get("original_purchase")
         if original_purchase is not None and original_purchase.business_id != business.id:
             raise serializers.ValidationError({"original_purchase": "Invalid purchase for this business."})
+        bank_account = data.get("bank_account")
+        if bank_account is not None and bank_account.business_id != business.id:
+            raise serializers.ValidationError({"bank_account": "Invalid account for this business."})
+        if data.get("refund_method") == PurchaseReturn.METHOD_BANK and not bank_account:
+            raise serializers.ValidationError({"bank_account": "Select which account received this refund."})
         for item in data.get("items", []):
             purchase_item = item.get("purchase_item")
             product = item.get("product")
@@ -218,26 +230,51 @@ class PurchaseReturnSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop("items", [])
-        purchase_return = PurchaseReturn.objects.create(**validated_data)
+        original_purchase = validated_data["original_purchase"]
 
-        for item_data in items_data:
-            item = PurchaseReturnItem(purchase_return=purchase_return, **item_data)
-            item.save()                     # computes item.total = qty*price
+        # Mirrors SaleReturnSerializer.create exactly, direction reversed: a
+        # return first reduces what we still owe the supplier (already
+        # handled by parties.balances.party_balances — not touched here, to
+        # avoid double-counting it). Only the part beyond what was actually
+        # due is money the supplier actually has to pay back to us now.
+        due_before = original_purchase.due_amount if original_purchase.due_amount > 0 else Decimal("0")
+        refunded_amount = max(Decimal("0"), validated_data["amount"] - due_before)
+        validated_data["refunded_amount"] = refunded_amount
 
-            # Goods going back to the supplier come out of stock — the
-            # opposite of SaleReturnItem, which restores it. Floored at 0
-            # (Greatest) so a stock discrepancy can't push it negative.
-            # Converted into primary-unit terms the same way the original
-            # purchase was (via Unit.base_quantity_for) — item.quantity is
-            # whatever unit the returned line was originally billed in
-            # (e.g. "Piece"), which isn't necessarily the primary unit
-            # stock_quantity is tracked in (e.g. "Box").
-            if item.product_id:
-                product = item.product
-                unit_label = item.purchase_item.unit_label if item.purchase_item_id else ""
-                base_qty = product.unit.base_quantity_for(item.quantity, unit_label) if product.unit_id else item.quantity
-                Product.objects.filter(pk=item.product_id).update(
-                    stock_quantity=Greatest(F("stock_quantity") - base_qty, Decimal("0"))
+        with transaction.atomic():
+            purchase_return = PurchaseReturn.objects.create(**validated_data)
+
+            for item_data in items_data:
+                item = PurchaseReturnItem(purchase_return=purchase_return, **item_data)
+                item.save()                     # computes item.total = qty*price
+
+                # Goods going back to the supplier come out of stock — the
+                # opposite of SaleReturnItem, which restores it. Floored at 0
+                # (Greatest) so a stock discrepancy can't push it negative.
+                # Converted into primary-unit terms the same way the original
+                # purchase was (via Unit.base_quantity_for) — item.quantity is
+                # whatever unit the returned line was originally billed in
+                # (e.g. "Piece"), which isn't necessarily the primary unit
+                # stock_quantity is tracked in (e.g. "Box").
+                if item.product_id:
+                    product = item.product
+                    unit_label = item.purchase_item.unit_label if item.purchase_item_id else ""
+                    base_qty = product.unit.base_quantity_for(item.quantity, unit_label) if product.unit_id else item.quantity
+                    Product.objects.filter(pk=item.product_id).update(
+                        stock_quantity=Greatest(F("stock_quantity") - base_qty, Decimal("0"))
+                    )
+
+            # A bank refund gets a real BankTransaction (money coming IN this
+            # time); a cash refund is picked up directly by the cash reports.
+            if refunded_amount > 0 and purchase_return.refund_method == PurchaseReturn.METHOD_BANK:
+                sync_bank_transaction(
+                    reference=f"PURCHASERETURN-{purchase_return.id}",
+                    bank_account=purchase_return.bank_account,
+                    transaction_type="CREDIT",
+                    amount=refunded_amount,
+                    date=purchase_return.return_date,
+                    description=f"Refund for return on {original_purchase.bill_number}",
+                    created_by=purchase_return.created_by,
                 )
 
         return purchase_return

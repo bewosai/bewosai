@@ -74,7 +74,7 @@ export default function CreateBusinessPage() {
             <div>
               <label className="mb-1.5 block text-sm font-medium text-navy-200">Business Name</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Rajan Traders, My Shop..." className={field} autoFocus />
+                placeholder="General Store" className={field} autoFocus />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-navy-200">Business Type <span className="text-navy-500">(optional)</span></label>

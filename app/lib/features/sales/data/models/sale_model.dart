@@ -102,6 +102,9 @@ class Sale {
   final String notes;
   final bool reminderEnabled;
   final DateTime? reminderAt;
+  // Why the reminder was set (e.g. "Promised to pay by Friday") — shown in the
+  // notification and the reminder list, so a follow-up isn't a bare amount.
+  final String reminderNote;
   final List<SaleItem> items;
   final DateTime? createdAt;
 
@@ -142,6 +145,7 @@ class Sale {
     required this.notes,
     this.reminderEnabled = false,
     this.reminderAt,
+    this.reminderNote = '',
     required this.items,
     this.createdAt,
     this.pendingSync = false,
@@ -173,6 +177,7 @@ class Sale {
         notes: json['notes'] as String? ?? '',
         reminderEnabled: json['reminder_enabled'] as bool? ?? false,
         reminderAt: Formatters.parseDate(json['reminder_at'] as String?),
+        reminderNote: json['reminder_note'] as String? ?? '',
         items: (json['items'] as List? ?? [])
             .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -195,6 +200,7 @@ class Sale {
         'notes': notes,
         'reminder_enabled': reminderEnabled,
         if (reminderAt != null) 'reminder_at': reminderAt!.toIso8601String(),
+        'reminder_note': reminderNote,
         'items': items.map((e) => e.toJson()).toList(),
       };
 

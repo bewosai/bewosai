@@ -82,7 +82,7 @@ class _SettingsBusinessScreenState extends State<SettingsBusinessScreen> {
       ),
     );
     if (source == null) return;
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 80);
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 80, maxWidth: 1600, maxHeight: 1600);
     if (picked == null || !mounted) return;
     setState(() {
       _logoFile = File(picked.path);

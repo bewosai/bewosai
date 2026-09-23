@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from bewosai.validators import IMAGE_VALIDATORS
 from bewosai.utils import require_business
 from .models import BankAccount, BankTransaction
 
@@ -15,6 +16,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "balance", "is_active", "created_at",
         )
         read_only_fields = ("id", "balance", "created_at", "qr_code_url")
+        extra_kwargs = {"qr_code": {"validators": IMAGE_VALIDATORS}}
 
     def validate_account_type(self, value):
         limit = BankAccount.TYPE_LIMITS.get(value)

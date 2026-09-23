@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from bewosai.validators import IMAGE_VALIDATORS
 from .models import ExpenseCategory, Expense
 
 
@@ -20,6 +21,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "description", "payment_method", "receipt_image", "receipt_image_url", "created_at",
         )
         read_only_fields = ("id", "created_at", "category_name", "receipt_image_url")
+        extra_kwargs = {"receipt_image": {"validators": IMAGE_VALIDATORS}}
 
     def get_receipt_image_url(self, obj):
         if not obj.receipt_image:

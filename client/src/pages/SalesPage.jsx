@@ -50,6 +50,11 @@ const STATUS_COLORS = Object.fromEntries(
 );
 
 const EMPTY_ITEM = { product_id: "", product_name: "", quantity: 0, unit_label: "", unit_price: 0, discount_amount: 0 };
+// A line's discount as it counts: never negative, never more than the line itself
+// (quantity × price). Typed values beyond that are flagged red and capped, so a
+// typo can't make a line total negative.
+const lineGross = (it) => (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0);
+const itemDiscount = (it) => Math.min(Math.max(0, parseFloat(it.discount_amount) || 0), lineGross(it));
 const EMPTY_FORM = {
   customer_id: "",
   customer_name: "",
@@ -66,6 +71,7 @@ const EMPTY_FORM = {
   cash_amount: 0,
   reminder_enabled: false,
   reminder_at: "",
+  reminder_note: "",
   notes: "",
   status: "CONFIRMED",
 };
@@ -232,6 +238,7 @@ function SaleModal({ onClose, onSaved, editData }) {
     cash_amount: editData.cash_amount || 0,
     reminder_enabled: !!editData.reminder_enabled,
     reminder_at: toDatetimeLocal(editData.reminder_at),
+    reminder_note: editData.reminder_note || "",
     notes: editData.notes || "",
     status: editData.status || "CONFIRMED",
   } : { ...EMPTY_FORM, items: [{ ...EMPTY_ITEM }], tax_rate: currentBusiness?.default_tax_rate ?? 0 });
@@ -313,7 +320,7 @@ function SaleModal({ onClose, onSaved, editData }) {
     setShowQuickAddCustomer(false);
   };
 
-  const subtotal = form.items.reduce((s, it) => s + (it.quantity * it.unit_price) - (parseFloat(it.discount_amount) || 0), 0);
+  const subtotal = form.items.reduce((s, it) => s + lineGross(it) - itemDiscount(it), 0);
   const discountIsAmount = form.discount_mode === "amount";
   const discountValue = Math.max(0, parseFloat(form.discount) || 0);
   // Either a % of the subtotal or a flat amount, capped to [0, subtotal].
@@ -351,6 +358,21 @@ function SaleModal({ onClose, onSaved, editData }) {
     setForm(f => ({ ...f, paid_amount: creditSale ? 0 : grandTotal }));
   }, [grandTotal, creditSale, paidAmountTouched]);
 
+  // Empties the whole form for a fresh start (new sales only — clearing an
+  // invoice being edited would wipe what's saved, so Cancel is the way out there).
+  const clearForm = () => {
+    if (!window.confirm("Clear this invoice? All items and details will be removed.")) return;
+    setForm({ ...EMPTY_FORM, sale_date: today(), items: [{ ...EMPTY_ITEM }], tax_rate: currentBusiness?.default_tax_rate ?? 0 });
+    setVatEnabled(parseFloat(currentBusiness?.default_tax_rate || 0) > 0);
+    setCustomerSearch("");
+    setShowCustomerDropdown(false);
+    setCreditSale(false);
+    setPaidAmountTouched(false);
+    setError("");
+  };
+  const formIsEmpty = !form.customer_id && !form.customer_name && !(parseFloat(form.discount) > 0) && !form.notes &&
+    form.items.every(it => !it.product_id && !it.product_name && !(parseFloat(it.quantity) > 0));
+
   const handleSubmit = async (statusOverride) => {
     setError("");
     // No customer = a Cash Sale. It has to be paid in full: an unpaid balance (or an
@@ -384,6 +406,7 @@ function SaleModal({ onClose, onSaved, editData }) {
         cash_amount: form.payment_method === "SPLIT" ? (form.cash_amount || 0) : 0,
         reminder_enabled: form.reminder_enabled,
         reminder_at: form.reminder_enabled && form.reminder_at ? form.reminder_at : null,
+        reminder_note: form.reminder_enabled ? form.reminder_note.trim() : "",
         notes: form.notes,
         status: statusOverride || form.status,
         items: form.items.map(it => ({
@@ -392,7 +415,7 @@ function SaleModal({ onClose, onSaved, editData }) {
           quantity: it.quantity,
           unit_label: it.unit_label || "",
           unit_price: it.unit_price,
-          discount_amount: it.discount_amount || 0,
+          discount_amount: itemDiscount(it),
         })),
       };
       const isNew = !editData?.id;
@@ -515,8 +538,8 @@ function SaleModal({ onClose, onSaved, editData }) {
 
           {/* Payment Reminder — mirrors the mobile app's "Set Reminder" on
               Quick POS, but the web can't fire a background notification
-              like the phone app does, so it's surfaced instead as a due
-              reminder banner on the Dashboard. */}
+              like the phone app does, so it's surfaced instead in the
+              Topbar's notification bell (see ReminderBell.jsx). */}
           <div>
             <label className="flex items-center gap-2 text-xs font-semibold text-navy-400 cursor-pointer select-none">
               <input type="checkbox" checked={form.reminder_enabled}
@@ -534,11 +557,21 @@ function SaleModal({ onClose, onSaved, editData }) {
               Set Reminder
             </label>
             {form.reminder_enabled && (
-              <input type="datetime-local"
-                className="mt-1.5 w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none text-sm"
-                value={form.reminder_at}
-                onChange={e => setForm(f => ({ ...f, reminder_at: e.target.value }))}
-              />
+              <>
+                <input type="datetime-local"
+                  className="mt-1.5 w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none text-sm"
+                  value={form.reminder_at}
+                  onChange={e => setForm(f => ({ ...f, reminder_at: e.target.value }))}
+                />
+                {/* Why this reminder was set — shown alongside the due amount in the
+                    bell, so a follow-up isn't just a bare amount with no context. */}
+                <input type="text" maxLength={200}
+                  placeholder="Reminder note (optional) — e.g. Promised to pay by Friday"
+                  className="mt-1.5 w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none text-sm"
+                  value={form.reminder_note}
+                  onChange={e => setForm(f => ({ ...f, reminder_note: e.target.value }))}
+                />
+              </>
             )}
           </div>
 
@@ -562,7 +595,8 @@ function SaleModal({ onClose, onSaved, editData }) {
                 <div className="col-span-1"></div>
               </div>
               {form.items.map((item, i) => {
-                const rowTotal = (item.quantity * item.unit_price) - (parseFloat(item.discount_amount) || 0);
+                const rowTotal = lineGross(item) - itemDiscount(item);
+                const discountTooBig = (parseFloat(item.discount_amount) || 0) > lineGross(item) + 0.005;
                 const prod = products.find(p => String(p.id) === String(item.product_id));
                 const unitDetail = prod?.unit_detail;
                 const hasSecondaryUnit = !!(unitDetail?.secondary_unit && unitDetail?.conversion_factor);
@@ -615,9 +649,10 @@ function SaleModal({ onClose, onSaved, editData }) {
                     </div>
                     <div className="col-span-1">
                       <input type="number" min="0"
-                        className="w-full rounded-md bg-navy-800 border border-navy-700 px-2 py-1.5 text-xs text-white text-right focus:border-orange-500 focus:outline-none"
+                        title={discountTooBig ? `Discount can't be more than the line amount (Rs ${lineGross(item).toFixed(2)}) — it will be capped.` : undefined}
+                        className={`w-full rounded-md bg-navy-800 border px-2 py-1.5 text-xs text-white text-right focus:outline-none ${discountTooBig ? "border-red-500 focus:border-red-500" : "border-navy-700 focus:border-orange-500"}`}
                         value={item.discount_amount}
-                        onChange={e => setItem(i, "discount_amount", parseFloat(e.target.value) || 0)}
+                        onChange={e => setItem(i, "discount_amount", Math.max(0, parseFloat(e.target.value) || 0))}
                       />
                     </div>
                     <div className="col-span-1 text-right text-xs text-white font-medium">
@@ -780,6 +815,12 @@ function SaleModal({ onClose, onSaved, editData }) {
 
         {/* Footer */}
         <div className="flex gap-3 justify-end border-t border-navy-800 p-5 shrink-0">
+          {!editData && (
+            <button type="button" disabled={saving || formIsEmpty} onClick={clearForm}
+              className="mr-auto px-4 py-2 rounded-lg border border-navy-700 text-navy-400 hover:bg-navy-800 disabled:opacity-40">
+              Clear
+            </button>
+          )}
           <button onClick={onClose} className="px-4 py-2 rounded-lg border border-navy-700 text-navy-400 hover:bg-navy-800">Cancel</button>
           <button disabled={saving} onClick={() => handleSubmit("DRAFT")}
             className="px-4 py-2 rounded-lg border border-navy-700 text-navy-300 hover:bg-navy-800 disabled:opacity-50">

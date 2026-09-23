@@ -81,10 +81,30 @@ export function wrapWithOfflineQueue(axiosInstance) {
       const isReallyOffline = typeof navigator !== "undefined" && navigator.onLine === false;
 
       if (isNetworkError && isMutation && isReallyOffline) {
+        // An upload (FormData, i.e. a bill photo/receipt/logo) can't be stored
+        // as JSON, and JSON.parse on it used to throw a raw SyntaxError that
+        // every screen showed as a vague "failed to save". Say what to do.
+        const hasFile = typeof FormData !== "undefined" && err.config.data instanceof FormData;
+        if (hasFile) {
+          return Promise.reject({
+            response: {
+              data: {
+                detail: "You're offline. Photos can't be saved offline — reconnect and try again, or save without the photo.",
+              },
+            },
+          });
+        }
+        let body;
+        try {
+          body = err.config.data ? JSON.parse(err.config.data) : undefined;
+        } catch {
+          // Not JSON — can't be replayed later, so don't queue a broken request.
+          return Promise.reject(err);
+        }
         enqueue({
           method: err.config.method,
           url: err.config.url,
-          data: err.config.data ? JSON.parse(err.config.data) : undefined,
+          data: body,
           params: err.config.params,
         });
         // Shaped like a normal axios error so every existing

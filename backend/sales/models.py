@@ -56,6 +56,12 @@ class Sale(models.Model):
         help_text="When to notify the business owner to follow up on this due amount. "
                    "Fired as an on-device notification by the mobile app, not a server push.",
     )
+    reminder_note = models.CharField(
+        max_length=200, blank=True,
+        help_text="Why this reminder was set (e.g. 'Promised to pay by Friday') — "
+                   "shown alongside the due amount in the notification and the reminder bell/list, "
+                   "so a follow-up isn't just a bare amount with no context.",
+    )
     reconciled_amount = models.DecimalField(
         max_digits=14, decimal_places=2, default=0,
         help_text="Portion of paid_amount applied here later via a party PartyPayment "
@@ -127,11 +133,29 @@ class SaleItem(models.Model):
 
 
 class SaleReturn(models.Model):
+    METHOD_CASH = "CASH"
+    METHOD_BANK = "BANK"
+    METHOD_CHOICES = [(METHOD_CASH, "Cash"), (METHOD_BANK, "Bank Transfer")]
+
     original_sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="returns")
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="sale_returns")
     return_date = models.DateField()
     reason = models.TextField(blank=True)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
+    # A return first reduces what the customer still owes on the original
+    # invoice (see parties.balances.party_balances, which already subtracts
+    # `amount` from their balance — nothing here duplicates that). Only the
+    # portion beyond what was actually due is real money handed back, and
+    # that's what these three fields are for: how (cash or bank) and how
+    # much (refunded_amount, set once at creation — see SaleReturnSerializer).
+    # A return that's fully absorbed by the due amount moves no money, so
+    # refunded_amount is 0 and refund_method is unused.
+    refund_method = models.CharField(max_length=10, choices=METHOD_CHOICES, default=METHOD_CASH)
+    bank_account = models.ForeignKey(
+        "banking.BankAccount", on_delete=models.SET_NULL, null=True, blank=True, related_name="sale_return_refunds",
+        help_text="Which account paid the refund when refund_method is BANK.",
+    )
+    refunded_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

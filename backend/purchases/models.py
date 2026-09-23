@@ -107,11 +107,25 @@ class PurchaseItem(models.Model):
 
 
 class PurchaseReturn(models.Model):
+    METHOD_CASH = "CASH"
+    METHOD_BANK = "BANK"
+    METHOD_CHOICES = [(METHOD_CASH, "Cash"), (METHOD_BANK, "Bank Transfer")]
+
     original_purchase = models.ForeignKey(Purchase, on_delete=models.CASCADE, related_name="returns")
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="purchase_returns")
     return_date = models.DateField()
     reason = models.TextField(blank=True)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
+    # Mirrors SaleReturn's three fields exactly, direction reversed: a
+    # purchase return first reduces what we still owe the supplier (already
+    # handled by parties.balances.party_balances); only the portion beyond
+    # that is real money the supplier actually paid back to us.
+    refund_method = models.CharField(max_length=10, choices=METHOD_CHOICES, default=METHOD_CASH)
+    bank_account = models.ForeignKey(
+        "banking.BankAccount", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchase_return_refunds",
+        help_text="Which account received the refund when refund_method is BANK.",
+    )
+    refunded_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
