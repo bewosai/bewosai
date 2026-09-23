@@ -23,6 +23,9 @@ class AuthRepositoryImpl implements AuthRepository {
       _service.googleLogin(idToken, remember: remember);
 
   @override
+  Future<VerifyOtpResult> staffLogin(String token) => _service.staffLogin(token);
+
+  @override
   Future<void> setAccountType(String accountType) => _service.setAccountType(accountType);
 
   @override

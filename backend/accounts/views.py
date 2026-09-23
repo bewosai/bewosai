@@ -15,10 +15,11 @@ from .admin_access import grant_platform_admin_if_listed
 # from bewosai.sms import send_otp_sms  # phone login/signup temporarily disabled (2026-09-16)
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, get_platform, require_feature, require_staff_permission, staff_can
 from bewosai.utils import client_ip, get_bid, get_business
-from .models import User, Business, FiscalYear, StaffMember, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
+from .models import User, Business, FiscalYear, StaffMember, StaffActivity, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
+from bewosai.pagination import LargePageNumberPagination
 from .serializers import (
     UserSerializer, BusinessSerializer, FiscalYearSerializer, StaffMemberSerializer, InviteStaffSerializer,
-    SendOTPSerializer, VerifyOTPSerializer, GoogleLoginSerializer,
+    SendOTPSerializer, VerifyOTPSerializer, GoogleLoginSerializer, StaffActivitySerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -349,7 +350,7 @@ def _login_response(user, is_new, remember):
         is_new_user=is_new,
         # New user needs to select their profile type (personal vs business)
         needs_profile_setup=is_new,
-        businesses=BusinessSerializer(businesses, many=True).data,
+        businesses=BusinessSerializer(businesses, many=True, context={"user": user}).data,
     )
 
 
@@ -391,7 +392,7 @@ class SetAccountTypeView(APIView):
             return api_response(
                 True, "Account type already set.", status.HTTP_200_OK,
                 user=UserSerializer(user).data,
-                businesses=BusinessSerializer(businesses, many=True).data,
+                businesses=BusinessSerializer(businesses, many=True, context={"user": user}).data,
             )
 
         # Set the account type
@@ -406,7 +407,7 @@ class SetAccountTypeView(APIView):
         return api_response(
             True, "Account type set.", status.HTTP_200_OK,
             user=UserSerializer(user).data,
-            businesses=BusinessSerializer(businesses, many=True).data,
+            businesses=BusinessSerializer(businesses, many=True, context={"user": user}).data,
         )
 
 
@@ -576,15 +577,10 @@ def _staff_limit_error(business, exclude_member=None):
     others = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER)
     if exclude_member is not None:
         others = others.exclude(pk=exclude_member.pk)
-    is_unlimited = business.staff_limit_override is None and business.effective_plan == Business.PLAN_PREMIUMPLUS
-    plan_limit = (
-        StaffListView.PREMIUM_STAFF_LIMIT if business.effective_plan != Business.PLAN_FREE
-        else StaffListView.FREE_STAFF_LIMIT
-    )
-    staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_limit
-    if is_unlimited or others.count() < staff_limit:
+    staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_staff_limit(business.effective_plan)
+    if others.count() < staff_limit:
         return None
-    plan_name = "Premium" if business.effective_plan != Business.PLAN_FREE else "Free"
+    plan_name = plan_display_name(business.effective_plan)
     return Response(
         {
             "error": (
@@ -596,14 +592,29 @@ def _staff_limit_error(business, exclude_member=None):
     )
 
 
+# Staff members allowed beyond the owner, per business, by plan — a platform
+# admin can raise or lower this for one specific business via
+# superadmin.BusinessActionView's "set_staff_limit" action, which always wins
+# over the plan default below.
+STAFF_LIMIT_BY_PLAN = {
+    Business.PLAN_FREE: 1,
+    Business.PLAN_PREMIUM: 3,
+    Business.PLAN_PREMIUMPLUS: 5,
+}
+
+
+def plan_staff_limit(effective_plan):
+    return STAFF_LIMIT_BY_PLAN.get(effective_plan, STAFF_LIMIT_BY_PLAN[Business.PLAN_FREE])
+
+
+def plan_display_name(effective_plan):
+    return {
+        Business.PLAN_FREE: "Free", Business.PLAN_PREMIUM: "Premium", Business.PLAN_PREMIUMPLUS: "Premium Plus",
+    }.get(effective_plan, effective_plan)
+
+
 class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
     serializer_class = StaffMemberSerializer
-
-    # Free plan: 1 staff member beyond the owner. Premium: 8 — a platform
-    # admin can raise (or lower) this per-business via
-    # superadmin.BusinessActionView's "set_staff_limit" action.
-    FREE_STAFF_LIMIT = 1
-    PREMIUM_STAFF_LIMIT = 8
 
     def get_queryset(self):
         bid = self.kwargs["business_id"]
@@ -783,12 +794,6 @@ class BusinessStaffListView(_RequireStaffManagement, generics.ListAPIView):
 class BusinessStaffInviteView(_RequireStaffManagement, APIView):
     """Invite (or add) a staff member to the current business."""
 
-    # Free plan: 1 staff member beyond the owner. Premium: 8 — a platform
-    # admin can raise (or lower) this per-business via
-    # superadmin.BusinessActionView's "set_staff_limit" action.
-    FREE_STAFF_LIMIT = 1
-    PREMIUM_STAFF_LIMIT = 8
-
     def post(self, request):
         business = get_business(request)
         if not business:
@@ -810,11 +815,9 @@ class BusinessStaffInviteView(_RequireStaffManagement, APIView):
 
         non_owner_count = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER).count()
         already_member = business.staff.filter(user__email=email, is_active=True).exists()
-        is_unlimited = business.staff_limit_override is None and business.effective_plan == Business.PLAN_PREMIUMPLUS
-        plan_limit = self.PREMIUM_STAFF_LIMIT if business.effective_plan != Business.PLAN_FREE else self.FREE_STAFF_LIMIT
-        staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_limit
-        if not is_unlimited and not already_member and non_owner_count >= staff_limit:
-            plan_name = "Premium" if business.effective_plan != Business.PLAN_FREE else "Free"
+        staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_staff_limit(business.effective_plan)
+        if not already_member and non_owner_count >= staff_limit:
+            plan_name = plan_display_name(business.effective_plan)
             return Response(
                 {
                     "error": (
@@ -853,6 +856,10 @@ class BusinessStaffActivityView(APIView):
         bid = get_bid(request)
         if not bid:
             return Response([], status=status.HTTP_200_OK)
+        # Other staff members' sign-in times, devices and IPs — for the owner, or
+        # someone the owner gave the "staff" module to; not every cashier.
+        if not _staff_managed_business(request, bid, "GET"):
+            return Response({"error": "Your account doesn't have access to this."}, status=status.HTTP_403_FORBIDDEN)
 
         staff_user_ids = StaffMember.objects.filter(
             business_id=bid,
@@ -877,6 +884,51 @@ class BusinessStaffActivityView(APIView):
             for la in activities
         ]
         return Response(data)
+
+
+class StaffAuditLogView(generics.ListAPIView):
+    """
+    The owner-facing "who changed what, and when" log: every Sale, Purchase,
+    Expense, Quotation, Product, Party, PartyPayment, BankAccount and
+    BankTransaction created, edited (with old -> new values) or deleted in
+    this business — populated automatically by superadmin.signals, not by
+    this view. Same access rule as BusinessStaffActivityView: the owner, or
+    a staff member granted the "staff" module — not every cashier's business.
+
+    Filters (all optional, combine with AND): ?staff=<user id>, ?module=sales,
+    ?action=CREATE|UPDATE|DELETE, ?date_from=YYYY-MM-DD, ?date_to=YYYY-MM-DD.
+    """
+    serializer_class = StaffActivitySerializer
+    pagination_class = LargePageNumberPagination
+
+    def get_queryset(self):
+        bid = get_bid(self.request)
+        if not bid or not _staff_managed_business(self.request, bid, "GET"):
+            return StaffActivity.objects.none()
+        qs = StaffActivity.objects.filter(business_id=bid).select_related("user")
+
+        staff_id = self.request.query_params.get("staff")
+        if staff_id:
+            qs = qs.filter(user_id=staff_id)
+        module = self.request.query_params.get("module")
+        if module:
+            qs = qs.filter(module=module)
+        action = self.request.query_params.get("action")
+        if action:
+            qs = qs.filter(action=action.upper())
+        date_from = self.request.query_params.get("date_from")
+        if date_from:
+            qs = qs.filter(timestamp__date__gte=date_from)
+        date_to = self.request.query_params.get("date_to")
+        if date_to:
+            qs = qs.filter(timestamp__date__lte=date_to)
+        return qs
+
+    def get(self, request, *args, **kwargs):
+        bid = get_bid(request)
+        if bid and not _staff_managed_business(request, bid, "GET"):
+            return Response({"error": "Your account doesn't have access to this."}, status=status.HTTP_403_FORBIDDEN)
+        return super().get(request, *args, **kwargs)
 
 
 # ── Licensing ────────────────────────────────────────────────────────────────
@@ -943,6 +995,8 @@ class LicenseActivateView(APIView):
         business = get_business(request)
         if not business:
             return api_response(False, "No business selected.", status.HTTP_400_BAD_REQUEST)
+        if business.owner_id != request.user.id:
+            return api_response(False, "Only the business owner can activate a license.", status.HTTP_403_FORBIDDEN)
 
         code = (request.data.get("code") or "").strip().upper()
         if not code:

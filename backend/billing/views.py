@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import Business, StaffMember, User
-from accounts.views import BusinessListCreateView, StaffListView
+from accounts.views import BusinessListCreateView, plan_staff_limit
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.utils import require_business
 from superadmin.views import IsPlatformAdmin
@@ -38,13 +38,9 @@ def _usage_and_limits(request, business):
 
     if business is not None:
         non_owner_staff = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER).count()
-        is_staff_unlimited = business.staff_limit_override is None and business.effective_plan == Business.PLAN_PREMIUMPLUS
-        staff_plan_limit = (
-            StaffListView.PREMIUM_STAFF_LIMIT if business.effective_plan != Business.PLAN_FREE else StaffListView.FREE_STAFF_LIMIT
-        )
-        staff_limit = business.staff_limit_override if business.staff_limit_override is not None else staff_plan_limit
+        staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_staff_limit(business.effective_plan)
         usage["staff_count"] = non_owner_staff
-        usage["staff_limit"] = None if is_staff_unlimited else staff_limit
+        usage["staff_limit"] = staff_limit
 
     return usage
 
@@ -79,6 +75,8 @@ class ApplyCouponView(APIView):
 
     def post(self, request):
         business = require_business(request)
+        if business.owner_id != request.user.id:
+            return api_response(False, "Only the business owner can apply a coupon.", status.HTTP_403_FORBIDDEN)
         code = (request.data.get("code") or "").strip()
         if not code:
             return api_response(False, "Enter a coupon code.", status.HTTP_400_BAD_REQUEST)

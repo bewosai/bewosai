@@ -132,7 +132,7 @@ const plans = [
     badge: "Most Popular",
     features: [
       "Up to 5 Business Profiles",
-      "Up to 8 Staff Members",
+      "Up to 3 Staff Members",
       "Multi-User Access",
       "Unlimited Transactions & Reports",
       "Multiple Bank Accounts",

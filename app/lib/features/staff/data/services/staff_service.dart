@@ -67,12 +67,18 @@ class StaffService {
   // Staff created here have no email/phone of their own — they sign in
   // purely through the login link this generates (see
   // AppConstants.staffLoginUrl / accounts.views.StaffListView.post).
-  Future<StaffMember> invite({required int businessId, required String name, String role = 'CASHIER'}) async {
+  Future<StaffMember> invite({
+    required int businessId,
+    required String name,
+    String role = 'CASHIER',
+    Map<String, dynamic>? permissions,
+  }) async {
     try {
       final res = await _dio.post('/auth/businesses/$businessId/staff/', data: {
         'name': name,
         'role': role,
-        'permissions': defaultPermissionsFor(role),
+        // What the owner ticked, or the role's starting set when they didn't customise.
+        'permissions': permissions ?? defaultPermissionsFor(role),
       });
       return StaffMember.fromJson(res.data as Map<String, dynamic>);
     } catch (e) {

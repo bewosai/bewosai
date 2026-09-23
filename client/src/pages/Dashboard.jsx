@@ -19,6 +19,11 @@ const MIN_VISIBLE_KPIS = 3;
 // Shown until a viewer customizes their own set — the handful of numbers
 // that answer "how's the business right now" without crowding the page;
 // everything else is one tap away via the Customize button.
+// Which permission module each dashboard card's number comes from.
+const KPI_MODULE = {
+  sales_today: "sales", collection_today: "sales", purchases_today: "purchases", expenses_today: "expenses",
+  receivable: "parties", payable: "parties", cash_balance: "reports", net_profit: "reports", low_stock: "inventory",
+};
 const DEFAULT_VISIBLE_KPI_KEYS = ["sales_today", "receivable", "payable", "net_profit", "low_stock"];
 
 function loadVisibleKpiKeys(allKeys) {
@@ -171,7 +176,7 @@ export default function DashboardPage() {
 
   const f = (v) => fmt(v || 0);
 
-  const kpis = [
+  const allKpis = [
     { key: "sales_today",      label: t("todaySales"),     value: f(data?.sales_today),      icon: ShoppingCart,  iconBg: "bg-blue-100 text-blue-600",    path: "/sales",                  sub: language === "ne" ? "आजको बिक्री" : "Today" },
     { key: "purchases_today",  label: "Today's Purchase",  value: f(data?.purchases_today),  icon: Receipt,       iconBg: "bg-purple-100 text-purple-600", path: "/purchases",              sub: language === "ne" ? "आजको खरिद" : "Today" },
     { key: "collection_today", label: "Today's Collection",value: f(data?.collection_today), icon: Wallet,        iconBg: "bg-green-100 text-green-600",   path: "/payments",               sub: language === "ne" ? "आज संकलन" : "Cash + Bank" },
@@ -182,6 +187,10 @@ export default function DashboardPage() {
     { key: "net_profit",       label: t("netProfit"),      value: f(data?.profit_month),     icon: BarChart3,     iconBg: "bg-purple-100 text-purple-600", path: "/reports",                sub: language === "ne" ? "यो महिना" : "This month" },
     { key: "low_stock",        label: t("lowStock"),       value: data?.low_stock_count ?? "–", icon: Package,   iconBg: "bg-yellow-100 text-yellow-600", path: "/inventory/low-stock",    sub: language === "ne" ? "कम स्टक" : "Items" },
   ];
+  // The server zeroes figures the viewer may not see and names those modules in
+  // `restricted`; leave those cards out rather than show a misleading 0.
+  const restricted = data?.restricted || [];
+  const kpis = allKpis.filter((k) => !restricted.includes(KPI_MODULE[k.key]));
   const allKpiKeys = kpis.map((k) => k.key);
   const [visibleKeys, setVisibleKeys] = useState(() => loadVisibleKpiKeys(allKpiKeys));
   const [showCustomize, setShowCustomize] = useState(false);

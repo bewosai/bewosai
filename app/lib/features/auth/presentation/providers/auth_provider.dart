@@ -188,6 +188,18 @@ class AuthProvider extends ChangeNotifier {
         return true;
       });
 
+  /// Staff sign-in from the link the owner shared (pasted whole, or just its
+  /// token). Ends in the same state as any other login.
+  Future<bool> signInWithStaffLink(String linkOrToken) => _guard(() async {
+        final token = AppConstants.staffTokenFromLink(linkOrToken);
+        if (token == null) {
+          throw ApiException("That doesn't look like a staff login link. Paste the whole link the owner sent you.");
+        }
+        final result = await _authUseCases.staffLogin(token);
+        await _finishLogin(result);
+        return true;
+      });
+
   Future<void> _finishLogin(VerifyOtpResult result) async {
     await _storage.saveTokens(access: result.access, refresh: result.refresh);
     await _storage.saveUser(result.user.toJson());

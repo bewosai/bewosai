@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 
 class AppConstants {
   static const String appName = 'Bewosai';
+  // Shown in Settings so anyone can tell which APK is installed (every build is
+  // version 2.0.0+1). Change it whenever a new APK is built.
+  static const String buildLabel = '2026-09-22-a';
 
   // ── Server URL ──────────────────────────────────────────────────────────
   // Override at build time for a real device / a different backend (e.g.
@@ -114,6 +117,18 @@ class AppConstants {
   // Mirrors client/src/pages/StaffPage.jsx's staffLoginUrl().
   static const String _webAppUrl = 'https://bewosaiapp.vercel.app';
   static String staffLoginUrl(String token) => '$_webAppUrl/staff-login/$token';
+
+  /// The login token from what a staff member pastes: the full link the owner
+  /// shared (`https://.../staff-login/TOKEN`, on any host) or the bare token.
+  /// Null when it doesn't look like either.
+  static String? staffTokenFromLink(String? input) {
+    final text = (input ?? '').trim();
+    if (text.isEmpty) return null;
+    final fromUrl = RegExp(r'/staff-login/([A-Za-z0-9_\-]{20,})').firstMatch(text);
+    final token = fromUrl != null ? fromUrl.group(1)! : text;
+    // Tokens are secrets.token_urlsafe(32): 43 URL-safe characters, no spaces or slashes.
+    return RegExp(r'^[A-Za-z0-9_\-]{20,128}$').hasMatch(token) ? token : null;
+  }
 
   // Stock movement types — inventory.StockMovement TYPE_CHOICES (OPENING is set
   // automatically when a product is created, so it's excluded from manual adjustments)

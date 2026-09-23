@@ -15,6 +15,8 @@ class AuthUseCases {
   Future<VerifyOtpResult> googleLogin(String idToken, {bool remember = false}) =>
       _repository.googleLogin(idToken, remember: remember);
 
+  Future<VerifyOtpResult> staffLogin(String token) => _repository.staffLogin(token);
+
   Future<void> setAccountType(String accountType) => _repository.setAccountType(accountType);
 
   Future<void> logout(String? refresh) => _repository.logout(refresh);

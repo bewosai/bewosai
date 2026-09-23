@@ -9,6 +9,7 @@ abstract class AuthRepository {
   Future<OtpResult> sendOtp(String email, {bool isSignup});
   Future<VerifyOtpResult> verifyOtp(String email, String code, {bool remember, String name});
   Future<VerifyOtpResult> googleLogin(String idToken, {bool remember});
+  Future<VerifyOtpResult> staffLogin(String token);
   Future<void> setAccountType(String accountType);
   Future<void> logout(String? refresh);
   Future<AppUser> getMe();

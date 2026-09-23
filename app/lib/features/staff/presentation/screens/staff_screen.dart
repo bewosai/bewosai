@@ -6,14 +6,19 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../data/models/staff_access.dart';
 import '../../data/models/staff_model.dart';
+import '../../data/services/staff_service.dart' show defaultPermissionsFor;
 import '../providers/staff_provider.dart';
+import '../widgets/staff_access_editor.dart';
 
 void _shareStaffLoginLink(String name, String token) {
   final url = AppConstants.staffLoginUrl(token);
   SharePlus.instance.share(ShareParams(
     text: "Here's your staff login link for Bewosai${name.isNotEmpty ? ', $name' : ''} — "
-        "open it to sign in, no password needed:\n\n$url",
+        "no password needed. On a computer, open it to sign in. In the Bewosai app, tap "
+        "\"Staff? Sign in with your login link\" on the first screen and paste it.\n\n$url\n\n"
+        "Keep this link private — anyone with it can sign in as you.",
   ));
 }
 
@@ -41,23 +46,17 @@ class _StaffScreenState extends State<StaffScreen> {
     final currentBusiness = context.watch<AuthProvider>().currentBusiness;
     final businessId = currentBusiness?.id;
 
-    // Mirrors the backend's own staff-cap check (accounts/views.py
-    // StaffListView/BusinessStaffInviteView) — shown proactively so an
-    // owner isn't surprised by the rejection only after filling out the
-    // whole invite form. Free=1, Premium=8 by default; a platform admin can
-    // raise (or lower) this per-business via staff_limit_override, which
-    // takes precedence over the plan default when set.
-    const freeStaffLimit = 1;
-    const premiumStaffLimit = 8;
-    // effectivePlan (not plan) — a coupon/referral-granted PremiumPlus is
-    // unlimited, and even plain Premium via that route must still unlock
-    // the higher fixed limit, not just a directly-licensed one.
+    // Mirrors the backend's own per-plan staff limit (accounts/views.py's
+    // STAFF_LIMIT_BY_PLAN / plan_staff_limit) — shown proactively so an owner
+    // isn't surprised by the rejection only after filling out the invite
+    // form. effectivePlan (not plan): a coupon/referral-granted upgrade must
+    // unlock the higher limit too. staffLimitOverride, when Super Admin has
+    // set one for this business, always wins over the plan default below.
+    const planStaffLimit = {'FREE': 1, 'PREMIUM': 3, 'PREMIUMPLUS': 5};
     final effectivePlan = currentBusiness?.effectivePlan ?? currentBusiness?.plan;
-    final isUnlimited = currentBusiness?.staffLimitOverride == null && effectivePlan == 'PREMIUMPLUS';
-    final planLimit = effectivePlan == 'FREE' ? freeStaffLimit : premiumStaffLimit;
-    final staffLimit = currentBusiness?.staffLimitOverride ?? planLimit;
+    final staffLimit = currentBusiness?.staffLimitOverride ?? planStaffLimit[effectivePlan] ?? 1;
     final nonOwnerCount = sp.staff.where((s) => s.role != 'OWNER').length;
-    final atStaffLimit = !isUnlimited && nonOwnerCount >= staffLimit;
+    final atStaffLimit = nonOwnerCount >= staffLimit;
 
     final filteredStaff = _search.isEmpty
         ? sp.staff
@@ -284,6 +283,9 @@ class _InviteStaffSheetState extends State<_InviteStaffSheet> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   String _role = 'CASHIER';
+  // What this person may use, starting from the role's preset and adjustable
+  // feature by feature before the link is created.
+  Map<String, dynamic> _permissions = defaultPermissionsFor('CASHIER');
   bool _saving = false;
   // Set once the invite succeeds — a new staff member has no email/phone,
   // so their login link is the only way for them to sign in, and it's
@@ -298,6 +300,7 @@ class _InviteStaffSheetState extends State<_InviteStaffSheet> {
       businessId: widget.businessId,
       name: _nameController.text.trim(),
       role: _role,
+      permissions: _permissions,
     );
     if (!mounted) return;
     setState(() {
@@ -345,13 +348,25 @@ class _InviteStaffSheetState extends State<_InviteStaffSheet> {
                 .where((r) => r != 'OWNER')
                 .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                 .toList(),
-            onChanged: (v) => setState(() => _role = v ?? 'CASHIER'),
+            onChanged: (v) => setState(() {
+              _role = v ?? 'CASHIER';
+              _permissions = defaultPermissionsFor(_role); // a new role starts from its preset
+            }),
           ),
           const SizedBox(height: 6),
           Text(_roleSummary(_role), style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
+          const SizedBox(height: 16),
+          const Text('What can they do?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+          const SizedBox(height: 2),
+          Text(
+            'Pick how much of each feature this person gets. You can change it any time.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+          ),
+          const SizedBox(height: 6),
+          StaffAccessEditor(value: _permissions, onChanged: (p) => setState(() => _permissions = p)),
           const SizedBox(height: 20),
           PrimaryButton(
-            label: 'Create Staff',
+            label: 'Create link',
             isLoading: _saving,
             onPressed: _submit,
           ),
@@ -444,6 +459,7 @@ class _ManageStaffSheet extends StatefulWidget {
 
 class _ManageStaffSheetState extends State<_ManageStaffSheet> {
   String? _role; // the picked-but-not-yet-saved role
+  Map<String, dynamic>? _permissions; // edited-but-not-yet-saved access, null = untouched
   bool _busy = false;
 
   StaffMember? _member(StaffProvider sp) {
@@ -519,6 +535,8 @@ class _ManageStaffSheetState extends State<_ManageStaffSheet> {
     if (m == null) return const SizedBox.shrink(); // removed while open
     final role = _role ?? m.role;
     final roleChanged = role != m.role;
+    final access = _permissions ?? m.permissions;
+    final accessChanged = _permissions != null && !samePermissions(_permissions!, m.permissions);
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
@@ -547,6 +565,29 @@ class _ManageStaffSheetState extends State<_ManageStaffSheet> {
               onPressed: () => _run(
                 (p) => p.updateRole(widget.businessId, m.id, role),
                 success: 'Role changed to $role',
+              ),
+            ),
+          ],
+          const Divider(height: 28),
+          const Text('What can they do?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+          const SizedBox(height: 4),
+          StaffAccessEditor(
+            value: access,
+            enabled: !_busy && !roleChanged,
+            onChanged: (p) => setState(() => _permissions = p),
+          ),
+          if (accessChanged) ...[
+            const SizedBox(height: 10),
+            PrimaryButton(
+              label: 'Save access',
+              isLoading: _busy,
+              onPressed: () => _run(
+                (p) async {
+                  final ok = await p.updatePermissions(widget.businessId, m.id, access);
+                  if (ok) setState(() => _permissions = null);
+                  return ok;
+                },
+                success: 'Access updated',
               ),
             ),
           ],

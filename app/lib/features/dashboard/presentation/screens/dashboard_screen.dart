@@ -253,12 +253,17 @@ class _StatGrid extends StatelessWidget {
     final d = dashboard;
     final purchaseMonth = context.watch<PurchaseProvider>().thisMonthTotal;
     final totalBalance = context.watch<BankingProvider>().totalBalance;
+    // A staff member only sees the figures for modules the owner gave them
+    // (the server zeroes the rest anyway) - no misleading "Rs 0" cards.
+    final business = context.watch<AuthProvider>().currentBusiness;
+    bool allowed(String module) => business?.can(module) ?? true;
 
     return ResponsiveGrid(
       columns: isTablet ? 3 : 2,
       spacing: 12,
       childAspectRatio: isTablet ? 1.9 : 1.35,
       children: [
+        if (allowed('parties'))
         _StatCard(
           value: Formatters.currency(d.totalReceivable),
           label: 'To Receive',
@@ -267,6 +272,7 @@ class _StatGrid extends StatelessWidget {
           valueColor: AppColors.success,
           onTap: () => context.push('/reports'),
         ),
+        if (allowed('parties'))
         _StatCard(
           value: Formatters.currency(d.totalPayable),
           label: 'To Give',
@@ -275,6 +281,7 @@ class _StatGrid extends StatelessWidget {
           valueColor: AppColors.error,
           onTap: () => context.push('/reports'),
         ),
+        if (allowed('sales'))
         _StatCard(
           value: Formatters.currency(d.salesMonth),
           label: 'Sales (This Month)',
@@ -283,16 +290,19 @@ class _StatGrid extends StatelessWidget {
           // (not push()) replaces the stack, same as tapping the bottom nav.
           onTap: () => context.go(dashboardLocation(tab: 1, subtab: 0)),
         ),
+        if (allowed('purchases'))
         _StatCard(
           value: Formatters.currency(purchaseMonth),
           label: 'Purchase (This Month)',
           onTap: () => context.go(dashboardLocation(tab: 1, subtab: 1)),
         ),
+        if (allowed('expenses'))
         _StatCard(
           value: Formatters.currency(d.expensesMonth),
           label: 'Expense (This Month)',
           onTap: () => context.push('/expenses'),
         ),
+        if (allowed('banking'))
         _StatCard(
           value: Formatters.currency(totalBalance),
           label: 'Total Balance',

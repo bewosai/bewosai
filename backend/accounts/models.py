@@ -482,6 +482,21 @@ class LoginActivity(models.Model):
 
 
 class StaffActivity(models.Model):
+    """
+    The business-facing "who changed what, and when" log — what a business
+    owner sees for their staff (accounts.views.StaffAuditLogView), as opposed
+    to superadmin.ActivityLog which is the cross-business create/delete-only
+    feed Super Admin uses. Populated automatically by superadmin.signals
+    (same connection point, extended to also write here) for CREATE/UPDATE/
+    DELETE on the same TRACKED_APP_MODELS list — never written to directly by
+    view code, so it can't be forgotten on a new endpoint.
+
+    old_data/new_data hold only the fields that actually changed on an UPDATE
+    (see superadmin.signals.WATCHED_FIELDS) — not a full snapshot of the row —
+    already rendered as display strings, so this can be shown as-is with no
+    further model lookups.
+    """
+
     ACTION_LOGIN = "LOGIN"
     ACTION_LOGOUT = "LOGOUT"
     ACTION_CREATE = "CREATE"
@@ -497,13 +512,27 @@ class StaffActivity(models.Model):
         (ACTION_VIEW, "View"),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="activities")
+    # Nullable: some tracked models (Product, Party, BankAccount) have no
+    # created_by of their own, and a change made outside a request (a
+    # management command, a data migration) has no signed-in user at all —
+    # both still get logged, just with user=None, rather than being dropped.
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="activities")
     business = models.ForeignKey("Business", on_delete=models.CASCADE, related_name="staff_activities", null=True, blank=True)
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
     module = models.CharField(max_length=50, blank=True)
     description = models.TextField(blank=True)
+    # What was changed: the model, its row, and a human label for it (e.g.
+    # "Invoice INV-1024") — same shape as superadmin.ActivityLog, so the two
+    # feeds can share formatting helpers.
+    object_type = models.CharField(max_length=50, blank=True)
+    object_id = models.PositiveIntegerField(null=True, blank=True)
+    object_repr = models.CharField(max_length=255, blank=True)
+    old_data = models.JSONField(default=dict, blank=True)
+    new_data = models.JSONField(default=dict, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-timestamp"]
+        verbose_name_plural = "staff activities"
+        indexes = [models.Index(fields=["business", "-timestamp"])]

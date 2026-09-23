@@ -170,6 +170,8 @@ class _PartyImportScreenState extends State<PartyImportScreen> {
   Widget build(BuildContext context) {
     return FeatureGate(
       feature: 'excel_import',
+      module: 'parties',
+      action: 'create',
       child: Scaffold(
         appBar: AppBar(title: const Text('Import Parties'), actions: const [HomeLogoButton()]),
         body: ResponsiveBody(

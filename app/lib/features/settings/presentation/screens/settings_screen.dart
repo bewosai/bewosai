@@ -108,12 +108,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // a role (Manager / Cashier / Viewer). It's a Premium feature, so
               // on the Free plan this explains that and opens Upgrade instead
               // of leaving the option out where nobody would find it.
+              if (auth.currentBusiness?.can('staff') ?? true)
               _MenuItem(
                 icon: Icons.groups_outlined,
                 label: 'Staff',
                 subtitle: features.isEnabled('staff_management')
                     ? 'Invite staff, set their role, share their login link'
-                    : 'Premium — add up to 8 staff members. Tap to upgrade',
+                    : 'Premium — add up to 3 staff members. Tap to upgrade',
                 onTap: () {
                   if (features.isEnabled('staff_management')) {
                     context.push('/staff');

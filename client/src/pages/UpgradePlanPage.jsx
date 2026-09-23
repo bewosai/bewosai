@@ -31,8 +31,8 @@ function fmtDate(d) {
 function PlanComparison({ effectivePlan, usage }) {
   const plans = [
     { key: "FREE", features: ["2 business profiles", "1 staff member", "Core sales & inventory"] },
-    { key: "PREMIUM", features: ["5 business profiles", "8 staff members", "Bulk import/export", "Priority support"] },
-    { key: "PREMIUMPLUS", features: ["Unlimited business profiles", "Unlimited staff members", "Everything in Premium"] },
+    { key: "PREMIUM", features: ["5 business profiles", "3 staff members", "Bulk import/export", "Priority support"] },
+    { key: "PREMIUMPLUS", features: ["Unlimited business profiles", "5 staff members", "Everything in Premium"] },
   ];
 
   const usageFor = (label, isCurrent) => {
@@ -216,7 +216,11 @@ Or enter my code ${referral.referral_code} when creating your business.`,
             <PlanComparison effectivePlan={effectivePlan} usage={subscription} />
           </div>
           <p className="mt-3 text-xs text-navy-500">
-            Want to buy Premium or Premium Plus directly? Contact us and we'll set you up with a coupon.
+            Want to buy Premium or Premium Plus directly?{" "}
+            <a href="mailto:bewosai@gmail.com" className="font-medium text-orange-400 hover:text-orange-300">
+              Email us
+            </a>{" "}
+            and we'll set you up with a coupon.
           </p>
         </SectionCard>
 

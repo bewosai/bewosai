@@ -28,9 +28,15 @@ class StaffProvider extends ChangeNotifier {
   // other way) — cleared the next time an invite starts.
   StaffMember? lastInvited;
 
-  Future<bool> invite({required int businessId, required String name, String role = 'CASHIER'}) => _guard(() async {
+  Future<bool> invite({
+    required int businessId,
+    required String name,
+    String role = 'CASHIER',
+    Map<String, dynamic>? permissions,
+  }) =>
+      _guard(() async {
         lastInvited = null;
-        final created = await _useCases.inviteStaff(businessId: businessId, name: name, role: role);
+        final created = await _useCases.inviteStaff(businessId: businessId, name: name, role: role, permissions: permissions);
         staff = [...staff, created];
         lastInvited = created;
         return true;
@@ -45,6 +51,12 @@ class StaffProvider extends ChangeNotifier {
 
   Future<bool> updateRole(int businessId, int staffId, String role) => _guard(() async {
         final updated = await _useCases.updateRole(businessId, staffId, role);
+        staff = staff.map((s) => s.id == staffId ? updated : s).toList();
+        return true;
+      });
+
+  Future<bool> updatePermissions(int businessId, int staffId, Map<String, dynamic> permissions) => _guard(() async {
+        final updated = await _useCases.updatePermissions(businessId, staffId, permissions);
         staff = staff.map((s) => s.id == staffId ? updated : s).toList();
         return true;
       });

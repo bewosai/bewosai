@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import PhoneInput from "../components/common/PhoneInput";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+import { prepareImage } from "../utils/image";
 
 function SettingCard({ title, icon: Icon, children }) {
   return (
@@ -314,11 +315,18 @@ export default function SettingsPage() {
     default_tax_rate: currentBusiness?.default_tax_rate ?? 13,
   });
 
-  const handleLogoUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoFile(file);
-    setLogoPreview(URL.createObjectURL(file));
+  const handleLogoUpload = async (e) => {
+    const picked = e.target.files?.[0];
+    if (!picked) return;
+    try {
+      const file = await prepareImage(picked);
+      setSaveError("");
+      setLogoFile(file);
+      setLogoPreview(URL.createObjectURL(file));
+    } catch (err) {
+      setSaveError(err.message);
+      e.target.value = "";
+    }
   };
 
   const handleSave = async () => {
@@ -698,7 +706,7 @@ export default function SettingsPage() {
               <p className="text-xs text-navy-500 mt-0.5">
                 {isFeatureEnabled("staff_management")
                   ? (language === "ne" ? "स्टाफ आमन्त्रण गर्नुहोस्, भूमिका सेट गर्नुहोस्, लगइन लिङ्क साझा गर्नुहोस्" : "Invite staff, set their role, share their login link")
-                  : (language === "ne" ? "प्रिमियम — ८ जनासम्म स्टाफ थप्नुहोस्। अपग्रेड गर्न ट्याप गर्नुहोस्" : "Premium — add up to 8 staff members. Click to upgrade")}
+                  : (language === "ne" ? "प्रिमियम — ३ जनासम्म स्टाफ थप्नुहोस्। अपग्रेड गर्न ट्याप गर्नुहोस्" : "Premium — add up to 3 staff members. Click to upgrade")}
               </p>
             </div>
             <ChevronRight className="h-4 w-4 text-navy-500 shrink-0" />

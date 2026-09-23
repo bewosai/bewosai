@@ -64,6 +64,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Lets superadmin.signals attribute a StaffActivity log entry to whoever
+    # made the request, from inside a model signal that has no request.
+    "bewosai.audit.CurrentUserMiddleware",
 ]
 
 ROOT_URLCONF = "bewosai.urls"
@@ -93,6 +96,13 @@ DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
+        # Only forced for Postgres — SQLite has no SSL concept, and requiring
+        # it unconditionally (as a plain dj_database_url.parse(..., ssl_require=True)
+        # would) breaks every local `manage.py runserver`, which has no
+        # DATABASE_URL at all. Matters for Render's *External* database URL
+        # (rejected without SSL) and any third-party Postgres host that
+        # mandates it; Render's own Internal URL works either way.
+        ssl_require=config("DATABASE_URL", default="").startswith("postgres"),
     )
 }
 

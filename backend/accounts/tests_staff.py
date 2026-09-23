@@ -76,12 +76,23 @@ class StaffFlowTests(TestCase):
         self.assertEqual(res.status_code, 403)
         self.assertIn("staff_management", res.data["detail"])
 
-    def test_premium_allows_up_to_eight_staff_then_a_clear_error(self):
-        for n in range(8):
+    def test_premium_allows_up_to_three_staff_then_a_clear_error(self):
+        for n in range(3):
             self.assertEqual(self.invite(f"Staff {n}").status_code, 201, n)
-        over = self.invite("Ninth")
+        over = self.invite("Fourth")
         self.assertEqual(over.status_code, 403)
-        self.assertIn("up to 8", over.data["error"])
+        self.assertIn("up to 3", over.data["error"])
+        self.assertIn("Premium plan", over.data["error"])
+
+    def test_premium_plus_allows_up_to_five_staff_then_a_clear_error(self):
+        self.business.plan = Business.PLAN_PREMIUMPLUS
+        self.business.save()
+        for n in range(5):
+            self.assertEqual(self.invite(f"Staff {n}").status_code, 201, n)
+        over = self.invite("Sixth")
+        self.assertEqual(over.status_code, 403)
+        self.assertIn("up to 5", over.data["error"])
+        self.assertIn("Premium Plus plan", over.data["error"])
 
     def test_several_staff_up_to_the_limit_then_a_clear_error(self):
         self.business.staff_limit_override = 3

@@ -1,8 +1,9 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email as django_validate_email
 from rest_framework import serializers
+from bewosai.validators import IMAGE_VALIDATORS
 from bewosai.utils import suggest_email_typo_fix
-from .models import User, Business, FiscalYear, StaffMember
+from .models import User, Business, FiscalYear, StaffMember, StaffActivity
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -45,6 +46,8 @@ class BusinessSerializer(serializers.ModelSerializer):
     # not `plan`, or a PremiumPlus-via-coupon business would still see
     # itself as Free-limited even though the backend would actually allow it.
     effective_plan = serializers.CharField(read_only=True)
+    my_role = serializers.SerializerMethodField()
+    my_permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = Business
@@ -55,6 +58,7 @@ class BusinessSerializer(serializers.ModelSerializer):
             "web_trial_enabled", "web_trial_start", "web_trial_end",
             "mobile_trial_enabled", "mobile_trial_start", "mobile_trial_end",
             "owner", "owner_name", "owner_business_limit_override", "staff_count", "created_at",
+            "my_role", "my_permissions",
         )
         # plan / subscription_expires / staff_limit_override / the trial
         # fields are superadmin-only (see superadmin.BusinessActionView) — a
@@ -65,9 +69,36 @@ class BusinessSerializer(serializers.ModelSerializer):
             "web_trial_enabled", "web_trial_start", "web_trial_end",
             "mobile_trial_enabled", "mobile_trial_start", "mobile_trial_end",
         )
+        extra_kwargs = {"logo": {"validators": IMAGE_VALIDATORS}}
 
     def get_staff_count(self, obj):
         return obj.staff.filter(is_active=True).count()
+
+    def _viewer(self):
+        """Whoever is looking: the request's user, or the `user` a login response passes in."""
+        user = self.context.get("user")
+        if user is None:
+            request = self.context.get("request")
+            user = getattr(request, "user", None)
+        return user if user is not None and getattr(user, "is_authenticated", False) else None
+
+    def get_my_role(self, obj):
+        """The viewer's role in this business ("OWNER" for its owner), or None."""
+        user = self._viewer()
+        if user is None:
+            return None
+        if obj.owner_id == user.id:
+            return StaffMember.ROLE_OWNER
+        member = obj.staff.filter(user=user, is_active=True).first()
+        return member.role if member else None
+
+    def get_my_permissions(self, obj):
+        """What the viewer may do here, per module — clients hide what's denied."""
+        user = self._viewer()
+        if user is None:
+            return None
+        from bewosai.permissions import permission_matrix
+        return permission_matrix(user, obj)
 
     def validate_status(self, value):
         # SUSPENDED is a Super Admin enforcement action (policy violations,
@@ -200,3 +231,19 @@ class VerifyOTPSerializer(serializers.Serializer):
 class GoogleLoginSerializer(serializers.Serializer):
     id_token = serializers.CharField()
     remember = serializers.BooleanField(default=False)
+
+
+class StaffActivitySerializer(serializers.ModelSerializer):
+    """One row of the owner-facing "who changed what, and when" log —
+    see accounts.views.StaffAuditLogView / accounts.models.StaffActivity."""
+
+    user_name = serializers.CharField(source="user.name", read_only=True, default="")
+    user_email = serializers.CharField(source="user.email", read_only=True, default="")
+
+    class Meta:
+        model = StaffActivity
+        fields = (
+            "id", "user", "user_name", "user_email", "action", "module", "description",
+            "object_type", "object_id", "object_repr", "old_data", "new_data", "timestamp",
+        )
+        read_only_fields = fields

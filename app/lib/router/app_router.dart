@@ -57,6 +57,8 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
           final editId = state.uri.queryParameters['edit'];
           return FeatureGate(
             feature: 'pos',
+            module: 'sales',
+            action: editId != null ? 'edit' : 'create',
             child: QuickPosScreen(
               saleId: editId != null ? int.tryParse(editId) : null,
               pendingEdit: state.extra is Sale ? state.extra as Sale : null,
@@ -68,6 +70,7 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
         path: '/invoice/:id',
         builder: (context, state) => FeatureGate(
           feature: 'pos',
+          module: 'sales',
           child: InvoiceDetailScreen(saleId: int.parse(state.pathParameters['id']!)),
         ),
       ),
@@ -75,13 +78,14 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
         path: '/party-ledger/:id',
         builder: (context, state) => FeatureGate(
           feature: 'parties',
+          module: 'parties',
           child: PartyLedgerScreen(partyId: int.parse(state.pathParameters['id']!)),
         ),
       ),
-      GoRoute(path: '/expenses', builder: (context, state) => const FeatureGate(feature: 'expenses', child: ExpensesScreen())),
-      GoRoute(path: '/banking', builder: (context, state) => const FeatureGate(feature: 'banking', child: BankingScreen())),
-      GoRoute(path: '/reports', builder: (context, state) => const FeatureGate(feature: 'reports', child: ReportsScreen())),
-      GoRoute(path: '/staff', builder: (context, state) => const FeatureGate(feature: 'staff_management', child: StaffScreen())),
+      GoRoute(path: '/expenses', builder: (context, state) => const FeatureGate(feature: 'expenses', module: 'expenses', child: ExpensesScreen())),
+      GoRoute(path: '/banking', builder: (context, state) => const FeatureGate(feature: 'banking', module: 'banking', child: BankingScreen())),
+      GoRoute(path: '/reports', builder: (context, state) => const FeatureGate(feature: 'reports', module: 'reports', child: ReportsScreen())),
+      GoRoute(path: '/staff', builder: (context, state) => const FeatureGate(feature: 'staff_management', module: 'staff', child: StaffScreen())),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(path: '/recycle-bin', builder: (context, state) => const RecycleBinScreen()),
     ],

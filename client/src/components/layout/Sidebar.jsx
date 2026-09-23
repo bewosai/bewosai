@@ -14,6 +14,8 @@ import {
   Wifi, WifiOff, RefreshCw,
 } from "lucide-react";
 
+import { canOpenPath } from "../../utils/permissions";
+
 const PLAN_LABELS = { FREE: "Free", PREMIUM: "Premium", PREMIUMPLUS: "Premium Plus" };
 
 function buildNavItems(t, language) {
@@ -134,8 +136,14 @@ export default function Sidebar({ open, setOpen }) {
   const { t, language } = useTranslation();
   const { isFeatureEnabled } = useFeatures();
   const { isOnline, pendingCount, isSyncing, flush } = useOfflineSync(api);
+  // Two filters: features Super Admin has switched off, and pages this staff
+  // member wasn't given (a link to a page they can't open is just a dead end).
   const navItems = buildNavItems(t, language)
-    .filter((item) => !item.feature || isFeatureEnabled(item.feature));
+    .filter((item) => !item.feature || isFeatureEnabled(item.feature))
+    .map((item) => (item.children
+      ? { ...item, children: item.children.filter((c) => canOpenPath(currentBusiness, c.path)) }
+      : item))
+    .filter((item) => (item.children ? item.children.length > 0 : !item.path || canOpenPath(currentBusiness, item.path)));
 
   return (
     <>

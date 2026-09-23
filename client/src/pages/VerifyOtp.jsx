@@ -53,9 +53,12 @@ export default function VerifyOtpPage() {
     if (digits.length < 6) { setError("Enter the complete 6-digit OTP."); return; }
     const res = await verifyOtp(identifier, digits, remember);
     if (res.ok) {
-      if (res.isPlatformAdmin && (res.businesses?.length ?? 0) === 0) {
-        // A platform admin with no business of their own goes straight to the
-        // Super Admin panel instead of being asked to create one first.
+      if (res.isPlatformAdmin) {
+        // Every platform admin lands on Super Admin straight after signing
+        // in — previously only true when they had no business of their own,
+        // which meant "is_platform_admin didn't take effect" and "landed on
+        // a normal dashboard instead" looked identical from the outside.
+        // They can still reach their own business from Super Admin's sidebar.
         navigate("/superadmin", { replace: true });
       } else if (res.needsProfileSetup) {
         // New user — must pick profile

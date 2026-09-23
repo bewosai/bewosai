@@ -1,6 +1,8 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLicense } from "../context/LicenseContext";
+import { canOpenPath } from "../utils/permissions";
+import NoAccess from "./NoAccess";
 
 export default function ProtectedRoute({ children, forType }) {
   const { isLoggedIn, user, currentBusiness } = useAuth();
@@ -40,6 +42,12 @@ export default function ProtectedRoute({ children, forType }) {
   // generate a license in the first place — including their own.
   if (forType === "business" && licenseLoaded && !hasActiveSubscription && !user?.is_platform_admin) {
     return <Navigate to="/license-required" replace />;
+  }
+
+  // A staff member the owner hasn't given this page to: the menu already hides
+  // it, so this catches typing the address (the server would refuse the data anyway).
+  if (forType === "business" && !user?.is_platform_admin && !canOpenPath(currentBusiness, location.pathname)) {
+    return <NoAccess />;
   }
 
   return children;

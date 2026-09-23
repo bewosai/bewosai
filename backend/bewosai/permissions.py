@@ -163,6 +163,45 @@ def staff_can(user, business, module_key, method="GET"):
     return module_perms.get(action, True) is not False
 
 
+# The modules an owner can grant or withhold per staff member, and the four
+# actions each has — the same keys the Staff screens' permission matrix uses.
+PERMISSION_MODULES = ("sales", "purchases", "expenses", "inventory", "parties", "payments", "banking", "reports", "staff")
+PERMISSION_ACTIONS = ("view", "create", "edit", "delete")
+
+
+def permission_matrix(user, business):
+    """
+    What `user` may do in `business`, as {module: {view, create, edit, delete}} of
+    booleans — exactly the answer staff_can gives, worked out once so a client can
+    hide what a staff member can't use instead of letting them tap it and get a 403.
+
+    The owner (or an OWNER-role member) can do everything; someone with no active
+    membership can do nothing. A module the owner never configured for a staff
+    member defaults to allowed — except "staff", which defaults to denied — and an
+    explicit False on one action denies just that action (see staff_can).
+    """
+    def uniform(value):
+        return {m: {a: value for a in PERMISSION_ACTIONS} for m in PERMISSION_MODULES}
+
+    if business.owner_id == user.id:
+        return uniform(True)
+    staff = business.staff.filter(user=user, is_active=True).first()
+    if not staff:
+        return uniform(False)
+    from accounts.models import StaffMember
+    if staff.role == StaffMember.ROLE_OWNER:
+        return uniform(True)
+
+    matrix = {}
+    for module in PERMISSION_MODULES:
+        module_perms = staff.permissions.get(module)
+        if not isinstance(module_perms, dict):
+            matrix[module] = {a: module != "staff" for a in PERMISSION_ACTIONS}
+        else:
+            matrix[module] = {a: module_perms.get(a, True) is not False for a in PERMISSION_ACTIONS}
+    return matrix
+
+
 class IsPremiumBusiness(BasePermission):
     """
     Gates Premium-only features (e.g. bulk import/export). The business must

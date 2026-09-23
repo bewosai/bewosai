@@ -7,13 +7,14 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../shell/presentation/screens/contact_screen.dart';
 import '../providers/billing_provider.dart';
 
 const _planLabels = {'FREE': 'Free', 'PREMIUM': 'Premium', 'PREMIUMPLUS': 'Premium Plus'};
 const _planFeatures = {
   'FREE': ['2 business profiles', '1 staff member', 'Core sales & inventory'],
-  'PREMIUM': ['5 business profiles', '8 staff members', 'Bulk import/export', 'Priority support'],
-  'PREMIUMPLUS': ['Unlimited business profiles', 'Unlimited staff members', 'Everything in Premium'],
+  'PREMIUM': ['5 business profiles', '3 staff members', 'Bulk import/export', 'Priority support'],
+  'PREMIUMPLUS': ['Unlimited business profiles', '5 staff members', 'Everything in Premium'],
 };
 
 Color _planColor(String plan) {
@@ -196,9 +197,18 @@ class _CurrentPlanCard extends StatelessWidget {
               child: _PlanRow(plan: plan, isCurrent: plan == effectivePlan),
             ),
           const SizedBox(height: 4),
-          Text(
-            "Want to buy Premium or Premium Plus directly? Contact us and we'll set you up with a coupon.",
-            style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+          InkWell(
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ContactScreen())),
+            child: Text.rich(
+              TextSpan(
+                style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                children: const [
+                  TextSpan(text: 'Want to buy Premium or Premium Plus directly? '),
+                  TextSpan(text: 'Contact us', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.orange)),
+                  TextSpan(text: " and we'll set you up with a coupon."),
+                ],
+              ),
+            ),
           ),
         ],
       ),

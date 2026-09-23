@@ -181,6 +181,8 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
   Widget build(BuildContext context) {
     return FeatureGate(
       feature: 'excel_import',
+      module: 'inventory',
+      action: 'create',
       child: Scaffold(
         appBar: AppBar(title: const Text('Import Products'), actions: const [HomeLogoButton()]),
         body: ResponsiveBody(

@@ -67,8 +67,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         child: TabBarView(
           controller: _tabController,
           children: const [
-            FeatureGate(feature: 'pos', child: SalesScreen()),
-            FeatureGate(feature: 'purchases', child: PurchasesScreen()),
+            FeatureGate(feature: 'pos', module: 'sales', child: SalesScreen()),
+            FeatureGate(feature: 'purchases', module: 'purchases', child: PurchasesScreen()),
           ],
         ),
       ),

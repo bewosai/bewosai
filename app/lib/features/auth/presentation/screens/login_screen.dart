@@ -152,6 +152,44 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Staff have no email or code: the owner shares a login link, and pasting it
+  /// here signs them in with exactly the access the owner gave them.
+  Future<void> _signInWithStaffLink() async {
+    final controller = TextEditingController();
+    final link = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Staff sign-in'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Paste the login link the business owner sent you.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(hintText: 'https://.../staff-login/...'),
+              onSubmitted: (v) => Navigator.pop(ctx, v),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Sign in')),
+        ],
+      ),
+    );
+    if (link == null || !mounted) return;
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.signInWithStaffLink(link);
+    if (!mounted) return;
+    if (!ok && auth.error != null) {
+      showAppSnackBar(context, auth.error!, isError: true);
+    }
+  }
+
   Future<void> _verifyOtp() async {
     if (_verifying) return;
     if (!(_otpFormKey.currentState?.validate() ?? false)) return;
@@ -497,6 +535,13 @@ class _LoginScreenState extends State<LoginScreen> {
               label: const Text('Continue with Google'),
             ),
           ],
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton(
+              onPressed: auth.isLoading ? null : _signInWithStaffLink,
+              child: const Text('Staff? Sign in with your login link'),
+            ),
+          ),
         ],
       ),
     );

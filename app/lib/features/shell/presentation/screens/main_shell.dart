@@ -61,8 +61,8 @@ class _MainShellState extends State<MainShell> {
     final screens = [
       const DashboardScreen(),
       TransactionsScreen(initialSubTab: widget.initialSubTab, requestToken: widget.navToken),
-      const FeatureGate(feature: 'parties', child: PartiesScreen()),
-      const FeatureGate(feature: 'inventory', child: InventoryScreen()),
+      const FeatureGate(feature: 'parties', module: 'parties', child: PartiesScreen()),
+      const FeatureGate(feature: 'inventory', module: 'inventory', child: InventoryScreen()),
       const MoreScreen(),
     ];
     return Scaffold(

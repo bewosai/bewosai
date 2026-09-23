@@ -69,6 +69,17 @@ class AuthService {
     }
   }
 
+  /// Signs in a staff member with the login token from the link the owner shared
+  /// (no email, no code) - the same session shape as a normal login.
+  Future<VerifyOtpResult> staffLogin(String token) async {
+    try {
+      final res = await _dio.post('/auth/staff-login/', data: {'token': token});
+      return _verifyOtpResultFromResponse(res.data as Map<String, dynamic>);
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
   Future<VerifyOtpResult> googleLogin(String idToken, {bool remember = false}) async {
     try {
       final res = await _dio.post('/auth/google-login/', data: {

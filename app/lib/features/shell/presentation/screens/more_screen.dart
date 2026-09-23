@@ -17,7 +17,10 @@ class _MoreTile {
   final String label;
   final VoidCallback onTap;
   final String? feature;
-  const _MoreTile(this.icon, this.label, this.onTap, {this.feature});
+  // The staff permission needed to see this tile (module + action).
+  final String? module;
+  final String action;
+  const _MoreTile(this.icon, this.label, this.onTap, {this.feature, this.module, this.action = 'view'});
 }
 
 class MoreScreen extends StatelessWidget {
@@ -31,24 +34,29 @@ class MoreScreen extends StatelessWidget {
     final business = auth.currentBusiness;
 
     final businessTiles = [
-      _MoreTile(Icons.point_of_sale_outlined, 'Quick POS', () => context.push('/pos'), feature: 'pos'),
+      _MoreTile(Icons.point_of_sale_outlined, 'Quick POS', () => context.push('/pos'), feature: 'pos', module: 'sales', action: 'create'),
       _MoreTile(
         Icons.assignment_return_outlined,
         'Sales Return',
         () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SalesReturnScreen())),
         feature: 'pos',
+        module: 'sales',
       ),
       _MoreTile(
         Icons.undo_outlined,
         'Purchase Return',
         () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PurchaseReturnScreen())),
         feature: 'purchases',
+        module: 'purchases',
       ),
-      _MoreTile(Icons.receipt_outlined, t('expenses'), () => context.push('/expenses'), feature: 'expenses'),
-      _MoreTile(Icons.account_balance_outlined, t('banking'), () => context.push('/banking'), feature: 'banking'),
-      _MoreTile(Icons.bar_chart_outlined, t('reports'), () => context.push('/reports'), feature: 'reports'),
-      _MoreTile(Icons.badge_outlined, t('staff'), () => context.push('/staff'), feature: 'staff_management'),
-    ].where((tile) => tile.feature == null || features.isEnabled(tile.feature!)).toList();
+      _MoreTile(Icons.receipt_outlined, t('expenses'), () => context.push('/expenses'), feature: 'expenses', module: 'expenses'),
+      _MoreTile(Icons.account_balance_outlined, t('banking'), () => context.push('/banking'), feature: 'banking', module: 'banking'),
+      _MoreTile(Icons.bar_chart_outlined, t('reports'), () => context.push('/reports'), feature: 'reports', module: 'reports'),
+      _MoreTile(Icons.badge_outlined, t('staff'), () => context.push('/staff'), feature: 'staff_management', module: 'staff'),
+    ]
+        .where((tile) => tile.feature == null || features.isEnabled(tile.feature!))
+        .where((tile) => tile.module == null || (business?.can(tile.module!, tile.action) ?? true))
+        .toList();
 
     final importTiles = [
       _MoreTile(
@@ -56,14 +64,21 @@ class MoreScreen extends StatelessWidget {
         'Import Products',
         () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InventoryImportScreen())),
         feature: 'excel_import',
+        module: 'inventory',
+        action: 'create',
       ),
       _MoreTile(
         Icons.people_outline,
         'Import Parties',
         () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PartyImportScreen())),
         feature: 'excel_import',
+        module: 'parties',
+        action: 'create',
       ),
-    ].where((tile) => tile.feature == null || features.isEnabled(tile.feature!)).toList();
+    ]
+        .where((tile) => tile.feature == null || features.isEnabled(tile.feature!))
+        .where((tile) => tile.module == null || (business?.can(tile.module!, tile.action) ?? true))
+        .toList();
 
     return Scaffold(
       appBar: AppBar(title: Text(t('more')), actions: const [HomeLogoButton()]),
@@ -161,13 +176,16 @@ class MoreScreen extends StatelessWidget {
                   t('settings'),
                   () => context.push('/settings'),
                 ),
-                _divider(),
-                _tile(
-                  context,
-                  Icons.delete_outline,
-                  t('recycleBin'),
-                  () => context.push('/recycle-bin'),
-                ),
+                // Only for someone who may delete something (the bin holds what was deleted).
+                if (business?.canDeleteAnything ?? true) ...[
+                  _divider(),
+                  _tile(
+                    context,
+                    Icons.delete_outline,
+                    t('recycleBin'),
+                    () => context.push('/recycle-bin'),
+                  ),
+                ],
                 _divider(),
                 _tile(
                   context,

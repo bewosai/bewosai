@@ -27,6 +27,38 @@ class Business {
   // whatever the backend will actually enforce (see accounts/views.py).
   final int? staffLimitOverride;
 
+  /// The signed-in person's role here ("OWNER" for the owner) and what they may
+  /// do, per module: {module: {view, create, edit, delete}}. Null when the
+  /// server didn't send it (a session saved before it existed) - then [can]
+  /// says yes and the server remains the one that refuses.
+  final String? myRole;
+  final Map<String, Map<String, bool>>? myPermissions;
+
+  /// May the signed-in person [action] (view / create / edit / delete) on
+  /// [module] (sales, purchases, expenses, inventory, parties, payments,
+  /// banking, reports, staff)? Decides what to SHOW; the server enforces it.
+  bool can(String module, [String action = 'view']) {
+    final table = myPermissions;
+    if (table == null) return true;
+    return table[module]?[action] != false;
+  }
+
+  /// True if the person may delete anything at all (the Recycle Bin is for them).
+  bool get canDeleteAnything => const [
+        'sales', 'purchases', 'expenses', 'inventory', 'parties', 'payments', 'banking',
+      ].any((m) => can(m, 'delete'));
+
+  static Map<String, Map<String, bool>>? _parsePermissions(dynamic raw) {
+    if (raw is! Map) return null;
+    return {
+      for (final e in raw.entries)
+        '${e.key}': {
+          if (e.value is Map)
+            for (final a in (e.value as Map).entries) '${a.key}': a.value == true,
+        },
+    };
+  }
+
   Business({
     required this.id,
     required this.name,
@@ -47,6 +79,8 @@ class Business {
     required this.ownerName,
     required this.staffCount,
     this.staffLimitOverride,
+    this.myRole,
+    this.myPermissions,
   });
 
   factory Business.fromJson(Map<String, dynamic> json) => Business(
@@ -69,6 +103,8 @@ class Business {
         ownerName: json['owner_name'] as String? ?? '',
         staffCount: json['staff_count'] as int? ?? 1,
         staffLimitOverride: json['staff_limit_override'] as int?,
+        myRole: json['my_role'] as String?,
+        myPermissions: _parsePermissions(json['my_permissions']),
       );
 
   Map<String, dynamic> toJson() => {
@@ -104,5 +140,7 @@ class Business {
         'owner_name': ownerName,
         'staff_count': staffCount,
         'staff_limit_override': staffLimitOverride,
+        'my_role': myRole,
+        'my_permissions': myPermissions,
       };
 }

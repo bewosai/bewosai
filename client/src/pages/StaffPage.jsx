@@ -5,7 +5,10 @@ import PageHeader from "../components/shared/PageHeader";
 import SectionCard from "../components/shared/SectionCard";
 import PrimaryButton from "../components/shared/PrimaryButton";
 import { auth as authApi } from "../api";
-import { UserCheck, Plus, Shield, Eye, X, Crown, ChevronDown, ChevronUp, Check, Edit2, Trash2, Search, Link2, Copy, RefreshCw, AlertCircle } from "lucide-react";
+import {
+  UserCheck, Plus, Shield, Eye, X, Crown, ChevronDown, ChevronUp, Check, Edit2, Trash2, Search, Link2, Copy,
+  RefreshCw, AlertCircle, History, ChevronLeft, ChevronRight, FilePlus, FilePen, FileX,
+} from "lucide-react";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 
 function staffLoginUrl(token) {
@@ -164,7 +167,7 @@ function LoginLinkPanel({ token, onRegenerate, regenerating }) {
       </div>
       <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
         <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <p>Anyone with this link can open the app as this staff member — no email or code needed. Share it only with them, and regenerate it if it ever leaks.</p>
+        <p>Anyone with this link can open the app as this staff member — no email or code needed. Share it only with them, and regenerate it if it ever leaks. On a phone, they open it in the browser, or in the Bewosai app tap “Staff? Sign in with your login link” and paste it.</p>
       </div>
       {onRegenerate && (
         <button
@@ -477,6 +480,160 @@ function ViewPermissionsModal({ member, onClose }) {
   );
 }
 
+/* ─── Staff Activity — the owner-facing "who changed what, and when" log
+     (accounts.StaffActivity via /api/staff/audit-log/). Filterable by staff
+     member, module, action and date; each row is the server's own
+     already-formatted description ("Updated Invoice INV-4 — Amount paid:
+     0.00 → 500.00"), so nothing here re-derives the before/after text. ─── */
+const AUDIT_MODULES = [
+  ["sales", "Sales"], ["purchases", "Purchases"], ["expenses", "Expenses"], ["inventory", "Inventory"],
+  ["parties", "Parties"], ["payments", "Payments"], ["banking", "Banking"], ["reports", "Reports"], ["staff", "Staff"],
+];
+const AUDIT_ACTION_META = {
+  CREATE: { label: "Created", icon: FilePlus, color: "text-green-400 bg-green-500/10" },
+  UPDATE: { label: "Updated", icon: FilePen, color: "text-blue-400 bg-blue-500/10" },
+  DELETE: { label: "Deleted", icon: FileX, color: "text-red-400 bg-red-500/10" },
+};
+const AUDIT_PAGE_SIZE = 50;
+
+function StaffActivityLog({ businessId, staff }) {
+  const [rows, setRows] = useState([]);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [staffFilter, setStaffFilter] = useState("");
+  const [moduleFilter, setModuleFilter] = useState("");
+  const [actionFilter, setActionFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const load = () => {
+    if (!businessId) return;
+    setLoading(true);
+    setError("");
+    const params = { page, page_size: AUDIT_PAGE_SIZE };
+    if (staffFilter) params.staff = staffFilter;
+    if (moduleFilter) params.module = moduleFilter;
+    if (actionFilter) params.action = actionFilter;
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    authApi.staffAuditLog(params)
+      .then((r) => {
+        const data = r.data;
+        setRows(data?.results ?? data ?? []);
+        setCount(data?.count ?? (Array.isArray(data) ? data.length : 0));
+      })
+      .catch((e) => {
+        // 403 here means this signed-in staff member wasn't given the "staff"
+        // module — same access rule the backend enforces, not a real error.
+        setRows([]);
+        setCount(0);
+        setError(
+          e.response?.status === 403
+            ? "You don't have access to staff activity. Ask the business owner to enable it for you."
+            : "Couldn't load staff activity."
+        );
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, [businessId, page, staffFilter, moduleFilter, actionFilter, dateFrom, dateTo]);
+  useEffect(() => setPage(1), [staffFilter, moduleFilter, actionFilter, dateFrom, dateTo]);
+
+  const totalPages = Math.max(1, Math.ceil(count / AUDIT_PAGE_SIZE));
+
+  return (
+    <SectionCard
+      title="Staff Activity"
+      subtitle="Every sale, purchase, expense and more that staff created, edited or deleted — with before/after values on edits."
+    >
+      <div className="mb-4 flex flex-wrap gap-2">
+        <select value={staffFilter} onChange={(e) => setStaffFilter(e.target.value)}
+          className="rounded-lg border border-navy-700 bg-navy-800 px-2.5 py-1.5 text-xs text-white focus:border-orange-500 focus:outline-none">
+          <option value="">All staff</option>
+          {staff.map((m) => (
+            <option key={m.user} value={m.user}>{m.user_name || m.user_email || `#${m.user}`}</option>
+          ))}
+        </select>
+        <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}
+          className="rounded-lg border border-navy-700 bg-navy-800 px-2.5 py-1.5 text-xs text-white focus:border-orange-500 focus:outline-none">
+          <option value="">All features</option>
+          {AUDIT_MODULES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+        <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}
+          className="rounded-lg border border-navy-700 bg-navy-800 px-2.5 py-1.5 text-xs text-white focus:border-orange-500 focus:outline-none">
+          <option value="">All actions</option>
+          {Object.entries(AUDIT_ACTION_META).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+          className="rounded-lg border border-navy-700 bg-navy-800 px-2.5 py-1.5 text-xs text-white focus:border-orange-500 focus:outline-none" />
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+          className="rounded-lg border border-navy-700 bg-navy-800 px-2.5 py-1.5 text-xs text-white focus:border-orange-500 focus:outline-none" />
+        {(staffFilter || moduleFilter || actionFilter || dateFrom || dateTo) && (
+          <button
+            onClick={() => { setStaffFilter(""); setModuleFilter(""); setActionFilter(""); setDateFrom(""); setDateTo(""); }}
+            className="rounded-lg px-2.5 py-1.5 text-xs text-navy-400 hover:text-white"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {error ? (
+        <p className="flex items-center gap-2 py-8 text-center text-sm text-navy-400 justify-center">
+          <AlertCircle className="h-4 w-4 shrink-0 text-orange-400" /> {error}
+        </p>
+      ) : loading ? (
+        <p className="py-8 text-center text-sm text-navy-500">Loading…</p>
+      ) : rows.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-10 text-center">
+          <History className="h-10 w-10 text-navy-700" />
+          <p className="text-sm text-navy-400">No activity found.</p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-1.5">
+            {rows.map((a) => {
+              const meta = AUDIT_ACTION_META[a.action] || AUDIT_ACTION_META.UPDATE;
+              const Icon = meta.icon;
+              return (
+                <div key={a.id} className="flex items-start gap-3 rounded-xl border border-navy-800 bg-navy-950 px-3 py-2.5">
+                  <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${meta.color}`}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-white">{a.description}</p>
+                    <p className="mt-0.5 text-xs text-navy-500">
+                      {a.user_name || a.user_email || "Unknown"} · {new Date(a.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between text-xs text-navy-400">
+              <span>Page {page} of {totalPages} · {count} total</span>
+              <div className="flex gap-1.5">
+                <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
+                  className="flex items-center gap-1 rounded-lg border border-navy-700 px-2 py-1 disabled:opacity-40">
+                  <ChevronLeft className="h-3.5 w-3.5" /> Prev
+                </button>
+                <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
+                  className="flex items-center gap-1 rounded-lg border border-navy-700 px-2 py-1 disabled:opacity-40">
+                  Next <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </SectionCard>
+  );
+}
+
 export default function StaffPage() {
   const { currentBusiness } = useAuth();
   const { t } = useTranslation();
@@ -504,18 +661,18 @@ export default function StaffPage() {
 
   useEffect(load, [currentBusiness?.id]);
 
-  // Mirrors the backend's own FREE_STAFF_LIMIT check (accounts/views.py) —
-  // shown proactively so a Free-plan owner isn't surprised by the rejection
-  // only after filling out the whole invite form.
-  const FREE_STAFF_LIMIT = 1;
+  // Mirrors the backend's own per-plan staff limit (accounts/views.py's
+  // STAFF_LIMIT_BY_PLAN / plan_staff_limit) — shown proactively so an owner
+  // isn't surprised by the rejection only after filling out the invite form.
+  // effective_plan (not plan): a coupon/referral-granted upgrade must read as
+  // upgraded here too. staff_limit_override, when Super Admin has set one for
+  // this business, always wins over the plan default, same as the backend.
+  const PLAN_STAFF_LIMIT = { FREE: 1, PREMIUM: 3, PREMIUMPLUS: 5 };
   const nonOwnerCount = staff.filter((m) => m.role !== "OWNER" && m.is_active !== false).length;
-  // effective_plan (not plan) — a coupon/referral-granted PremiumPlus must
-  // read as unlimited here too, or the Invite button stays disabled even
-  // though the backend would actually allow it. See Business.effective_plan.
   const effectivePlan = currentBusiness?.effective_plan || currentBusiness?.plan;
-  const isFreePlan = effectivePlan !== "PREMIUM" && effectivePlan !== "PREMIUMPLUS";
-  const isUnlimited = effectivePlan === "PREMIUMPLUS";
-  const atStaffLimit = !isUnlimited && isFreePlan && nonOwnerCount >= FREE_STAFF_LIMIT;
+  const planName = effectivePlan === "PREMIUMPLUS" ? "Premium Plus" : effectivePlan === "PREMIUM" ? "Premium" : "Free";
+  const staffLimit = currentBusiness?.staff_limit_override ?? (PLAN_STAFF_LIMIT[effectivePlan] ?? PLAN_STAFF_LIMIT.FREE);
+  const atStaffLimit = nonOwnerCount >= staffLimit;
 
   const filteredStaff = staff.filter((m) => {
     if (!search.trim()) return true;
@@ -542,7 +699,8 @@ export default function StaffPage() {
       {atStaffLimit && (
         <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-orange-500/20 bg-orange-500/5 px-4 py-3">
           <p className="text-sm text-orange-300">
-            Your Free plan allows up to {FREE_STAFF_LIMIT} staff member{FREE_STAFF_LIMIT !== 1 ? "s" : ""} besides the owner — upgrade to Premium to invite more.
+            Your {planName} plan allows up to {staffLimit} staff member{staffLimit !== 1 ? "s" : ""} besides the owner
+            {effectivePlan !== "PREMIUMPLUS" ? " — upgrade for more." : "."}
           </p>
         </div>
       )}
@@ -642,6 +800,10 @@ export default function StaffPage() {
           </div>
         )}
       </SectionCard>
+
+      <div className="mt-6">
+        <StaffActivityLog businessId={currentBusiness?.id} staff={staff} />
+      </div>
 
       {showInvite && (
         <InviteModal

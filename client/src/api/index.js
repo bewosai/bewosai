@@ -108,6 +108,10 @@ export const auth = {
   closeFiscalYear: (bid) => api.post(`/auth/businesses/${bid}/close-fiscal-year/`),
   fiscalYears: (bid) => api.get(`/auth/businesses/${bid}/fiscal-years/`),
   staffLogin: (token) => api.post("/auth/staff-login/", { token }),
+  // The owner-facing "who changed what, and when" log — every create/edit/delete
+  // a staff member made, with before/after values on edits. See accounts.views.
+  // StaffAuditLogView. p: { staff, module, action, date_from, date_to, page }.
+  staffAuditLog: (p) => api.get("/staff/audit-log/", { params: p }),
 };
 
 export const inventory = {

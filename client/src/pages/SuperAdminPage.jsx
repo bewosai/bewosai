@@ -540,11 +540,14 @@ function CreateUserModal({ onClose, onSaved }) {
 // Deliberately the only "edit" a platform admin has on a tenant's business —
 // its own profile/records (name, contact info, financial data) are
 // admin-view-only. This just overrides the plan-based caps: how many staff
-// this business can add (default Free=1/Premium=8), and how many business
-// profiles this owner can create (default Free=2/Premium=5).
+// this business can add (default Free=1/Premium=3/Premium Plus=5 — see
+// accounts.views.STAFF_LIMIT_BY_PLAN), and how many business profiles this
+// owner can create (default Free=2/Premium=5).
+const STAFF_PLAN_DEFAULT = { FREE: 1, PREMIUM: 3, PREMIUMPLUS: 5 };
+
 function ManageLimitsModal({ biz, onClose, onSaved }) {
-  const planStaffDefault = biz.plan === "PREMIUM" ? 8 : 1;
-  const planBizDefault = biz.plan === "PREMIUM" ? 5 : 2;
+  const planStaffDefault = STAFF_PLAN_DEFAULT[biz.plan] ?? STAFF_PLAN_DEFAULT.FREE;
+  const planBizDefault = biz.plan === "PREMIUM" || biz.plan === "PREMIUMPLUS" ? 5 : 2;
   const [staffLimit, setStaffLimit] = useState(biz.staff_limit_override ?? "");
   const [bizLimit, setBizLimit] = useState(biz.owner_business_limit_override ?? "");
   const [saving, setSaving] = useState(false);
@@ -578,7 +581,7 @@ function ManageLimitsModal({ biz, onClose, onSaved }) {
           <input type="number" min="0" placeholder={`Plan default (${planStaffDefault})`}
             className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
             value={staffLimit} onChange={e => setStaffLimit(e.target.value)} />
-          <p className="mt-1 text-[11px] text-navy-500">Leave blank to use the {biz.plan === "PREMIUM" ? "Premium" : "Free"} plan default of {planStaffDefault}.</p>
+          <p className="mt-1 text-[11px] text-navy-500">Leave blank to use the {biz.plan === "PREMIUMPLUS" ? "Premium Plus" : biz.plan === "PREMIUM" ? "Premium" : "Free"} plan default of {planStaffDefault}.</p>
         </div>
         <div>
           <label className="mb-1 block text-xs font-semibold text-navy-400">Business profiles this owner can create</label>
