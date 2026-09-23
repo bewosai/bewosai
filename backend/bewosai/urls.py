@@ -2,11 +2,24 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 from superadmin.views import EffectiveFeaturesView
 
+
+def _health(request):
+    """The bare root URL — nothing calls this (the website and app always hit
+    /api/... directly), but visiting it in a browser used to show a plain
+    "Not Found" that looked like the service was broken, when it was just
+    that no view existed at "/" at all. This also works as a Render Health
+    Check Path (Settings -> Health Checks), which needs a URL that always
+    returns 200 when the service is actually up."""
+    return JsonResponse({"status": "ok", "service": "bewosai-backend"})
+
+
 urlpatterns = [
+    path("", _health),
     path("admin/", admin.site.urls),
     # API docs
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
