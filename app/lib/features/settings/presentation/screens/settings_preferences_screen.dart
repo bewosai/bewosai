@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/calendar/nepal_time.dart';
 import '../../../../core/calendar/nepali_calendar_service.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/i18n/translations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_mode.dart';
@@ -116,9 +118,13 @@ class SettingsPreferencesScreen extends StatelessWidget {
                           child: Align(
                             alignment: Alignment.centerRight,
                             child: Text(
-                              settings.settings.showNepaliCalendar
-                                  ? 'Today: ${NepaliCalendarService.today()}'
-                                  : 'Dates shown in AD (Gregorian)',
+                              // Both calendars side by side (Nepal time) plus the
+                              // build, so a wrong date can be pinned on the
+                              // conversion, the phone's clock, or an old install.
+                              '${settings.settings.showNepaliCalendar ? 'Today: ${NepaliCalendarService.today()}' : 'Dates shown in AD (Gregorian)'}\n'
+                              '${DateFormat('d MMM yyyy').format(NepalTime.today())} AD · Nepal time\n'
+                              'Build ${AppConstants.buildLabel}',
+                              textAlign: TextAlign.right,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ),
