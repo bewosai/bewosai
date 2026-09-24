@@ -127,7 +127,7 @@ const plans = [
   {
     name: "Premium",
     price: "Rs. 1999",
-    period: "per month",
+    period: "per year",
     color: "border-orange-500",
     badge: "Most Popular",
     features: [

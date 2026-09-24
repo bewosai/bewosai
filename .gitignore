@@ -5,3 +5,5 @@ release/
 .tools/
 .claude/
 apk-release/
+.neon
+.env.local
