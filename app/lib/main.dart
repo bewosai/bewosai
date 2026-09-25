@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'core/features/feature_provider.dart';
+import 'core/input/zero_field_select.dart';
 import 'core/licensing/license_provider.dart';
 import 'core/network/api_client.dart';
 import 'core/notifications/notification_service.dart';
@@ -37,6 +38,7 @@ void main() async {
   ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await NotificationService.instance.init();
+  ZeroFieldSelect.install();
   runApp(const BewosaiApp());
 }
 

@@ -143,8 +143,8 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
                             l.closingBalance >= 0 ? 'They Owe You' : 'You Owe Them',
                             l.closingBalance.abs(),
                             l.closingBalance >= 0
-                                ? AppColors.warning
-                                : AppColors.success,
+                                ? AppColors.success
+                                : AppColors.error,
                           ),
                         ),
                       ],

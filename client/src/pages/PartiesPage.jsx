@@ -141,14 +141,14 @@ function PartyModal({ initial, onClose, onSaved }) {
               <div className="grid shrink-0 grid-cols-2 gap-1.5">
                 <button type="button" onClick={() => setObDirection("RECEIVABLE")}
                   className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                    obDirection === "RECEIVABLE" ? "border-red-500 bg-red-500/10 text-red-400" : "border-navy-700 bg-navy-950 text-navy-400 hover:border-navy-600"
+                    obDirection === "RECEIVABLE" ? "border-green-500 bg-green-500/10 text-green-400" : "border-navy-700 bg-navy-950 text-navy-400 hover:border-navy-600"
                   }`}
                 >
                   To Receive
                 </button>
                 <button type="button" onClick={() => setObDirection("PAYABLE")}
                   className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                    obDirection === "PAYABLE" ? "border-green-500 bg-green-500/10 text-green-400" : "border-navy-700 bg-navy-950 text-navy-400 hover:border-navy-600"
+                    obDirection === "PAYABLE" ? "border-red-500 bg-red-500/10 text-red-400" : "border-navy-700 bg-navy-950 text-navy-400 hover:border-navy-600"
                   }`}
                 >
                   To Give
@@ -195,7 +195,7 @@ function PartyCard({ party, onEdit, onDelete, onLedger }) {
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className={`text-sm font-bold ${balance > 0 ? "text-red-400" : balance < 0 ? "text-green-400" : "text-navy-400"}`}>
+          <p className={`text-sm font-bold ${balance > 0 ? "text-green-400" : balance < 0 ? "text-red-400" : "text-navy-400"}`}>
             {balanceLabel}
           </p>
           <p className="text-[10px] text-navy-500">
@@ -293,9 +293,9 @@ function LedgerModal({ party, onClose }) {
               <p className="text-xs text-navy-400">Total Credit</p>
               <p className="mt-1 font-bold text-white">{fmt(ledger.total_credit)}</p>
             </div>
-            <div className={`rounded-xl border p-3 text-center ${balance > 0 ? "border-red-500/20 bg-red-500/5" : balance < 0 ? "border-green-500/20 bg-green-500/5" : "border-navy-700 bg-navy-950"}`}>
+            <div className={`rounded-xl border p-3 text-center ${balance > 0 ? "border-green-500/20 bg-green-500/5" : balance < 0 ? "border-red-500/20 bg-red-500/5" : "border-navy-700 bg-navy-950"}`}>
               <p className="text-xs text-navy-400">Balance</p>
-              <p className={`mt-1 font-bold ${balance > 0 ? "text-red-400" : balance < 0 ? "text-green-400" : "text-navy-400"}`}>
+              <p className={`mt-1 font-bold ${balance > 0 ? "text-green-400" : balance < 0 ? "text-red-400" : "text-navy-400"}`}>
                 {balance !== 0 ? fmt(balance) : "Settled"}
               </p>
             </div>
@@ -335,7 +335,7 @@ function LedgerModal({ party, onClose }) {
                     <div className="col-span-2 text-right text-xs">
                       {e.credit > 0 ? <span className="text-green-400">−{fmt(e.credit)}</span> : "—"}
                     </div>
-                    <div className={`col-span-1 text-right text-xs font-semibold ${e.balance > 0 ? "text-red-400" : e.balance < 0 ? "text-green-400" : "text-navy-400"}`}>
+                    <div className={`col-span-1 text-right text-xs font-semibold ${e.balance > 0 ? "text-green-400" : e.balance < 0 ? "text-red-400" : "text-navy-400"}`}>
                       {fmt(e.balance)}
                     </div>
                   </div>
@@ -480,12 +480,12 @@ export default function PartiesPage() {
           </div>
           <p className="mt-1.5 text-2xl font-bold text-blue-400">{stats.suppliers}</p>
         </div>
-        <div className="rounded-2xl border border-orange-500/20 bg-orange-500/5 p-4">
+        <div className="rounded-2xl border border-green-500/20 bg-green-500/5 p-4">
           <div className="flex items-center justify-between">
             <p className="text-xs text-navy-400">To Receive</p>
-            <TrendingUp className="h-4 w-4 text-orange-400" />
+            <TrendingUp className="h-4 w-4 text-green-400" />
           </div>
-          <p className="mt-1.5 text-xl font-bold text-orange-400">
+          <p className="mt-1.5 text-xl font-bold text-green-400">
             {maskAmount(stats.totalReceivable, (v) => `Rs. ${Math.round(v).toLocaleString()}`)}
           </p>
         </div>

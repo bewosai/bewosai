@@ -6,7 +6,10 @@ import { AppSettingsProvider } from "./context/AppSettingsContext";
 import { FeatureProvider } from "./context/FeatureContext";
 import { LicenseProvider } from "./context/LicenseContext";
 import App from "./App";
+import { installZeroSelect } from "./utils/zeroSelect";
 import "./index.css";
+
+installZeroSelect();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

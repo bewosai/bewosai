@@ -159,7 +159,7 @@ class _PartiesScreenState extends State<PartiesScreen> {
                           label: 'To Receive',
                           value: pp.totalReceivable,
                           icon: Icons.call_received,
-                          color: AppColors.warning,
+                          color: AppColors.success,
                         ),
                       ],
                     ),
@@ -255,9 +255,9 @@ class _PartiesScreenState extends State<PartiesScreen> {
                                           style: TextStyle(
                                             fontWeight: FontWeight.w800,
                                             color: p.balance > 0
-                                                ? AppColors.error
+                                                ? AppColors.success
                                                 : (p.balance < 0
-                                                      ? AppColors.success
+                                                      ? AppColors.error
                                                       : AppColors
                                                             .textSecondary),
                                           ),
@@ -548,7 +548,7 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
                     child: _DirectionButton(
                       label: 'To Receive',
                       selected: _obDirection == 'RECEIVABLE',
-                      color: AppColors.error,
+                      color: AppColors.success,
                       onTap: () => setState(() => _obDirection = 'RECEIVABLE'),
                     ),
                   ),
@@ -557,7 +557,7 @@ class _PartyFormSheetState extends State<_PartyFormSheet> {
                     child: _DirectionButton(
                       label: 'To Give',
                       selected: _obDirection == 'PAYABLE',
-                      color: AppColors.success,
+                      color: AppColors.error,
                       onTap: () => setState(() => _obDirection = 'PAYABLE'),
                     ),
                   ),
