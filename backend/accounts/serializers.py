@@ -12,6 +12,13 @@ class UserSerializer(serializers.ModelSerializer):
     # BusinessSerializer (one extra query per row, same trade-off already
     # accepted there).
     business_count = serializers.IntegerField(source="businesses.count", read_only=True)
+    # What the apps use to show the Super Admin panel and skip the trial lock —
+    # false for anyone but settings.SUPERADMIN_EMAIL, even if an old row still
+    # has the flag set.
+    is_platform_admin = serializers.SerializerMethodField()
+
+    def get_is_platform_admin(self, obj):
+        return bool(obj.is_platform_admin and obj.may_be_platform_admin)
 
     class Meta:
         model = User

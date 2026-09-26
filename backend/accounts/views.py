@@ -758,7 +758,7 @@ class StaffActivityView(APIView):
         user_id = request.query_params.get("user_id")
 
         login_qs = LoginActivity.objects.filter(user=request.user)
-        if user_id and request.user.is_platform_admin:
+        if user_id and request.user.is_platform_admin and request.user.may_be_platform_admin:
             login_qs = LoginActivity.objects.filter(user_id=user_id)
 
         data = []

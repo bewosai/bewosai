@@ -73,6 +73,25 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.email or self.phone or f"user #{self.pk}"
 
+    @property
+    def may_be_platform_admin(self):
+        """Only settings.SUPERADMIN_EMAIL may hold Super Admin (no restriction
+        when that setting is blank, as under tests)."""
+        from django.conf import settings
+
+        only = getattr(settings, "SUPERADMIN_EMAIL", "")
+        return not only or (self.email or "").strip().lower() == only
+
+    def save(self, *args, **kwargs):
+        # One enforcement point for every way the flag can be set — admin
+        # forms, the create-user API, management commands, PLATFORM_ADMIN_EMAILS.
+        if self.is_platform_admin and not self.may_be_platform_admin:
+            self.is_platform_admin = False
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None and "is_platform_admin" not in update_fields:
+                kwargs["update_fields"] = [*update_fields, "is_platform_admin"]
+        super().save(*args, **kwargs)
+
 
 class OTPCode(models.Model):
     MAX_ATTEMPTS = 5

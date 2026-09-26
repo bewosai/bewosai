@@ -29,6 +29,9 @@ class IsPlatformAdmin(permissions.BasePermission):
             request.user
             and request.user.is_authenticated
             and request.user.is_platform_admin
+            # Also refuses an account whose flag was set before the
+            # SUPERADMIN_EMAIL rule existed (see User.save).
+            and request.user.may_be_platform_admin
         )
 
 

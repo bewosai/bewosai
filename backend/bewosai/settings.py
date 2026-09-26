@@ -6,6 +6,15 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# The one account allowed to be a platform admin (Super Admin). Every other
+# account has is_platform_admin forced off on save and is refused by the Super
+# Admin permission check, however the flag got set. Blank under `manage.py
+# test`, where fixtures use their own admin emails; tests that check this rule
+# set it explicitly.
+SUPERADMIN_EMAIL = "" if "test" in sys.argv[1:2] else config(
+    "SUPERADMIN_EMAIL", default="mahatok008@gmail.com",
+).strip().lower()
+
 # How long each server process may reuse the Super Admin feature switches before
 # re-reading them (see bewosai/feature_cache.py). Off under `manage.py test`, where
 # each test rolls its database back but a process-wide cache would outlive it.
