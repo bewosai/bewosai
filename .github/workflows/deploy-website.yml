@@ -1,0 +1,53 @@
+# Builds the website and deploys it to Vercel production on every push to
+# main that touches client/. Vercel's own Git auto-deploy hasn't been firing,
+# so this does it directly with the Vercel CLI.
+#
+# Needs one repository secret: VERCEL_TOKEN (vercel.com/account/tokens).
+# Without it the job only builds (still catching build errors) and skips the deploy.
+name: Deploy website
+
+on:
+  push:
+    branches: [main]
+    paths: ["client/**", ".github/workflows/deploy-website.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-website
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      # From client/.vercel/project.json (project "bewosaiapp"); not secret.
+      VERCEL_ORG_ID: team_ZHVHav293g0r3n3XnSDaWtlk
+      VERCEL_PROJECT_ID: prj_QLWORDPnKO13xoqlotb1C5Y2YtdZ
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Build check
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy to Vercel production
+        if: env.VERCEL_TOKEN != ''
+        run: |
+          npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy skipped
+        if: env.VERCEL_TOKEN == ''
+        run: echo "::warning::VERCEL_TOKEN secret is not set, so the website was built but not deployed."

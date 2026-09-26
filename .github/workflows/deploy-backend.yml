@@ -1,0 +1,60 @@
+# Runs the backend test suite on every push to main that touches backend/,
+# and only if every test passes, tells Render to deploy — so a change that
+# breaks something never reaches the live server.
+#
+# Needs one repository secret: RENDER_DEPLOY_HOOK (Render -> bewosai-backend ->
+# Settings -> Deploy Hook). Without it the tests still run; the deploy is skipped.
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/deploy-backend.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: backend/.python-version
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      - name: Checks and tests
+        env:
+          SECRET_KEY: ci-only-not-secret
+          # Same as local dev's .env: plain-HTTP test requests aren't bounced to HTTPS.
+          DEBUG: "True"
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          # The admin pages' tests need the static manifest, as Render's build makes.
+          python manage.py collectstatic --noinput
+          python manage.py test --noinput
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+    steps:
+      - name: Trigger Render deploy
+        if: env.RENDER_DEPLOY_HOOK != ''
+        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+
+      - name: Deploy skipped
+        if: env.RENDER_DEPLOY_HOOK == ''
+        run: echo "::warning::RENDER_DEPLOY_HOOK secret is not set, so tests ran but Render was not deployed."

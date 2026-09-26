@@ -88,6 +88,15 @@ class MakePlatformAdminCommandTests(TestCase):
 
 
 class OtpThrottlingTests(_ClearThrottleCache):
+    def setUp(self):
+        super().setUp()
+        # These tests are about throttling, not delivery: without this they only
+        # passed where a real email provider happened to be configured in .env.
+        from unittest import mock
+        patcher = mock.patch("accounts.views.send_otp_email", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def send(self, email="x@example.com"):
         return APIClient().post("/api/auth/send-otp/", {"identifier": email}, format="json")
 
