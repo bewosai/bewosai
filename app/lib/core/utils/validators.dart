@@ -34,6 +34,26 @@ class Validators {
     return n.clamp(0.0, gross < 0 ? 0.0 : gross).toDouble();
   }
 
+  /// A line discount typed as a % of [gross] (capped to 0–100%) or, when
+  /// [percent] is false, as rupees (see [cappedDiscount]) — returned in rupees,
+  /// rounded to paisa.
+  static double discountAmount(String? value, double gross, {bool percent = false}) {
+    if (!percent) return cappedDiscount(value, gross);
+    final pct = (double.tryParse((value ?? '').trim()) ?? 0).clamp(0.0, 100.0);
+    final g = gross < 0 ? 0.0 : gross;
+    return (g * pct / 100 * 100).round() / 100;
+  }
+
+  static String? discountPercent(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+    final n = double.tryParse(text);
+    if (n == null) return 'Discount must be a number';
+    if (n < 0) return "Discount can't be negative";
+    if (n > 100) return "Can't be more than 100%";
+    return null;
+  }
+
   // Domain is one or more "label." segments (supports subdomains like
   // user@mail.example.co) followed by a final 2+ letter TLD.
   static final _emailRegex = RegExp(r'^[\w.\-+]+@([\w\-]+\.)+[a-zA-Z]{2,}$');

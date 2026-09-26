@@ -540,6 +540,13 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   late final _salePriceController = TextEditingController(
     text: widget.product?.salePrice.toString() ?? '0',
   );
+  // Own prices per secondary unit (e.g. per Piece); blank = main price ÷ conversion.
+  late final _secondaryPurchaseController = TextEditingController(
+    text: widget.product?.secondaryPurchasePrice?.toString() ?? '',
+  );
+  late final _secondarySaleController = TextEditingController(
+    text: widget.product?.secondarySalePrice?.toString() ?? '',
+  );
   late final _stockController = TextEditingController(
     text: widget.product?.stockQuantity.toString() ?? '0',
   );
@@ -569,6 +576,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
+    final unit = _selectedUnit(context.read<InventoryProvider>());
+    final hasSecondary = unit != null && unit.hasSecondary;
     final product = Product(
       id: widget.product?.id ?? 0,
       name: _nameController.text.trim(),
@@ -579,6 +588,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       description: _descriptionController.text.trim(),
       purchasePrice: double.tryParse(_purchasePriceController.text) ?? 0,
       salePrice: double.tryParse(_salePriceController.text) ?? 0,
+      secondaryPurchasePrice: hasSecondary ? double.tryParse(_secondaryPurchaseController.text) : null,
+      secondarySalePrice: hasSecondary ? double.tryParse(_secondarySaleController.text) : null,
       stockQuantity: double.tryParse(_stockController.text) ?? 0,
       lowStockThreshold: double.tryParse(_thresholdController.text) ?? 5,
       isLowStock: false,
@@ -778,6 +789,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _nameController.dispose();
     _purchasePriceController.dispose();
     _salePriceController.dispose();
+    _secondaryPurchaseController.dispose();
+    _secondarySaleController.dispose();
     _stockController.dispose();
     _thresholdController.dispose();
     _barcodeController.dispose();
@@ -786,29 +799,34 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     super.dispose();
   }
 
-  /// Live "= Rs. X / Piece" hint shown under a price field once a unit with
-  /// a secondary unit is selected — the field itself is always entered in
-  /// the *primary* unit (matching how Unit.priceFor/base_quantity_for treat
-  /// it elsewhere), so this exists purely to save the shop owner from doing
-  /// the box-to-piece division by hand and getting it wrong.
-  String? _secondaryPriceHint(InventoryProvider inv, String priceText) {
-    Unit? selectedUnit;
+  Unit? _selectedUnit(InventoryProvider inv) {
     for (final u in inv.units) {
-      if (u.id == _unit) {
-        selectedUnit = u;
-        break;
-      }
+      if (u.id == _unit) return u;
     }
-    if (selectedUnit == null || !selectedUnit.hasSecondary) return null;
-    final price = double.tryParse(priceText);
-    if (price == null) return null;
-    final secondaryPrice = selectedUnit.priceFor(price, selectedUnit.secondaryUnit);
-    return '= Rs. ${Formatters.amount(secondaryPrice)} / ${selectedUnit.secondaryUnit}';
+    return null;
+  }
+
+  /// What a blank per-secondary-unit price works out to — the main price ÷
+  /// conversion — shown as the field's hint so the owner only types a price
+  /// when a loose piece really sells (or is bought) at a different rate.
+  String _autoSecondaryHint(Unit unit, String mainPriceText) {
+    final price = double.tryParse(mainPriceText) ?? 0;
+    return 'Auto: ${Formatters.amount(unit.priceFor(price, unit.secondaryUnit))}';
+  }
+
+  String? _nonNegative(String? v) {
+    final text = (v ?? '').trim();
+    if (text.isEmpty) return null;
+    final n = double.tryParse(text);
+    if (n == null) return 'Must be a number';
+    return n < 0 ? "Can't be negative" : null;
   }
 
   @override
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
+    final unit = _selectedUnit(inv);
+    final perMain = unit == null ? '' : ' (per ${unit.name})';
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -881,10 +899,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      decoration: InputDecoration(
-                        labelText: 'Purchase Price',
-                        helperText: _secondaryPriceHint(inv, _purchasePriceController.text),
-                      ),
+                      decoration: InputDecoration(labelText: 'Purchase Price$perMain'),
                       onChanged: (_) => setState(() {}),
                     ),
                   ),
@@ -895,15 +910,43 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      decoration: InputDecoration(
-                        labelText: 'Sale Price',
-                        helperText: _secondaryPriceHint(inv, _salePriceController.text),
-                      ),
+                      decoration: InputDecoration(labelText: 'Sale Price$perMain'),
                       onChanged: (_) => setState(() {}),
                     ),
                   ),
                 ],
               ),
+              if (unit != null && unit.hasSecondary) ...[
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _secondaryPurchaseController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: 'Purchase (per ${unit.secondaryUnit})',
+                          hintText: _autoSecondaryHint(unit, _purchasePriceController.text),
+                        ),
+                        validator: _nonNegative,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _secondarySaleController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: 'Sale (per ${unit.secondaryUnit})',
+                          hintText: _autoSecondaryHint(unit, _salePriceController.text),
+                        ),
+                        validator: _nonNegative,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 12),
               Row(
                 children: [

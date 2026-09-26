@@ -14,6 +14,7 @@ import DatePicker from "../components/common/DatePicker";
 import { getRecentIds, pushRecentId } from "../utils/recentItems";
 import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
 import { priceForUnit } from "../utils/calculations";
+import LineDiscountInput, { lineDiscount } from "../components/shared/LineDiscountInput";
 import BillTemplate from "../components/invoice/BillTemplate";
 import PrintPreviewModal from "../components/invoice/PrintPreviewModal";
 import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
@@ -47,11 +48,15 @@ const STATUS_COLORS = {
   CANCELLED: "bg-red-500/10 text-red-400",
 };
 
-const EMPTY_ITEM = { product: "", product_name: "", quantity: 0, unit_label: "", unit_price: 0, discount_amount: 0 };
-// A line's discount as it counts: never negative, never more than the line itself
-// (quantity × price). Anything typed beyond that is flagged red and capped.
+const EMPTY_ITEM = {
+  product: "", product_name: "", quantity: 0, unit_label: "", unit_price: 0,
+  discount_mode: "amount", discount_amount: 0, discount_percent: 0,
+};
+// A line's discount as it counts, in rupees: never negative, never more than
+// the line itself (quantity × price), whether typed as Rs or as %. Anything
+// typed beyond that is flagged red and capped.
 const lineGross = (it) => (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0);
-const itemDiscount = (it) => Math.min(Math.max(0, parseFloat(it.discount_amount) || 0), lineGross(it));
+const itemDiscount = (it) => lineDiscount(it, lineGross(it));
 const EMPTY_FORM = {
   supplier: "",
   supplier_name: "",
@@ -60,6 +65,7 @@ const EMPTY_FORM = {
   due_date: "",
   items: [{ ...EMPTY_ITEM }],
   discount: 0,
+  discount_mode: "percent", // "percent" | "amount" — how the Overall Discount field is read
   tax_rate: 0,
   paid_amount: 0,
   payment_method: "CASH",
@@ -213,11 +219,14 @@ function PurchaseModal({ onClose, onSaved, editData }) {
     purchase_date: editData.purchase_date || editData.date || today(),
     due_date: editData.due_date || "",
     items: editData.items?.length
-      ? editData.items.map(it => ({ ...it, product: it.product ?? it.product_id ?? "" }))
+      ? editData.items.map(it => ({
+          ...it, product: it.product ?? it.product_id ?? "", discount_mode: "amount", discount_percent: 0,
+        }))
       : [{ ...EMPTY_ITEM }],
-    discount: editData.subtotal && parseFloat(editData.subtotal) > 0
-      ? Math.round((parseFloat(editData.discount || 0) / parseFloat(editData.subtotal)) * 10000) / 100
-      : (editData.discount || 0),
+    // Shown as the exact saved amount: converting to a rounded percentage and
+    // back would nudge the discount by a few paisa on every re-save.
+    discount: parseFloat(editData.discount || 0),
+    discount_mode: parseFloat(editData.discount || 0) > 0 ? "amount" : "percent",
     tax_rate: editData.tax_rate ?? currentBusiness?.default_tax_rate ?? 0,
     paid_amount: editData.paid_amount || 0,
     payment_method: editData.payment_method || "CASH",
@@ -271,11 +280,15 @@ function PurchaseModal({ onClose, onSaved, editData }) {
     if (key === "unit_label") {
       const prod = products.find(p => String(p.id) === String(items[i].product));
       if (prod) {
-        items[i].unit_price = priceForUnit(prod.purchase_price, prod.unit_detail, val);
+        items[i].unit_price = priceForUnit(prod.purchase_price, prod.unit_detail, val, prod.secondary_purchase_price);
       }
     }
     setForm(f => ({ ...f, items }));
   };
+
+  // Several fields of one line at once (the discount box changes mode and value together).
+  const patchItem = (i, patch) =>
+    setForm(f => ({ ...f, items: f.items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)) }));
 
   const addItem = () => setForm(f => ({ ...f, items: [...f.items, { ...EMPTY_ITEM }] }));
   const removeItem = (i) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
@@ -306,8 +319,21 @@ function PurchaseModal({ onClose, onSaved, editData }) {
   };
 
   const subtotal = form.items.reduce((s, it) => s + lineGross(it) - itemDiscount(it), 0);
-  const discountPercent = Math.min(100, Math.max(0, parseFloat(form.discount) || 0));
-  const discountAmount = subtotal * discountPercent / 100;
+  const discountIsAmount = form.discount_mode === "amount";
+  const discountValue = Math.max(0, parseFloat(form.discount) || 0);
+  // Either a % of the subtotal or a flat amount, capped to [0, subtotal] — same
+  // rule as the Sales form.
+  const discountAmount = Math.min(
+    Math.max(0, subtotal),
+    discountIsAmount ? discountValue : subtotal * Math.min(100, discountValue) / 100,
+  );
+  const discountPercent = subtotal > 0 ? Math.round((discountAmount / subtotal) * 10000) / 100 : 0;
+  // Switching mode converts the typed value so the discount itself is unchanged.
+  const setDiscountMode = (mode) => {
+    if (mode === form.discount_mode) return;
+    const converted = mode === "amount" ? Math.round(discountAmount * 100) / 100 : discountPercent;
+    setForm(f => ({ ...f, discount_mode: mode, discount: converted }));
+  };
   const taxableAmount = Math.max(0, subtotal - discountAmount);
   const taxRate = vatEnabled ? Math.min(100, Math.max(0, parseFloat(form.tax_rate) || 0)) : 0;
   const taxAmount = taxableAmount * taxRate / 100;
@@ -470,27 +496,34 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                 <div className="col-span-2">Unit</div>
                 <div className="col-span-1 text-right">Qty</div>
                 <div className="col-span-2 text-right">Cost</div>
-                <div className="col-span-1 text-right">Disc.</div>
+                <div className="col-span-2 text-right">Disc. (Rs / %)</div>
                 <div className="col-span-1 text-right">Total</div>
-                <div className="col-span-1"></div>
               </div>
               {form.items.map((item, i) => {
                 const rowTotal = lineGross(item) - itemDiscount(item);
-                const discountTooBig = (parseFloat(item.discount_amount) || 0) > lineGross(item) + 0.005;
                 const prod = products.find(p => String(p.id) === String(item.product));
                 const unitDetail = prod?.unit_detail;
                 const hasSecondaryUnit = !!(unitDetail?.secondary_unit && unitDetail?.conversion_factor);
+                const costOf = (label) =>
+                  priceForUnit(prod?.purchase_price, unitDetail, label, prod?.secondary_purchase_price);
                 return (
                   <div key={i} className="grid grid-cols-12 gap-1 px-2 py-2 border-t border-navy-700/50 items-center">
                     <div className="col-span-1 text-center text-xs text-navy-500">{i + 1}</div>
                     <div className="col-span-3">
                       <SearchableSelect
-                        options={products.map(p => ({
-                          id: p.id,
-                          label: p.name,
-                          sublabel: `Rs. ${parseFloat(p.purchase_price || 0).toFixed(2)}`,
-                          code: p.barcode || "",
-                        }))}
+                        options={products.map(p => {
+                          const u = p.unit_detail;
+                          const primary = parseFloat(p.purchase_price || 0);
+                          const second = u?.secondary_unit && u?.conversion_factor
+                            ? ` · Rs. ${priceForUnit(primary, u, u.secondary_unit, p.secondary_purchase_price).toFixed(2)}/${u.secondary_unit}`
+                            : "";
+                          return {
+                            id: p.id,
+                            label: p.name,
+                            sublabel: `Rs. ${primary.toFixed(2)}${u?.name ? `/${u.name}` : ""}${second}`,
+                            code: p.barcode || "",
+                          };
+                        })}
                         value={item.product}
                         onChange={(id) => setItem(i, "product", id)}
                         onAddNew={() => setQuickAddForRow(i)}
@@ -506,8 +539,8 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                           value={item.unit_label || unitDetail.name}
                           onChange={e => setItem(i, "unit_label", e.target.value)}
                         >
-                          <option value={unitDetail.name}>{unitDetail.name}</option>
-                          <option value={unitDetail.secondary_unit}>{unitDetail.secondary_unit}</option>
+                          <option value={unitDetail.name}>{unitDetail.name} — Rs {costOf(unitDetail.name)}</option>
+                          <option value={unitDetail.secondary_unit}>{unitDetail.secondary_unit} — Rs {costOf(unitDetail.secondary_unit)}</option>
                         </select>
                       ) : (
                         <span className="text-[11px] text-navy-500">{unitDetail?.name || "—"}</span>
@@ -527,18 +560,13 @@ function PurchaseModal({ onClose, onSaved, editData }) {
                         onChange={e => setItem(i, "unit_price", parseFloat(e.target.value) || 0)}
                       />
                     </div>
-                    <div className="col-span-1">
-                      <input type="number" min="0"
-                        title={discountTooBig ? `Discount can't be more than the line amount (Rs ${lineGross(item).toFixed(2)}) — it will be capped.` : undefined}
-                        className={`w-full rounded-md bg-navy-800 border px-2 py-1.5 text-xs text-white text-right focus:outline-none ${discountTooBig ? "border-red-500 focus:border-red-500" : "border-navy-700 focus:border-orange-500"}`}
-                        value={item.discount_amount}
-                        onChange={e => setItem(i, "discount_amount", Math.max(0, parseFloat(e.target.value) || 0))}
-                      />
+                    <div className="col-span-2">
+                      <LineDiscountInput item={item} gross={lineGross(item)} onChange={patch => patchItem(i, patch)} />
                     </div>
-                    <div className="col-span-1 text-right text-xs text-white font-medium">{rowTotal.toFixed(0)}</div>
-                    <div className="col-span-1 flex justify-end">
+                    <div className="col-span-1 flex items-center justify-end gap-1 text-xs text-white font-medium">
+                      <span>{rowTotal.toFixed(2)}</span>
                       {form.items.length > 1 && (
-                        <button onClick={() => removeItem(i)} className="text-navy-500 hover:text-red-400"><X size={14} /></button>
+                        <button onClick={() => removeItem(i)} className="text-navy-500 hover:text-red-400" title="Remove line"><X size={14} /></button>
                       )}
                     </div>
                   </div>
@@ -551,8 +579,21 @@ function PurchaseModal({ onClose, onSaved, editData }) {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-navy-400">Discount (%)</label>
-                  <input type="number" min="0" max="100" step="0.01"
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-navy-400">
+                      Overall Discount ({discountIsAmount ? "Rs" : "%"})
+                    </label>
+                    <div className="flex gap-1">
+                      {[["percent", "%"], ["amount", "Rs"]].map(([mode, label]) => (
+                        <button key={mode} type="button" onClick={() => setDiscountMode(mode)}
+                          className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                            form.discount_mode === mode ? "bg-orange-500 text-white" : "bg-navy-700 text-navy-300"
+                          }`}
+                        >{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <input type="number" min="0" max={discountIsAmount ? undefined : 100} step="0.01"
                     className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
                     value={form.discount}
                     onChange={e => setForm(f => ({ ...f, discount: parseFloat(e.target.value) || 0 }))}
@@ -624,7 +665,7 @@ function PurchaseModal({ onClose, onSaved, editData }) {
             </div>
             <div className="rounded-xl border border-navy-700 bg-navy-800/40 p-4 space-y-2 text-sm">
               <div className="flex justify-between text-navy-400"><span>Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-navy-400"><span>Discount ({discountPercent}%)</span><span>- Rs. {discountAmount.toFixed(2)}</span></div>
+              <div className="flex justify-between text-navy-400"><span>Discount{discountIsAmount ? "" : ` (${discountPercent}%)`}</span><span>- Rs. {discountAmount.toFixed(2)}</span></div>
               <div className="flex justify-between text-navy-400"><span>Tax ({taxRate}%)</span><span>+ Rs. {taxAmount.toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-white border-t border-navy-700 pt-2"><span>Grand Total</span><span>Rs. {grandTotal.toFixed(2)}</span></div>
               <div className="pt-1 space-y-2">

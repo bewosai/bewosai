@@ -111,6 +111,16 @@ class Product(models.Model):
     sale_price = models.DecimalField(
         max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)]
     )
+    # Prices per *secondary* unit (e.g. per Piece when the unit is Box = 12
+    # Pieces). Optional: blank means "primary price ÷ conversion_factor", which
+    # is what billing used before these existed; set them when a loose piece
+    # sells (or is bought) at its own rate.
+    secondary_purchase_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)]
+    )
+    secondary_sale_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)]
+    )
 
     # Stock — PRODUCT only (SERVICE forced to 0 in save())
     stock_quantity = models.DecimalField(

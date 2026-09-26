@@ -15,6 +15,7 @@ import BillTemplate from "../components/invoice/BillTemplate";
 import PrintPreviewModal from "../components/invoice/PrintPreviewModal";
 import { getRecentIds, pushRecentId } from "../utils/recentItems";
 import { priceForUnit } from "../utils/calculations";
+import LineDiscountInput, { lineDiscount } from "../components/shared/LineDiscountInput";
 import { paymentStatus, PAYMENT_STATUS_META } from "../utils/paymentStatus";
 
 const today = () => todayStr();
@@ -49,12 +50,16 @@ const STATUS_COLORS = Object.fromEntries(
   Object.entries(SALE_STATUS).map(([k, v]) => [k, v.cls])
 );
 
-const EMPTY_ITEM = { product_id: "", product_name: "", quantity: 0, unit_label: "", unit_price: 0, discount_amount: 0 };
-// A line's discount as it counts: never negative, never more than the line itself
-// (quantity × price). Typed values beyond that are flagged red and capped, so a
-// typo can't make a line total negative.
+const EMPTY_ITEM = {
+  product_id: "", product_name: "", quantity: 0, unit_label: "", unit_price: 0,
+  discount_mode: "amount", discount_amount: 0, discount_percent: 0,
+};
+// A line's discount as it counts, in rupees: never negative, never more than
+// the line itself (quantity × price), whether it was typed as Rs or as %.
+// Typed values beyond that are flagged red and capped, so a typo can't make a
+// line total negative.
 const lineGross = (it) => (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0);
-const itemDiscount = (it) => Math.min(Math.max(0, parseFloat(it.discount_amount) || 0), lineGross(it));
+const itemDiscount = (it) => lineDiscount(it, lineGross(it));
 const EMPTY_FORM = {
   customer_id: "",
   customer_name: "",
@@ -225,6 +230,8 @@ function SaleModal({ onClose, onSaved, editData }) {
       ? editData.items.map(it => ({
           ...it,
           product_id: it.product_id ?? it.product ?? "",
+          discount_mode: "amount",
+          discount_percent: 0,
         }))
       : [{ ...EMPTY_ITEM }],
     // Shown as the exact saved amount: converting to a rounded percentage and
@@ -286,11 +293,15 @@ function SaleModal({ onClose, onSaved, editData }) {
     if (key === "unit_label") {
       const prod = products.find(p => String(p.id) === String(items[i].product_id));
       if (prod) {
-        items[i].unit_price = priceForUnit(prod.selling_price || prod.price, prod.unit_detail, val);
+        items[i].unit_price = priceForUnit(prod.selling_price || prod.price, prod.unit_detail, val, prod.secondary_sale_price);
       }
     }
     setForm(f => ({ ...f, items }));
   };
+
+  // Several fields of one line at once (the discount box changes mode and value together).
+  const patchItem = (i, patch) =>
+    setForm(f => ({ ...f, items: f.items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)) }));
 
   const addItem = () => setForm(f => ({ ...f, items: [...f.items, { ...EMPTY_ITEM }] }));
   const removeItem = (i) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
@@ -590,27 +601,34 @@ function SaleModal({ onClose, onSaved, editData }) {
                 <div className="col-span-2">Unit</div>
                 <div className="col-span-1 text-right">Qty</div>
                 <div className="col-span-2 text-right">Price</div>
-                <div className="col-span-1 text-right">Disc.</div>
+                <div className="col-span-2 text-right">Disc. (Rs / %)</div>
                 <div className="col-span-1 text-right">Total</div>
-                <div className="col-span-1"></div>
               </div>
               {form.items.map((item, i) => {
                 const rowTotal = lineGross(item) - itemDiscount(item);
-                const discountTooBig = (parseFloat(item.discount_amount) || 0) > lineGross(item) + 0.005;
                 const prod = products.find(p => String(p.id) === String(item.product_id));
                 const unitDetail = prod?.unit_detail;
                 const hasSecondaryUnit = !!(unitDetail?.secondary_unit && unitDetail?.conversion_factor);
+                const priceOf = (label) =>
+                  priceForUnit(prod?.selling_price || prod?.price, unitDetail, label, prod?.secondary_sale_price);
                 return (
                   <div key={i} className="grid grid-cols-12 gap-1 px-2 py-2 border-t border-navy-700/50 items-center">
                     <div className="col-span-1 text-center text-xs text-navy-500">{i + 1}</div>
                     <div className="col-span-3">
                       <SearchableSelect
-                        options={products.map(p => ({
-                          id: p.id,
-                          label: p.name,
-                          sublabel: `Rs. ${parseFloat(p.selling_price || p.price || 0).toFixed(2)}`,
-                          code: p.barcode || "",
-                        }))}
+                        options={products.map(p => {
+                          const u = p.unit_detail;
+                          const primary = parseFloat(p.selling_price || p.price || 0);
+                          const second = u?.secondary_unit && u?.conversion_factor
+                            ? ` · Rs. ${priceForUnit(primary, u, u.secondary_unit, p.secondary_sale_price).toFixed(2)}/${u.secondary_unit}`
+                            : "";
+                          return {
+                            id: p.id,
+                            label: p.name,
+                            sublabel: `Rs. ${primary.toFixed(2)}${u?.name ? `/${u.name}` : ""}${second}`,
+                            code: p.barcode || "",
+                          };
+                        })}
                         value={item.product_id}
                         onChange={(id) => setItem(i, "product_id", id)}
                         onAddNew={() => setQuickAddForRow(i)}
@@ -626,8 +644,8 @@ function SaleModal({ onClose, onSaved, editData }) {
                           value={item.unit_label || unitDetail.name}
                           onChange={e => setItem(i, "unit_label", e.target.value)}
                         >
-                          <option value={unitDetail.name}>{unitDetail.name}</option>
-                          <option value={unitDetail.secondary_unit}>{unitDetail.secondary_unit}</option>
+                          <option value={unitDetail.name}>{unitDetail.name} — Rs {priceOf(unitDetail.name)}</option>
+                          <option value={unitDetail.secondary_unit}>{unitDetail.secondary_unit} — Rs {priceOf(unitDetail.secondary_unit)}</option>
                         </select>
                       ) : (
                         <span className="text-[11px] text-navy-500">{unitDetail?.name || "—"}</span>
@@ -647,20 +665,13 @@ function SaleModal({ onClose, onSaved, editData }) {
                         onChange={e => setItem(i, "unit_price", parseFloat(e.target.value) || 0)}
                       />
                     </div>
-                    <div className="col-span-1">
-                      <input type="number" min="0"
-                        title={discountTooBig ? `Discount can't be more than the line amount (Rs ${lineGross(item).toFixed(2)}) — it will be capped.` : undefined}
-                        className={`w-full rounded-md bg-navy-800 border px-2 py-1.5 text-xs text-white text-right focus:outline-none ${discountTooBig ? "border-red-500 focus:border-red-500" : "border-navy-700 focus:border-orange-500"}`}
-                        value={item.discount_amount}
-                        onChange={e => setItem(i, "discount_amount", Math.max(0, parseFloat(e.target.value) || 0))}
-                      />
+                    <div className="col-span-2">
+                      <LineDiscountInput item={item} gross={lineGross(item)} onChange={patch => patchItem(i, patch)} />
                     </div>
-                    <div className="col-span-1 text-right text-xs text-white font-medium">
-                      {rowTotal.toFixed(0)}
-                    </div>
-                    <div className="col-span-1 flex justify-end">
+                    <div className="col-span-1 flex items-center justify-end gap-1 text-xs text-white font-medium">
+                      <span>{rowTotal.toFixed(2)}</span>
                       {form.items.length > 1 && (
-                        <button onClick={() => removeItem(i)} className="text-navy-500 hover:text-red-400">
+                        <button onClick={() => removeItem(i)} className="text-navy-500 hover:text-red-400" title="Remove line">
                           <X size={14} />
                         </button>
                       )}

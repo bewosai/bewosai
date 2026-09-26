@@ -98,12 +98,17 @@ class Unit {
   /// primary unit (or anything else) just returns basePrice unchanged.
   /// Mirrors the backend's Unit.base_quantity_for — this is the price-side
   /// counterpart, purely a UI starting point the user can still edit.
-  double priceFor(double basePrice, String unitLabel) {
+  ///
+  /// [secondaryPrice] is the product's own price for the secondary unit
+  /// (secondarySalePrice / secondaryPurchasePrice); when set it wins over the
+  /// divided price.
+  double priceFor(double basePrice, String unitLabel, {double? secondaryPrice}) {
     if (unitLabel.isNotEmpty &&
         secondaryUnit.isNotEmpty &&
         conversionFactor != null &&
         conversionFactor! > 0 &&
         unitLabel.trim().toLowerCase() == secondaryUnit.trim().toLowerCase()) {
+      if (secondaryPrice != null && secondaryPrice > 0) return secondaryPrice;
       return ((basePrice / conversionFactor!) * 100).round() / 100;
     }
     return basePrice;
@@ -169,6 +174,10 @@ class Product {
   final String description;
   final double purchasePrice;
   final double salePrice;
+  /// Own prices per *secondary* unit (e.g. per Piece of a 12-Piece Box).
+  /// Null = work it out as the main price ÷ conversion factor.
+  final double? secondaryPurchasePrice;
+  final double? secondarySalePrice;
   /// Opening / current stock (PRODUCT only; 0 for SERVICE).
   final double stockQuantity;
   final double lowStockThreshold;
@@ -193,6 +202,8 @@ class Product {
     required this.description,
     required this.purchasePrice,
     required this.salePrice,
+    this.secondaryPurchasePrice,
+    this.secondarySalePrice,
     required this.stockQuantity,
     required this.lowStockThreshold,
     required this.isLowStock,
@@ -224,6 +235,12 @@ class Product {
       description: json['description']?.toString() ?? '',
       purchasePrice: Formatters.toDouble(json['purchase_price']),
       salePrice: Formatters.toDouble(json['sale_price']),
+      secondaryPurchasePrice: json['secondary_purchase_price'] == null
+          ? null
+          : Formatters.toDouble(json['secondary_purchase_price']),
+      secondarySalePrice: json['secondary_sale_price'] == null
+          ? null
+          : Formatters.toDouble(json['secondary_sale_price']),
       stockQuantity: Formatters.toDouble(json['stock_quantity']),
       lowStockThreshold: Formatters.toDouble(json['low_stock_threshold']),
       isLowStock: json['is_low_stock'] == true ||
@@ -250,6 +267,8 @@ class Product {
       'description': description,
       'purchase_price': purchasePrice,
       'sale_price': salePrice,
+      'secondary_purchase_price': secondaryPurchasePrice,
+      'secondary_sale_price': secondarySalePrice,
       'stock_quantity': isSvc ? 0 : stockQuantity,
       'low_stock_threshold': isSvc ? 0 : lowStockThreshold,
       'barcode': barcode,
@@ -284,6 +303,8 @@ class Product {
         'description': description,
         'purchase_price': purchasePrice,
         'sale_price': salePrice,
+        'secondary_purchase_price': secondaryPurchasePrice,
+        'secondary_sale_price': secondarySalePrice,
         'stock_quantity': stockQuantity,
         'low_stock_threshold': lowStockThreshold,
         'is_low_stock': isLowStock,
@@ -306,6 +327,8 @@ class Product {
     String? description,
     double? purchasePrice,
     double? salePrice,
+    double? secondaryPurchasePrice,
+    double? secondarySalePrice,
     double? stockQuantity,
     double? lowStockThreshold,
     bool? isLowStock,
@@ -329,6 +352,8 @@ class Product {
       description: description ?? this.description,
       purchasePrice: purchasePrice ?? this.purchasePrice,
       salePrice: salePrice ?? this.salePrice,
+      secondaryPurchasePrice: secondaryPurchasePrice ?? this.secondaryPurchasePrice,
+      secondarySalePrice: secondarySalePrice ?? this.secondarySalePrice,
       stockQuantity: stockQuantity ?? this.stockQuantity,
       lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
       isLowStock: isLowStock ?? this.isLowStock,

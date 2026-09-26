@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import { todayStr } from "../utils/dates";
+import { priceForUnit } from "../utils/calculations";
 
 /* ── Export current products to .xlsx — same columns the bulk-import
    template uses, so an exported file can be edited and re-imported. ── */
@@ -241,6 +242,8 @@ function ProductModal({ onClose, onSaved, categories, units, initial, onCategory
     stock_quantity: "", low_stock_threshold: "5",
     barcode: "", hs_code: "", description: "",
     ...initial,
+    secondary_purchase_price: initial?.secondary_purchase_price ?? "",
+    secondary_sale_price: initial?.secondary_sale_price ?? "",
     category: initial?.category ?? "",
     unit: initial?.unit ?? "",
   });
@@ -262,6 +265,11 @@ function ProductModal({ onClose, onSaved, categories, units, initial, onCategory
       // above) carries the server's existing image URL as a plain string,
       // which DRF's ImageField rejects if sent back as-is in the payload.
       const { image, ...payload } = form;
+      // Blank per-secondary-unit prices mean "work it out from the main price" —
+      // sent as null, since the API rejects "" for a number.
+      for (const key of ["secondary_purchase_price", "secondary_sale_price"]) {
+        if (payload[key] === "" || payload[key] === undefined || !selectedUnit?.secondary_unit) payload[key] = null;
+      }
       if (initial?.id) {
         await inventoryApi.updateProduct(initial.id, payload);
       } else {
@@ -317,18 +325,39 @@ function ProductModal({ onClose, onSaved, categories, units, initial, onCategory
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="mb-1 text-xs text-navy-400">Purchase Price</p>
+              <p className="mb-1 text-xs text-navy-400">Purchase Price{selectedUnit ? ` (per ${selectedUnit.name})` : ""}</p>
               <input value={form.purchase_price}
                 onChange={(e) => setForm({ ...form, purchase_price: e.target.value })}
                 placeholder="0.00" type="number" step="0.01" className={F} />
             </div>
             <div>
-              <p className="mb-1 text-xs text-navy-400">Sale Price</p>
+              <p className="mb-1 text-xs text-navy-400">Sale Price{selectedUnit ? ` (per ${selectedUnit.name})` : ""}</p>
               <input value={form.sale_price}
                 onChange={(e) => setForm({ ...form, sale_price: e.target.value })}
                 placeholder="0.00" type="number" step="0.01" className={F} />
             </div>
           </div>
+
+          {/* Own prices for the secondary unit (e.g. a loose Piece), if it sells
+              or is bought at a different rate than main price ÷ conversion. */}
+          {selectedUnit?.secondary_unit && parseFloat(selectedUnit.conversion_factor) > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="mb-1 text-xs text-navy-400">Purchase Price (per {selectedUnit.secondary_unit})</p>
+                <input value={form.secondary_purchase_price}
+                  onChange={(e) => setForm({ ...form, secondary_purchase_price: e.target.value })}
+                  placeholder={`Auto: ${priceForUnit(form.purchase_price, selectedUnit, selectedUnit.secondary_unit).toFixed(2)}`}
+                  type="number" min="0" step="0.01" className={F} />
+              </div>
+              <div>
+                <p className="mb-1 text-xs text-navy-400">Sale Price (per {selectedUnit.secondary_unit})</p>
+                <input value={form.secondary_sale_price}
+                  onChange={(e) => setForm({ ...form, secondary_sale_price: e.target.value })}
+                  placeholder={`Auto: ${priceForUnit(form.sale_price, selectedUnit, selectedUnit.secondary_unit).toFixed(2)}`}
+                  type="number" min="0" step="0.01" className={F} />
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

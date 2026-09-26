@@ -10,6 +10,7 @@ import '../../../../core/utils/payment_status.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/pdf/bill_pdf.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/line_discount_field.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../banking/presentation/providers/banking_provider.dart';
 import '../../../../shared/widgets/app_date_picker.dart';
@@ -1494,6 +1495,8 @@ class _PurchaseItemDetailSheetState extends State<_PurchaseItemDetailSheet> {
     text: widget.initialDiscount == 0 ? '' : _clean(widget.initialDiscount),
   );
   late String _unitLabel = _resolveUnit();
+  // Whether the Discount field holds a % of the line rather than rupees.
+  bool _discountIsPercent = false;
 
   // The dropdown asserts its value is exactly one of its items, and a saved
   // line's unit label can differ in case/spacing — snap to the real unit name.
@@ -1510,8 +1513,11 @@ class _PurchaseItemDetailSheetState extends State<_PurchaseItemDetailSheet> {
 
   double get _qty => double.tryParse(_qtyController.text) ?? 0;
   double get _cost => double.tryParse(_costController.text) ?? 0;
-  double get _discount => Validators.cappedDiscount(_discountController.text, _qty * _cost);
+  double get _discount =>
+      Validators.discountAmount(_discountController.text, _qty * _cost, percent: _discountIsPercent);
   double get _total => (_qty * _cost) - _discount;
+  double _costFor(String label) => widget.product.unitDetail!
+      .priceFor(widget.product.purchasePrice, label, secondaryPrice: widget.product.secondaryPurchasePrice);
 
   @override
   void dispose() {
@@ -1577,13 +1583,16 @@ class _PurchaseItemDetailSheetState extends State<_PurchaseItemDetailSheet> {
                     initialValue: _unitLabel,
                     decoration: const InputDecoration(labelText: 'Unit'),
                     items: [p.unitDetail!.name, p.unitDetail!.secondaryUnit]
-                        .map((label) => DropdownMenuItem(value: label, child: Text(label)))
+                        .map((label) => DropdownMenuItem(
+                              value: label,
+                              child: Text('$label — ${Formatters.currency(_costFor(label))}'),
+                            ))
                         .toList(),
                     onChanged: (label) {
                       if (label == null || label == _unitLabel) return;
                       setState(() {
                         _unitLabel = label;
-                        _costController.text = _clean(p.unitDetail!.priceFor(p.purchasePrice, label));
+                        _costController.text = _clean(_costFor(label));
                       });
                     },
                   ),
@@ -1616,13 +1625,12 @@ class _PurchaseItemDetailSheetState extends State<_PurchaseItemDetailSheet> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
+                LineDiscountField(
                   controller: _discountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Discount'),
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  validator: (v) => Validators.discount(v, _qty * _cost),
-                  onChanged: (_) => setState(() {}),
+                  isPercent: _discountIsPercent,
+                  gross: _qty * _cost,
+                  onModeChanged: (percent) => setState(() => _discountIsPercent = percent),
+                  onChanged: () => setState(() {}),
                 ),
                 const SizedBox(height: 18),
                 Row(
