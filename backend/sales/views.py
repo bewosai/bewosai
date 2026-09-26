@@ -1,6 +1,7 @@
 import re
 
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 from rest_framework import generics, filters, permissions
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -10,7 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_bid, require_business
-from .models import Sale, SaleReturn, Quotation
+from .models import Sale, SaleItem, SaleReturn, Quotation
 from .serializers import SaleSerializer, SaleReturnSerializer, QuotationSerializer
 
 
@@ -66,7 +67,11 @@ class SaleListCreateView(_RequirePos, generics.ListCreateAPIView):
             business__staff__user=self.request.user,
             business__staff__is_active=True,
             is_deleted=False,
-        ).select_related("customer", "created_by")
+        ).select_related("customer", "created_by").prefetch_related(
+            # Every sale's items (and each item's product + unit) in one query,
+            # not one query per sale plus two per line item.
+            Prefetch("items", queryset=SaleItem.objects.select_related("product__unit")),
+        )
         date_from = self.request.query_params.get("date_from")
         date_to = self.request.query_params.get("date_to")
         if date_from:

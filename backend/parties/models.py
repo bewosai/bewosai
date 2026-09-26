@@ -42,7 +42,13 @@ class Party(models.Model):
         Outstanding amount owed by (positive) or to (negative) this party —
         see parties.balances for exactly what goes into it. Shared with the
         dashboard totals and the ledger so they always agree.
+
+        A list view sets `_balance` for every row from one party_balances()
+        call, so a page of N parties doesn't run N separate balance lookups.
         """
+        cached = getattr(self, "_balance", None)
+        if cached is not None:
+            return cached
         from .balances import party_balances
 
         return party_balances(self.business_id, self.pk).get(self.pk, 0)

@@ -7,6 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, IsPremiumBusiness, require_feature, require_staff_permission
 from bewosai.utils import get_bid, get_business
+from .balances import party_balances
 from .models import Party, PartyPayment, PaymentAllocation
 from .serializers import PartySerializer, PartyPaymentSerializer
 
@@ -38,6 +39,15 @@ class PartyListCreateView(_RequireParties, generics.ListCreateAPIView):
             business__staff__is_active=True,
             is_deleted=False,
         )
+
+    def get_serializer(self, *args, **kwargs):
+        # Listing: work out every party's balance in one grouped pass instead of
+        # letting each row's Party.balance run its own handful of queries.
+        if kwargs.get("many") and args:
+            balances = party_balances(get_bid(self.request))
+            for party in args[0]:
+                party._balance = balances.get(party.pk, 0)
+        return super().get_serializer(*args, **kwargs)
 
     def perform_create(self, serializer):
         business = get_business(self.request)

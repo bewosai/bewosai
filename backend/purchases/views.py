@@ -1,6 +1,7 @@
 import re
 
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import generics, status, parsers, permissions
 from rest_framework.exceptions import ValidationError
@@ -10,7 +11,7 @@ from rest_framework.response import Response
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_business
-from .models import Purchase, PurchaseReturn
+from .models import Purchase, PurchaseItem, PurchaseReturn
 from .serializers import PurchaseSerializer, PurchaseReturnSerializer
 
 
@@ -51,6 +52,10 @@ class PurchaseListCreateView(_RequirePurchases, generics.ListCreateAPIView):
             return Purchase.objects.none()
         qs = Purchase.objects.filter(business=biz, is_deleted=False).select_related(
             "supplier", "created_by"
+        ).prefetch_related(
+            # Every bill's items (and each item's product + unit) in one query,
+            # not one query per bill plus two per line item.
+            Prefetch("items", queryset=PurchaseItem.objects.select_related("product__unit")),
         )
         supplier = self.request.query_params.get("supplier")
         if supplier:

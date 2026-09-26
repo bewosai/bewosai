@@ -6,7 +6,7 @@ from rest_framework import permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Sum, Count, F, DecimalField, Case, When
+from django.db.models import Sum, Count, F, DecimalField, Case, When, Prefetch, Q
 from django.db.models.functions import TruncDay, Coalesce
 
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, require_feature, require_staff_permission
@@ -126,29 +126,38 @@ class DashboardSummaryView(APIView):
         today = timezone.localdate()
         month_start = today.replace(day=1)
 
-        sales_today = Sale.objects.filter(
-            business=biz, sale_date=today, status="CONFIRMED", is_deleted=False
-        ).aggregate(total=Sum("total"))["total"] or 0
+        # One aggregate query per table (each total is a filtered Sum) rather
+        # than one query per figure — every round trip to the database adds
+        # latency, and this is the first screen after login.
+        sale_totals = Sale.objects.filter(
+            business=biz, status="CONFIRMED", is_deleted=False,
+        ).aggregate(
+            today=Sum("total", filter=Q(sale_date=today)),
+            month=Sum("total", filter=Q(sale_date__gte=month_start)),
+            collected_today=Sum("paid_amount", filter=Q(sale_date=today)),
+            # CASH in full, plus the cash portion of a SPLIT payment — see _ACTUAL_CASH.
+            cash_in=Sum(_ACTUAL_CASH, filter=Q(payment_method__in=["CASH", "SPLIT"])),
+        )
+        sales_today = sale_totals["today"] or 0
+        sales_month = sale_totals["month"] or 0
+        collection_today_sales = sale_totals["collected_today"] or 0
 
-        sales_month = Sale.objects.filter(
-            business=biz, sale_date__gte=month_start, status="CONFIRMED", is_deleted=False
-        ).aggregate(total=Sum("total"))["total"] or 0
+        payment_totals = PartyPayment.objects.filter(
+            party__business=biz, is_deleted=False,
+        ).aggregate(
+            in_today=Sum("amount", filter=Q(payment_type="IN", date=today)),
+            cash_in=Sum("amount", filter=Q(payment_type="IN", payment_method="CASH")),
+            cash_out=Sum("amount", filter=Q(payment_type="OUT", payment_method="CASH")),
+        )
+        collection_today_payments = payment_totals["in_today"] or 0
 
-        collection_today_sales = Sale.objects.filter(
-            business=biz, sale_date=today, status="CONFIRMED", is_deleted=False
-        ).aggregate(total=Sum("paid_amount"))["total"] or 0
-
-        collection_today_payments = PartyPayment.objects.filter(
-            party__business=biz, payment_type="IN", date=today, is_deleted=False
-        ).aggregate(total=Sum("amount"))["total"] or 0
-
-        expenses_today = Expense.objects.filter(
-            business=biz, date=today, is_deleted=False
-        ).aggregate(total=Sum("amount"))["total"] or 0
-
-        expenses_month = Expense.objects.filter(
-            business=biz, date__gte=month_start, is_deleted=False
-        ).aggregate(total=Sum("amount"))["total"] or 0
+        expense_totals = Expense.objects.filter(business=biz, is_deleted=False).aggregate(
+            today=Sum("amount", filter=Q(date=today)),
+            month=Sum("amount", filter=Q(date__gte=month_start)),
+            cash=Sum("amount", filter=Q(payment_method="CASH")),
+        )
+        expenses_today = expense_totals["today"] or 0
+        expenses_month = expense_totals["month"] or 0
 
         # Same per-party balances the Parties screen shows (opening balances,
         # returns and unmatched payments included), so "To Receive"/"To Give"
@@ -181,9 +190,13 @@ class DashboardSummaryView(APIView):
                 business=biz, status="CONFIRMED", due_amount__gt=0, is_deleted=False
             ).aggregate(total=Sum("due_amount"))["total"] or 0
 
-        purchases_today = Purchase.objects.filter(
-            business=biz, purchase_date=today, is_deleted=False
-        ).aggregate(total=Sum("total"))["total"] or 0
+        purchase_totals = Purchase.objects.filter(business=biz, is_deleted=False).aggregate(
+            today=Sum("total", filter=Q(purchase_date=today)),
+            # Cash actually spent on purchases — a business paying suppliers in
+            # cash would otherwise see its Cash Balance overstated by that amount.
+            cash_out=Sum(_ACTUAL_CASH, filter=Q(payment_method__in=["CASH", "SPLIT"])),
+        )
+        purchases_today = purchase_totals["today"] or 0
 
         # Matches Product.is_low_stock / inventory app's own ?low_stock= filter —
         # min_stock_level defaults to 0 and is unused by any UI, so filtering on it
@@ -193,25 +206,11 @@ class DashboardSummaryView(APIView):
             stock_quantity__lte=F("low_stock_threshold"),
         ).count()
 
-        # CASH in full, plus the cash portion of a SPLIT payment — see _ACTUAL_CASH.
-        cash_in = Sale.objects.filter(
-            business=biz, status="CONFIRMED", is_deleted=False, payment_method__in=["CASH", "SPLIT"],
-        ).aggregate(total=Sum(_ACTUAL_CASH))["total"] or 0
-        cash_in_payments = PartyPayment.objects.filter(
-            party__business=biz, payment_type="IN", payment_method="CASH", is_deleted=False
-        ).aggregate(total=Sum("amount"))["total"] or 0
-        cash_out_expenses = Expense.objects.filter(
-            business=biz, payment_method="CASH", is_deleted=False
-        ).aggregate(total=Sum("amount"))["total"] or 0
-        # Cash actually spent on purchases was missing entirely — a business
-        # paying suppliers in cash saw its Cash Balance overstated by exactly
-        # that amount, since nothing here ever subtracted it.
-        cash_out_purchases = Purchase.objects.filter(
-            business=biz, is_deleted=False, payment_method__in=["CASH", "SPLIT"],
-        ).aggregate(total=Sum(_ACTUAL_CASH))["total"] or 0
-        cash_out_payments = PartyPayment.objects.filter(
-            party__business=biz, payment_type="OUT", payment_method="CASH", is_deleted=False
-        ).aggregate(total=Sum("amount"))["total"] or 0
+        cash_in = sale_totals["cash_in"] or 0
+        cash_in_payments = payment_totals["cash_in"] or 0
+        cash_out_expenses = expense_totals["cash"] or 0
+        cash_out_purchases = purchase_totals["cash_out"] or 0
+        cash_out_payments = payment_totals["cash_out"] or 0
         # A return's refunded_amount is real money only once it exceeds what
         # was still due on the original invoice/bill (see SaleReturn's own
         # docstring) — a return that just reduced a due balance moves nothing.
@@ -241,6 +240,8 @@ class DashboardSummaryView(APIView):
         from sales.serializers import SaleSerializer
         recent_sales = Sale.objects.filter(
             business=biz, status="CONFIRMED", is_deleted=False
+        ).select_related("customer").prefetch_related(
+            Prefetch("items", queryset=SaleItem.objects.select_related("product__unit")),
         ).order_by("-created_at")[:5]
 
         cogs_month = SaleItem.objects.filter(

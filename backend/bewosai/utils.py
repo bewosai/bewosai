@@ -78,11 +78,18 @@ def get_business(request):
     Return the Business the request is scoped to, validating that the
     authenticated user is an active staff member of that business.
     Returns None if no valid business is found.
+
+    Remembered on the request: the permission classes and the view each ask
+    for it, and repeating the same lookup costs a database round trip each time.
     """
     bid = get_bid(request)
     if not bid:
         return None
-    return (
+    key = (str(bid), getattr(request.user, "pk", None))
+    cached = getattr(request, "_business_lookup", None)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    business = (
         Business.objects.filter(
             id=bid,
             staff__user=request.user,
@@ -91,6 +98,11 @@ def get_business(request):
         )
         .first()
     )
+    try:
+        request._business_lookup = (key, business)
+    except AttributeError:
+        pass
+    return business
 
 
 def require_business(request):
