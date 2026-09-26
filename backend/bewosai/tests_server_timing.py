@@ -10,9 +10,9 @@ class ServerTimingHeaderTests(TestCase):
             "/api/auth/verify-otp/", {"identifier": "nobody@example.com", "code": "000000"}, format="json",
         )
         header = res["Server-Timing"]
-        match = re.fullmatch(r'app;dur=(\d+), db;dur=(\d+);desc="(\d+) queries"', header)
+        match = re.fullmatch(r'app;dur=(\d+), db;dur=(\d+);desc="(\d+) queries", cpu;dur=(\d+)', header)
         self.assertIsNotNone(match, header)
-        app_ms, db_ms, queries = map(int, match.groups())
+        app_ms, db_ms, queries, _cpu_ms = map(int, match.groups())
         self.assertGreater(queries, 0)
         self.assertLessEqual(db_ms, app_ms)
 

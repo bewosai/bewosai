@@ -29,10 +29,15 @@ class ServerTimingMiddleware:
                 db["seconds"] += time.perf_counter() - started
 
         started = time.perf_counter()
+        cpu_started = time.thread_time()
         with connection.execute_wrapper(timed):
             response = self.get_response(request)
         total_ms = (time.perf_counter() - started) * 1000
+        # CPU this request actually used. Far below `app` with little `db` time
+        # means the process was waiting — e.g. a host throttling a small CPU share.
+        cpu_ms = (time.thread_time() - cpu_started) * 1000
         response["Server-Timing"] = (
-            f'app;dur={total_ms:.0f}, db;dur={db["seconds"] * 1000:.0f};desc="{db["count"]} queries"'
+            f'app;dur={total_ms:.0f}, db;dur={db["seconds"] * 1000:.0f};desc="{db["count"]} queries", '
+            f"cpu;dur={cpu_ms:.0f}"
         )
         return response
