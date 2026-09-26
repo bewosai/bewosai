@@ -1,9 +1,15 @@
+import sys
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# How long each server process may reuse the Super Admin feature switches before
+# re-reading them (see bewosai/feature_cache.py). Off under `manage.py test`, where
+# each test rolls its database back but a process-wide cache would outlive it.
+FEATURE_CACHE_SECONDS = 0 if "test" in sys.argv[1:2] else config("FEATURE_CACHE_SECONDS", default=30, cast=int)
 
 _INSECURE_DEFAULT_KEY = "bewosai-insecure-dev-key-change-in-production"
 SECRET_KEY = config("SECRET_KEY", default=_INSECURE_DEFAULT_KEY)

@@ -8,3 +8,5 @@ class SuperadminConfig(AppConfig):
     def ready(self):
         from . import signals
         signals.connect()
+        from bewosai import feature_cache
+        feature_cache.connect()

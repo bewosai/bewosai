@@ -37,22 +37,20 @@ def require_feature(key):
         message = f"The '{key}' feature is currently disabled for your plan or platform."
 
         def has_permission(self, request, view):
-            from superadmin.models import BusinessFeatureOverride, Feature
+            from .feature_cache import all_features, business_overrides
 
             business = get_business(request)
 
             if business:
                 try:
-                    override = BusinessFeatureOverride.objects.filter(
-                        business=business, feature_key=key,
-                    ).first()
+                    overrides = business_overrides(business.id)
                 except DatabaseError:
-                    override = None
-                if override is not None:
-                    return override.enabled
+                    overrides = {}
+                if key in overrides:
+                    return overrides[key]
 
             try:
-                feature = Feature.objects.filter(key=key).first()
+                feature = all_features().get(key)
             except DatabaseError:
                 # Feature table not migrated yet on this environment — fail
                 # open rather than 500 every gated endpoint.
