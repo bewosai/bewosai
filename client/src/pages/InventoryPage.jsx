@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import * as XLSX from "xlsx";
 import PageHeader from "../components/shared/PageHeader";
 import SectionCard from "../components/shared/SectionCard";
 import PrimaryButton from "../components/shared/PrimaryButton";
@@ -17,7 +16,10 @@ import { todayStr } from "../utils/dates";
 
 /* ── Export current products to .xlsx — same columns the bulk-import
    template uses, so an exported file can be edited and re-imported. ── */
-function exportProductsToExcel(products) {
+async function exportProductsToExcel(products) {
+  // Loaded on click: the spreadsheet library is large, and opening this page
+  // shouldn't download it just in case someone exports.
+  const XLSX = await import("xlsx");
   const headers = ["name", "category", "unit", "sale_price", "purchase_price", "stock_quantity", "low_stock_threshold", "barcode", "hs_code", "description"];
   const rows = products.map(p => [
     p.name, p.category_name || "", p.unit_name || "", p.sale_price, p.purchase_price,

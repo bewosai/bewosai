@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import * as XLSX from "xlsx";
 import { useAuth } from "../context/AuthContext";
 import { useEscToClose } from "../hooks/useEscToClose";
 import { useTranslation } from "../utils/translations";
@@ -25,7 +24,10 @@ import { todayStr } from "../utils/dates";
 
 /* ── Export current parties to .xlsx — same columns the bulk-import
    template uses, so an exported file can be edited and re-imported. ── */
-function exportPartiesToExcel(parties) {
+async function exportPartiesToExcel(parties) {
+  // Loaded on click: the spreadsheet library is large, and opening this page
+  // shouldn't download it just in case someone exports.
+  const XLSX = await import("xlsx");
   const headers = ["name", "party_type", "phone", "email", "address", "opening_balance"];
   const rows = parties.map(p => [
     p.name, p.party_type, p.phone || "", p.email || "", p.address || "", p.opening_balance ?? 0,

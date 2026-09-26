@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { reports as reportsApi } from "../api";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useDateFormat } from "../context/AppSettingsContext";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from "recharts";
+
+const MonthlyChart = lazy(() => import("../components/dashboard/MonthlyChart"));
 import {
   TrendingUp, TrendingDown, ShoppingCart,
   Package, Plus, Wallet, ArrowUpRight, ArrowDownRight, ArrowDownLeft,
@@ -134,20 +133,6 @@ function KpiCard({ label, value, sub, icon: Icon, iconBg, trend, onClick }) {
     </button>
   );
 }
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-xl border border-navy-800 bg-navy-900 p-3 shadow-xl">
-      <p className="text-xs font-semibold text-white mb-2">{label}</p>
-      {payload.map((p) => (
-        <p key={p.name} className="text-xs" style={{ color: p.color }}>
-          {p.name}: Rs. {Number(p.value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-        </p>
-      ))}
-    </div>
-  );
-};
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -299,18 +284,12 @@ export default function DashboardPage() {
             </div>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={monthly} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-navy-800)" />
-              <XAxis dataKey="name" tick={{ fill: "var(--color-navy-500)", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "var(--color-navy-500)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={{ fontSize: "12px", color: "var(--color-navy-400)" }} />
-              <Bar dataKey={t("revenue")} fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={30} />
-              <Bar dataKey={t("expenses")} fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={30} />
-              <Bar dataKey={t("profit")} fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={30} />
-            </BarChart>
-          </ResponsiveContainer>
+          <Suspense fallback={<div style={{ height: 260 }} />}>
+            <MonthlyChart
+              data={monthly}
+              labels={{ revenue: t("revenue"), expenses: t("expenses"), profit: t("profit") }}
+            />
+          </Suspense>
         )}
       </div>
 
