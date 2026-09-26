@@ -214,6 +214,26 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  /** Re-reads the business list — the plan saved at sign-in goes stale once a
+   * coupon or license upgrades it (account-wide, so every owned business can
+   * change), and Premium-only screens read effective_plan from here. */
+  const refreshBusinesses = useCallback(async () => {
+    try {
+      const { data } = await authApi.businesses();
+      const list = Array.isArray(data) ? data : data?.results || [];
+      localStorage.setItem("businesses", JSON.stringify(list));
+      setBusinesses(list);
+      setCurrentBusiness((prev) => {
+        const match = prev && list.find((b) => b.id === prev.id);
+        if (!match) return prev;
+        localStorage.setItem("current_business", JSON.stringify(match));
+        return match;
+      });
+    } catch {
+      // keep what we had; the next sign-in will refresh it anyway
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     const refresh = localStorage.getItem("refresh");
     const lastBusinessId = localStorage.getItem("last_business_id");
@@ -231,7 +251,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user, businesses, currentBusiness,
       loading, isLoggedIn,
-      sendOtp, verifyOtp, setAccountType, logout, selectBusiness, refreshUser,
+      sendOtp, verifyOtp, setAccountType, logout, selectBusiness, refreshUser, refreshBusinesses,
       addBusiness, updateBusinessInList, replaceBusiness, loginWithStaffLink,
     }}>
       {children}

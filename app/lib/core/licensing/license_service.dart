@@ -7,12 +7,16 @@ class LicenseStatus {
   final DateTime? trialExpiryDate;
   final Map<String, dynamic>? license;
 
+  /// FREE / PREMIUM / PREMIUMPLUS after licenses and coupons are applied.
+  final String effectivePlan;
+
   const LicenseStatus({
     required this.hasActiveSubscription,
     required this.isGrandfathered,
     required this.isTrialActive,
     this.trialExpiryDate,
     this.license,
+    this.effectivePlan = 'FREE',
   });
 
   factory LicenseStatus.fromJson(Map<String, dynamic> json) => LicenseStatus(
@@ -23,7 +27,24 @@ class LicenseStatus {
             ? DateTime.tryParse(json['trial_expiry_date'] as String)
             : null,
         license: json['license'] as Map<String, dynamic>?,
+        effectivePlan: json['effective_plan'] as String? ?? 'FREE',
       );
+
+  /// Still on the free trial with nothing bought or redeemed yet — the case
+  /// for showing "N days left, go Premium".
+  bool get isOnFreeTrial =>
+      isTrialActive && !isGrandfathered && license == null && effectivePlan == 'FREE';
+
+  /// Whole days until the trial ends (0 on its last day).
+  int? trialDaysLeft([DateTime? now]) {
+    final end = trialExpiryDate;
+    if (end == null) return null;
+    final today = now ?? DateTime.now();
+    final days = DateTime(end.year, end.month, end.day)
+        .difference(DateTime(today.year, today.month, today.day))
+        .inDays;
+    return days < 0 ? 0 : days;
+  }
 }
 
 class LicenseService {

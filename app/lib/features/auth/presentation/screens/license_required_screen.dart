@@ -38,13 +38,21 @@ class _LicenseRequiredScreenState extends State<LicenseRequiredScreen> {
     super.dispose();
   }
 
+  bool _isValidLength(String code) =>
+      code.length == _codeLength || code.length == LicenseProvider.couponCodeLength;
+
   Future<void> _activate() async {
     final license = context.read<LicenseProvider>();
     final code = _codeController.text.trim().toUpperCase();
-    if (code.length != _codeLength) return;
+    if (!_isValidLength(code)) return;
     final ok = await license.activate(code);
+    if (ok && mounted && license.couponMessage != null) {
+      context.read<AuthProvider>().refreshBusinesses();
+    }
     if (ok && mounted) {
-      setState(() => _activated = license.status?.license);
+      setState(() => _activated = license.couponMessage != null
+          ? {'coupon_message': license.couponMessage}
+          : (license.status?.license ?? <String, dynamic>{}));
     }
   }
 
@@ -83,7 +91,7 @@ class _LicenseRequiredScreenState extends State<LicenseRequiredScreen> {
   }
 
   Widget _buildForm(LicenseProvider license) {
-    final canSubmit = _codeController.text.trim().length == _codeLength && !license.isActivating;
+    final canSubmit = _isValidLength(_codeController.text.trim()) && !license.isActivating;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -109,7 +117,7 @@ class _LicenseRequiredScreenState extends State<LicenseRequiredScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Your free trial has ended. Enter the license code provided by your administrator to continue.',
+          'Your free trial has ended. Enter your Premium coupon code or the license code from your administrator to continue.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
         ),
@@ -118,7 +126,7 @@ class _LicenseRequiredScreenState extends State<LicenseRequiredScreen> {
           controller: _codeController,
           textCapitalization: TextCapitalization.characters,
           textAlign: TextAlign.center,
-          maxLength: _codeLength,
+          maxLength: LicenseProvider.couponCodeLength,
           autofocus: true,
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
@@ -153,13 +161,13 @@ class _LicenseRequiredScreenState extends State<LicenseRequiredScreen> {
         ],
         const SizedBox(height: 16),
         PrimaryButton(
-          label: license.isActivating ? 'Activating…' : 'Activate License',
+          label: license.isActivating ? 'Activating…' : 'Activate Premium',
           isLoading: license.isActivating,
           onPressed: canSubmit ? _activate : null,
         ),
         const SizedBox(height: 14),
         Text(
-          'Need a license? Please contact your administrator.',
+          'Need a code? Please contact your administrator.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
@@ -176,6 +184,7 @@ class _LicenseRequiredScreenState extends State<LicenseRequiredScreen> {
   }
 
   Widget _buildActivated(Map<String, dynamic> license) {
+    final couponMessage = license['coupon_message'] as String?;
     final expiry = license['expiry_date'] != null ? DateTime.tryParse('${license['expiry_date']}') : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -190,15 +199,16 @@ class _LicenseRequiredScreenState extends State<LicenseRequiredScreen> {
         ),
         const SizedBox(height: 20),
         Text(
-          'License Activated Successfully',
+          couponMessage != null ? 'Premium Activated' : 'License Activated Successfully',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
         ),
         const SizedBox(height: 8),
         Text(
-          expiry != null
-              ? 'Premium access is active until ${Formatters.date(expiry)}.'
-              : 'Premium access is now active.',
+          couponMessage ??
+              (expiry != null
+                  ? 'Premium access is active until ${Formatters.date(expiry)}.'
+                  : 'Premium access is now active.'),
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
         ),

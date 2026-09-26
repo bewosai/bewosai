@@ -9,6 +9,7 @@ import '../../../../router/dashboard_route.dart';
 import '../../../../shared/widgets/announcement_banner.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../../shared/widgets/nepal_clock.dart';
+import '../../../../shared/widgets/trial_banner.dart';
 import '../../../auth/data/models/business_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../banking/presentation/providers/banking_provider.dart';
@@ -99,6 +100,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   padding: EdgeInsets.all(padding),
                   children: [
                     const AnnouncementBanner(),
+                    const TrialBanner(),
                     const NepalClock(),
                     const SizedBox(height: 14),
                     _StatGrid(dashboard: d, isTablet: isTablet),

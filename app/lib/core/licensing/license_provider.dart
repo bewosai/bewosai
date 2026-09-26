@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../features/billing/data/services/billing_service.dart';
 import '../network/api_client.dart';
 import 'license_service.dart';
 
@@ -62,12 +63,25 @@ class LicenseProvider extends ChangeNotifier {
     refresh();
   }
 
+  /// Length of a Premium coupon code (billing.models.COUPON_CODE_LENGTH);
+  /// license codes are 5, so one box on the locked screen can take either.
+  static const couponCodeLength = 6;
+
+  /// The backend's "Coupon applied — Premium active until …" message after a
+  /// coupon (rather than a license) unlocked the business; null otherwise.
+  String? couponMessage;
+
   Future<bool> activate(String code) async {
     isActivating = true;
     activateError = null;
+    couponMessage = null;
     notifyListeners();
     try {
-      await _service.activate(code);
+      if (code.length == couponCodeLength) {
+        couponMessage = await BillingService().applyCoupon(code);
+      } else {
+        await _service.activate(code);
+      }
       await refresh();
       isActivating = false;
       notifyListeners();

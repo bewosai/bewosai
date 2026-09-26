@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { formatDateOnly } from "../utils/dates";
 import { billing as billingApi } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { useLicense } from "../context/LicenseContext";
 import PageHeader from "../components/shared/PageHeader";
 import SectionCard from "../components/shared/SectionCard";
 import PrimaryButton from "../components/shared/PrimaryButton";
@@ -79,7 +80,8 @@ function PlanComparison({ effectivePlan, usage }) {
 
 export default function UpgradePlanPage() {
   const navigate = useNavigate();
-  const { currentBusiness, user } = useAuth();
+  const { currentBusiness, user, refreshBusinesses } = useAuth();
+  const { refresh: refreshLicense } = useLicense();
 
   const [subscription, setSubscription] = useState(null);
   const [referral, setReferral] = useState(null);
@@ -116,6 +118,9 @@ export default function UpgradePlanPage() {
       setCouponSuccess(data.message || "Coupon applied!");
       setCouponCode("");
       load();
+      // Unlock Premium everywhere now, not after the next sign-in.
+      refreshBusinesses();
+      refreshLicense();
     } catch (err) {
       setCouponError(err.response?.data?.message || "Could not apply this coupon.");
     } finally {

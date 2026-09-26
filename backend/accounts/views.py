@@ -973,6 +973,10 @@ class LicenseMeView(APIView):
             "is_grandfathered": business.is_grandfathered,
             "is_trial_active": business.is_trial_active,
             "trial_expiry_date": business.trial_expiry_date,
+            # FREE / PREMIUM / PREMIUMPLUS after licenses and coupons — lets the
+            # apps hide their "trial: N days left, go Premium" banner once a
+            # coupon or license has already upgraded the business.
+            "effective_plan": business.effective_plan,
             "platform_trial_active": business.has_active_platform_trial(platform),
             "web_trial_enabled": business.web_trial_enabled,
             "web_trial_start": business.web_trial_start,

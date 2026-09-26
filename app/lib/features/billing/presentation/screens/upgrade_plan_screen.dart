@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../../core/licensing/license_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/widgets/app_widgets.dart';
@@ -59,7 +60,13 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen> {
     final billing = context.read<BillingProvider>();
     final ok = await billing.applyCoupon(code);
     if (!mounted) return;
-    if (ok) _codeController.clear();
+    if (ok) {
+      _codeController.clear();
+      // Unlock Premium everywhere now (plan labels, Staff/Import gates, the
+      // trial banner), not after the next sign-in.
+      context.read<AuthProvider>().refreshBusinesses();
+      context.read<LicenseProvider>().refresh();
+    }
     showAppSnackBar(context, ok ? (billing.couponSuccess ?? 'Coupon applied!') : (billing.couponError ?? 'Could not apply this coupon.'), isError: !ok);
   }
 

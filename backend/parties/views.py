@@ -1,4 +1,5 @@
 from decimal import Decimal
+from django.db import transaction
 from rest_framework import generics, filters, status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -111,9 +112,12 @@ class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
         party = serializer.validated_data.get("party")
         if party is None or party.business_id != business.id:
             raise ValidationError({"party": "Invalid party for this business."})
-        payment = serializer.save(created_by=self.request.user)
-        self._reconcile_payment(payment)
-        PartyPaymentSerializer._sync_bank(payment)
+        # All or nothing: a failure part-way must not leave some invoices marked
+        # paid by a payment that was never saved.
+        with transaction.atomic():
+            payment = serializer.save(created_by=self.request.user)
+            self._reconcile_payment(payment)
+            PartyPaymentSerializer._sync_bank(payment)
 
     @staticmethod
     def _reconcile_payment(payment):
@@ -176,8 +180,16 @@ class PartyPaymentDetailView(_RequirePayments, generics.RetrieveUpdateDestroyAPI
         party = serializer.validated_data.get("party")
         if party is not None and party.business_id != business.id:
             raise ValidationError({"party": "Invalid party for this business."})
-        payment = serializer.save()
-        PartyPaymentSerializer._sync_bank(payment)
+        # A changed amount, party or direction changes which invoices this
+        # payment settles: undo what it applied before, save, then apply it
+        # afresh — otherwise the invoices keep the old amount as paid and the
+        # party's balance and due reminders go wrong.
+        with transaction.atomic():
+            self._unreconcile_payment(serializer.instance)
+            serializer.instance.allocations.all().delete()
+            payment = serializer.save()
+            PartyPaymentListCreateView._reconcile_payment(payment)
+            PartyPaymentSerializer._sync_bank(payment)
 
     def perform_destroy(self, instance):
         from django.utils import timezone
@@ -186,11 +198,12 @@ class PartyPaymentDetailView(_RequirePayments, generics.RetrieveUpdateDestroyAPI
         # (sale/purchase paid_amount + the mirrored BankTransaction) so a
         # deleted payment doesn't leave the party's balance permanently wrong
         # while it sits in the Recycle Bin — restoring re-applies both.
-        self._unreconcile_payment(instance)
-        BankTransaction.objects.filter(reference=f"PARTYPAYMENT-{instance.id}").delete()
-        instance.is_deleted = True
-        instance.deleted_at = timezone.now()
-        instance.save(update_fields=["is_deleted", "deleted_at"])
+        with transaction.atomic():
+            self._unreconcile_payment(instance)
+            BankTransaction.objects.filter(reference=f"PARTYPAYMENT-{instance.id}").delete()
+            instance.is_deleted = True
+            instance.deleted_at = timezone.now()
+            instance.save(update_fields=["is_deleted", "deleted_at"])
 
     @staticmethod
     def _unreconcile_payment(payment):

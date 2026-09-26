@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import TrialBanner from "./TrialBanner";
 import KeyboardShortcutsModal from "../common/KeyboardShortcutsModal";
 import HelpSupportModal from "../common/HelpSupportModal";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
@@ -24,6 +25,7 @@ export default function AppLayout() {
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
+        <TrialBanner />
 
         {/* Scrollable content */}
         <main className="flex-1 overflow-y-auto">

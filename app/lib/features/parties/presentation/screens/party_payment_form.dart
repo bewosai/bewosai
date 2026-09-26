@@ -5,6 +5,8 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../banking/presentation/providers/banking_provider.dart';
+import '../../../purchases/presentation/providers/purchase_provider.dart';
+import '../../../sales/presentation/providers/sale_provider.dart';
 import '../../data/models/party_model.dart';
 import '../providers/party_provider.dart';
 import '../../../../core/calendar/nepal_time.dart';
@@ -91,6 +93,14 @@ class _PartyPaymentFormSheetState extends State<_PartyPaymentFormSheet> {
     if (!mounted) return;
     setState(() => _saving = false);
     if (ok) {
+      // The payment settles the oldest open bills: reload them so their dues
+      // update now — and, for sales, so a reminder for a bill that's now fully
+      // paid is cancelled (SaleProvider.load does that) instead of still firing.
+      if (_isIn) {
+        context.read<SaleProvider>().load();
+      } else {
+        context.read<PurchaseProvider>().load();
+      }
       Navigator.pop(context);
       showAppSnackBar(context, _isIn ? 'Payment received' : 'Payment made');
     } else {
