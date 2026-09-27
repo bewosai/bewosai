@@ -43,6 +43,17 @@ def superadmin_unlocked(user):
     return bool(until and until > timezone.now())
 
 
+def unlock_superadmin(user):
+    """Opens Super Admin for SUPERADMIN_UNLOCK_HOURS. Used after a verified
+    sign-in (the emailed code / Google just proved the Super Admin email, so
+    asking for a second code would add nothing) and by the unlock screen."""
+    if not is_admin_account(user):
+        return
+    hours = getattr(settings, "SUPERADMIN_UNLOCK_HOURS", 0) or 12
+    user.superadmin_unlocked_until = timezone.now() + timedelta(hours=hours)
+    user.save(update_fields=["superadmin_unlocked_until"])
+
+
 class IsPlatformAdmin(permissions.BasePermission):
     """The Super Admin account, signed in *and* unlocked with a fresh code."""
 
@@ -117,9 +128,7 @@ class SuperAdminUnlockVerifyView(APIView):
             }
             return Response({"message": messages.get(error, "Incorrect code. Please check and try again.")},
                             status=status.HTTP_400_BAD_REQUEST)
-        hours = getattr(settings, "SUPERADMIN_UNLOCK_HOURS", 0) or 12
-        request.user.superadmin_unlocked_until = timezone.now() + timedelta(hours=hours)
-        request.user.save(update_fields=["superadmin_unlocked_until"])
+        unlock_superadmin(request.user)
         return Response({"unlocked": True, "unlocked_until": request.user.superadmin_unlocked_until})
 
 

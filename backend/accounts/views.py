@@ -332,15 +332,23 @@ class GoogleLoginView(APIView):
 
 
 def _pay_waiting_referrals(user):
-    """A referral waits until the new user has verified a sign-in (see
-    billing.services.process_referral); this is that moment. Never allowed to
-    fail the login itself."""
+    """Runs right after a verified sign-in (emailed code or Google). A referral
+    waits until the new user has verified a sign-in (see
+    billing.services.process_referral), and the Super Admin account's sign-in
+    doubles as its Super Admin unlock — the same email was just proved. Never
+    allowed to fail the login itself."""
     try:
         from billing.services import reward_waiting_referrals
 
         reward_waiting_referrals(user)
     except Exception:
         logger.exception("Paying waiting referrals failed for user %s", user.pk)
+    try:
+        from superadmin.views import unlock_superadmin
+
+        unlock_superadmin(user)
+    except Exception:
+        logger.exception("Unlocking Super Admin after sign-in failed for user %s", user.pk)
 
 
 def _login_response(user, is_new, remember):

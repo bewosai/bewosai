@@ -62,6 +62,26 @@ class SuperAdminUnlockTests(TestCase):
         self.admin.refresh_from_db()
         self.assertEqual(self.api.get("/api/superadmin/stats/").status_code, 403)
 
+    def sign_in(self, email):
+        """The real login: request a code for `email`, then verify it."""
+        _, code = OTPCode.generate(email, "business")
+        res = APIClient().post("/api/auth/verify-otp/", {"identifier": email, "code": code}, format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+        api = APIClient()
+        api.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
+        return api, res.data
+
+    def test_signing_in_with_the_super_admin_email_opens_it_directly(self):
+        api, data = self.sign_in(OWNER)
+        self.assertTrue(data["user"]["is_platform_admin"])
+        self.assertEqual(api.get("/api/superadmin/stats/").status_code, 200)
+
+    def test_anyone_else_signing_in_never_gets_super_admin(self):
+        api, data = self.sign_in("shopkeeper@example.com")
+        self.assertFalse(data["user"]["is_platform_admin"])
+        self.assertEqual(api.get("/api/superadmin/stats/").status_code, 403)
+        self.assertEqual(api.get("/api/superadmin/unlock/").status_code, 403)
+
     def test_nobody_else_can_even_ask_for_a_code(self):
         other = User.objects.create_user(email="other@example.com")
         api = APIClient()
