@@ -14,7 +14,7 @@ from bewosai.utils import require_business
 from superadmin.views import IsPlatformAdmin
 from .models import Coupon, Referral, Subscription
 from .serializers import CouponSerializer, ReferralSerializer, SubscriptionSerializer
-from .services import CouponError, apply_coupon
+from .services import CouponError, apply_coupon, process_referral
 
 
 def _usage_and_limits(request, business):
@@ -24,16 +24,9 @@ def _usage_and_limits(request, business):
     the enforcement views (BusinessListCreateView, StaffListView) apply, so
     this can never drift out of sync with what actually blocks a request.
     """
-    owned = Business.objects.filter(owner=request.user)
-    effective_plans = {b.effective_plan for b in owned}
-    is_biz_unlimited = Business.PLAN_PREMIUMPLUS in effective_plans
-    is_biz_premium = is_biz_unlimited or Business.PLAN_PREMIUM in effective_plans
-    biz_plan_limit = BusinessListCreateView.PREMIUM_LIMIT if is_biz_premium else BusinessListCreateView.FREE_LIMIT
-    biz_limit = request.user.business_limit_override if request.user.business_limit_override is not None else biz_plan_limit
-
     usage = {
-        "business_count": owned.count(),
-        "business_limit": None if is_biz_unlimited else biz_limit,
+        "business_count": Business.objects.filter(owner=request.user).count(),
+        "business_limit": BusinessListCreateView.limit_for(request.user),
     }
 
     if business is not None:
@@ -81,6 +74,12 @@ class ApplyCouponView(APIView):
         if not code:
             return api_response(False, "Enter a coupon code.", status.HTTP_400_BAD_REQUEST)
 
+        # A friend's Refer & Win code (8 characters; coupons are 6) typed into
+        # the same box — for new accounts only, see process_referral.
+        referrer = Business.objects.filter(referral_code=code.upper()).exclude(pk=business.pk).first()
+        if referrer is not None:
+            return self._apply_referral(business, referrer)
+
         try:
             subscription = apply_coupon(code=code, user=request.user, business=business)
         except CouponError as exc:
@@ -89,6 +88,29 @@ class ApplyCouponView(APIView):
         return api_response(
             True, f"Coupon applied — {subscription.get_plan_display()} active until {subscription.end_date}.",
             status.HTTP_200_OK, subscription=SubscriptionSerializer(subscription).data,
+        )
+
+    @staticmethod
+    def _apply_referral(business, referrer):
+        # A business has room for one Referral row: an earlier *rejected* try
+        # (e.g. their own code) mustn't block a friend's valid one.
+        Referral.objects.filter(referred_business=business, status=Referral.STATUS_REJECTED).delete()
+        if business.referred_by_id is not None or Referral.objects.filter(referred_business=business).exists():
+            return api_response(False, "A referral code has already been used for this business.", status.HTTP_400_BAD_REQUEST)
+        referral = process_referral(new_business=business, referrer_business=referrer)
+        if referral.status == Referral.STATUS_REJECTED:
+            return api_response(False, referral.reject_reason, status.HTTP_400_BAD_REQUEST)
+        business.referred_by = referrer
+        business.save(update_fields=["referred_by"])
+        if referral.status == Referral.STATUS_REWARDED:
+            sub = referral.referred_subscription
+            return api_response(
+                True, f"Referral applied — Premium active until {sub.end_date}. Your friend got a free month too.",
+                status.HTTP_200_OK, subscription=SubscriptionSerializer(sub).data,
+            )
+        return api_response(
+            True, "Referral saved — you and your friend each get a free month once you sign in with a verified email.",
+            status.HTTP_200_OK,
         )
 
 

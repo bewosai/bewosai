@@ -131,7 +131,7 @@ const plans = [
     color: "border-orange-500",
     badge: "Most Popular",
     features: [
-      "Up to 5 Business Profiles",
+      "Up to 3 Business Profiles",
       "Up to 3 Staff Members",
       "Multi-User Access",
       "Unlimited Transactions & Reports",

@@ -14,8 +14,8 @@ import '../providers/billing_provider.dart';
 const _planLabels = {'FREE': 'Free', 'PREMIUM': 'Premium', 'PREMIUMPLUS': 'Premium Plus'};
 const _planFeatures = {
   'FREE': ['2 business profiles', '1 staff member', 'Core sales & inventory'],
-  'PREMIUM': ['5 business profiles', '3 staff members', 'Bulk import/export', 'Priority support'],
-  'PREMIUMPLUS': ['Unlimited business profiles', '5 staff members', 'Everything in Premium'],
+  'PREMIUM': ['3 business profiles', '3 staff members', 'Bulk import/export', 'Priority support'],
+  'PREMIUMPLUS': ['5 business profiles', '5 staff members', 'Everything in Premium'],
 };
 
 Color _planColor(String plan) {
@@ -122,8 +122,13 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen> {
                             child: TextField(
                               controller: _codeController,
                               textCapitalization: TextCapitalization.characters,
-                              maxLength: 6,
-                              decoration: const InputDecoration(labelText: '6-character code', hintText: 'A7K4P2', counterText: ''),
+                              maxLength: 8,
+                              decoration: const InputDecoration(
+                                labelText: 'Coupon or referral code',
+                                hintText: 'A7K4P2',
+                                helperText: "Coupon: 6 characters · friend's referral code: 8",
+                                counterText: '',
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),

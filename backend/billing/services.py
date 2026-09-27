@@ -13,6 +13,8 @@ from accounts.models import Business
 from .models import Coupon, Referral, Subscription
 
 REFERRAL_REWARD_DAYS = 30
+# A referral code can only be redeemed by an account at most this old.
+NEW_USER_DAYS = 30
 # Anti-abuse: a single referrer can't be rewarded more than this many times
 # in a rolling 24h window — catches a burst of farmed signups without
 # penalizing a business that's just genuinely popular that week.
@@ -86,45 +88,70 @@ def _extend_and_grant(*, business, plan, coupon_user, days=REFERRAL_REWARD_DAYS)
 
 def process_referral(*, new_business, referrer_business):
     """
-    Called once, right after a new Business is created with a valid referral
-    code. Runs the anti-abuse checks and, if they pass, grants both sides
-    their reward — the referrer gets a month of whatever tier they're
-    currently on (Premium stays Premium, PremiumPlus stays PremiumPlus; a
-    Free referrer's reward is Premium), and the new business always gets a
-    month of Premium. Always returns a Referral row (REWARDED or REJECTED)
-    so there's a permanent record of what happened either way.
+    Called once when a business is created with a referral code, or when its
+    owner types a referral code into "Have a coupon?". Referral codes are for
+    *new users only*: the redeeming account must be under NEW_USER_DAYS old
+    and must never have used a referral before. If the checks pass and the
+    new user has verified their sign-in (emailed code / Google), both sides
+    get REFERRAL_REWARD_DAYS: the referrer a month of whatever tier they're
+    currently on (a Free referrer's reward is Premium), the new business a
+    month of Premium. Not verified yet → the Referral waits as REGISTERED and
+    reward_waiting_referrals() pays it out at their first verified sign-in.
+    Always returns a Referral row, so there's a permanent record either way.
     """
-    if referrer_business.owner_id == new_business.owner_id:
+    def reject(reason):
         return Referral.objects.create(
             referrer_business=referrer_business, referred_business=new_business,
-            status=Referral.STATUS_REJECTED, reject_reason="Self-referral — same account on both sides.",
+            status=Referral.STATUS_REJECTED, reject_reason=reason,
         )
 
-    already_claimed = Business.objects.filter(
-        referred_by=referrer_business, owner_id=new_business.owner_id,
-    ).exclude(pk=new_business.pk).exists()
-    if already_claimed:
-        return Referral.objects.create(
-            referrer_business=referrer_business, referred_business=new_business,
-            status=Referral.STATUS_REJECTED, reject_reason="This account already redeemed a referral from this referrer.",
-        )
+    owner = new_business.owner
+    if referrer_business.owner_id == owner.id:
+        return reject("Self-referral — same account on both sides.")
+
+    if owner.created_at and owner.created_at < timezone.now() - timedelta(days=NEW_USER_DAYS):
+        return reject("Referral codes are for new accounts only.")
+
+    used_before = Referral.objects.filter(referred_business__owner=owner).exclude(
+        status=Referral.STATUS_REJECTED,
+    ).exclude(referred_business=new_business).exists()
+    if used_before:
+        return reject("This account has already used a referral code.")
 
     since = timezone.now() - timedelta(hours=24)
     recent_rewards = Referral.objects.filter(
         referrer_business=referrer_business, status=Referral.STATUS_REWARDED, rewarded_at__gte=since,
     ).count()
     if recent_rewards >= REFERRAL_RATE_LIMIT_PER_DAY:
-        return Referral.objects.create(
-            referrer_business=referrer_business, referred_business=new_business,
-            status=Referral.STATUS_REJECTED, reject_reason="Referral rate limit reached for this referrer.",
-        )
+        return reject("Referral rate limit reached for this referrer.")
 
+    referral = Referral.objects.create(
+        referrer_business=referrer_business, referred_business=new_business,
+        status=Referral.STATUS_REGISTERED,
+    )
+    if owner.is_verified:
+        _reward(referral)
+    return referral
+
+
+def reward_waiting_referrals(user):
+    """Pays out any referral that was waiting for `user` to verify their
+    sign-in. Called right after a verified email-code or Google login."""
+    for referral in Referral.objects.filter(
+        referred_business__owner=user, status=Referral.STATUS_REGISTERED,
+    ).select_related("referrer_business__owner", "referred_business__owner"):
+        _reward(referral)
+
+
+def _reward(referral):
+    """+REFERRAL_REWARD_DAYS for both sides of a REGISTERED referral."""
+    referrer_business = referral.referrer_business
+    new_business = referral.referred_business
     with transaction.atomic():
         now = timezone.now()
-        referral = Referral.objects.create(
-            referrer_business=referrer_business, referred_business=new_business,
-            status=Referral.STATUS_VERIFIED, verified_at=now,
-        )
+        referral.status = Referral.STATUS_VERIFIED
+        referral.verified_at = now
+        referral.save(update_fields=["status", "verified_at"])
 
         referrer_plan = referrer_business.effective_plan
         referrer_reward_plan = referrer_plan if referrer_plan != Business.PLAN_FREE else Business.PLAN_PREMIUM
@@ -136,5 +163,3 @@ def process_referral(*, new_business, referrer_business):
         referral.referrer_subscription = referrer_sub
         referral.referred_subscription = referred_sub
         referral.save(update_fields=["status", "rewarded_at", "referrer_subscription", "referred_subscription"])
-
-    return referral

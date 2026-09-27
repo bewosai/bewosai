@@ -10,8 +10,10 @@ from .models import Coupon, Referral, Subscription
 from .services import CouponError, apply_coupon, process_referral
 
 
-def make_business(email, name):
-    user = User.objects.create_user(email=email, name=name)
+def make_business(email, name, verified=True):
+    # Real accounts are verified by their first emailed-code/Google sign-in;
+    # referrals only pay out for verified ones (see process_referral).
+    user = User.objects.create_user(email=email, name=name, is_verified=verified)
     business = Business.objects.create(owner=user, name=f"{name} Biz")
     StaffMember.objects.create(user=user, business=business, role=StaffMember.ROLE_OWNER)
     return user, business

@@ -32,8 +32,8 @@ function fmtDate(d) {
 function PlanComparison({ effectivePlan, usage }) {
   const plans = [
     { key: "FREE", features: ["2 business profiles", "1 staff member", "Core sales & inventory"] },
-    { key: "PREMIUM", features: ["5 business profiles", "3 staff members", "Bulk import/export", "Priority support"] },
-    { key: "PREMIUMPLUS", features: ["Unlimited business profiles", "5 staff members", "Everything in Premium"] },
+    { key: "PREMIUM", features: ["3 business profiles", "3 staff members", "Bulk import/export", "Priority support"] },
+    { key: "PREMIUMPLUS", features: ["5 business profiles", "5 staff members", "Everything in Premium"] },
   ];
 
   const usageFor = (label, isCurrent) => {
@@ -233,12 +233,12 @@ Or enter my code ${referral.referral_code} when creating your business.`,
         <SectionCard title="Have a Coupon?">
           <form onSubmit={applyCoupon} className="flex flex-wrap items-end gap-3">
             <div className="min-w-0 flex-1">
-              <label className="mb-1 block text-xs font-semibold text-navy-400">6-character code</label>
+              <label className="mb-1 block text-xs font-semibold text-navy-400">Coupon (6) or friend's referral code (8)</label>
               <input
                 value={couponCode}
                 onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                 placeholder="A7K4P2"
-                maxLength={6}
+                maxLength={8}
                 className="w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm font-mono uppercase tracking-widest text-white outline-none placeholder:text-navy-600 placeholder:tracking-widest focus:border-orange-500"
               />
             </div>

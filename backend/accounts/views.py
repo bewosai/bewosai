@@ -259,6 +259,7 @@ class VerifyOTPView(APIView):
             raise
 
         logger.info("User %s logged in via OTP (new_user=%s)", identifier, is_new)
+        _pay_waiting_referrals(user)
 
         return _login_response(user, is_new, remember)
 
@@ -325,8 +326,21 @@ class GoogleLoginView(APIView):
             )
 
         logger.info("User %s logged in via Google (new_user=%s)", email, is_new)
+        _pay_waiting_referrals(user)
 
         return _login_response(user, is_new, remember)
+
+
+def _pay_waiting_referrals(user):
+    """A referral waits until the new user has verified a sign-in (see
+    billing.services.process_referral); this is that moment. Never allowed to
+    fail the login itself."""
+    try:
+        from billing.services import reward_waiting_referrals
+
+        reward_waiting_referrals(user)
+    except Exception:
+        logger.exception("Paying waiting referrals failed for user %s", user.pk)
 
 
 def _login_response(user, is_new, remember):
@@ -421,29 +435,48 @@ class MeView(generics.RetrieveUpdateAPIView):
 class BusinessListCreateView(generics.ListCreateAPIView):
     serializer_class = BusinessSerializer
 
-    # Free plan: 2 business profiles. Premium (having at least one Premium
-    # business already) unlocks up to 5. Matches the pricing plan limits.
+    # Business profiles each plan allows, judged by the best effective_plan
+    # among the businesses the user owns (licence, coupon or referral reward).
+    # Matches the pricing shown on the Upgrade page.
     FREE_LIMIT = 2
-    PREMIUM_LIMIT = 5
+    PREMIUM_LIMIT = 3
+    PREMIUMPLUS_LIMIT = 5
+
+    @classmethod
+    def plan_for(cls, user):
+        """The best plan across everything `user` owns."""
+        plans = {b.effective_plan for b in Business.objects.filter(owner=user)}
+        for plan in (Business.PLAN_PREMIUMPLUS, Business.PLAN_PREMIUM):
+            if plan in plans:
+                return plan
+        return Business.PLAN_FREE
+
+    @classmethod
+    def limit_for(cls, user, plan=None):
+        """How many business profiles `user` may own. A platform admin can
+        raise (or lower) it per user via superadmin.UserActionView's
+        "set_business_limit" action."""
+        if user.business_limit_override is not None:
+            return user.business_limit_override
+        return {
+            Business.PLAN_PREMIUMPLUS: cls.PREMIUMPLUS_LIMIT,
+            Business.PLAN_PREMIUM: cls.PREMIUM_LIMIT,
+        }.get(plan or cls.plan_for(user), cls.FREE_LIMIT)
 
     def get_queryset(self):
         return Business.objects.filter(staff__user=self.request.user, staff__is_active=True)
 
     def create(self, request, *args, **kwargs):
         owned = Business.objects.filter(owner=request.user)
-        # PremiumPlus (from a coupon/referral reward — see billing app) has
-        # no cap at all; Premium (bought/licensed, effective_plan on *any*
-        # owned business) unlocks the higher fixed limit; otherwise Free.
-        effective_plans = {b.effective_plan for b in owned}
-        is_unlimited = Business.PLAN_PREMIUMPLUS in effective_plans
-        is_premium = is_unlimited or Business.PLAN_PREMIUM in effective_plans
-        plan_limit = self.PREMIUM_LIMIT if is_premium else self.FREE_LIMIT
-        # A platform admin can raise (or lower) this per-user via
-        # superadmin.UserActionView's "set_business_limit" action.
-        limit = request.user.business_limit_override if request.user.business_limit_override is not None else plan_limit
-        if not is_unlimited and owned.count() >= limit:
-            plan_name = "Premium" if is_premium else "Free"
-            hint = "You've reached the maximum number of business profiles." if is_premium else "Upgrade to Premium to create more."
+        plan = self.plan_for(request.user)
+        limit = self.limit_for(request.user, plan)
+        if owned.count() >= limit:
+            plan_name = plan_display_name(plan)
+            hint = (
+                "Upgrade to Premium Plus to create more." if plan == Business.PLAN_PREMIUM
+                else "Upgrade to Premium to create more." if plan == Business.PLAN_FREE
+                else "You've reached the maximum number of business profiles."
+            )
             return Response(
                 {
                     "error": (
