@@ -791,7 +791,8 @@ class StaffActivityView(APIView):
         user_id = request.query_params.get("user_id")
 
         login_qs = LoginActivity.objects.filter(user=request.user)
-        if user_id and request.user.is_platform_admin and request.user.may_be_platform_admin:
+        from superadmin.views import is_admin_account, superadmin_unlocked
+        if user_id and is_admin_account(request.user) and superadmin_unlocked(request.user):
             login_qs = LoginActivity.objects.filter(user_id=user_id)
 
         data = []

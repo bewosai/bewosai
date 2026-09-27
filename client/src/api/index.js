@@ -82,6 +82,11 @@ api.interceptors.response.use(
     ) {
       window.dispatchEvent(new Event("bewosai:subscription-required"));
     }
+    // Super Admin's own emailed-code unlock ran out while the panel was open —
+    // SuperAdminPage shows its unlock screen again.
+    if (err.response?.status === 403 && err.response?.data?.unlock_required) {
+      window.dispatchEvent(new Event("bewosai:superadmin-locked"));
+    }
     return Promise.reject(err);
   }
 );
@@ -239,6 +244,9 @@ export const licenses = {
 };
 
 export const superadmin = {
+  unlockStatus: () => api.get("/superadmin/unlock/"),
+  unlockSend: (email) => api.post("/superadmin/unlock/send/", { email }),
+  unlockVerify: (code) => api.post("/superadmin/unlock/verify/", { code }),
   stats: () => api.get("/superadmin/stats/"),
 
   businesses: (p) => api.get("/superadmin/businesses/", { params: p }),

@@ -17,6 +17,7 @@ import LicensesTab from "./superadmin/LicensesTab";
 import CouponsTab from "./superadmin/CouponsTab";
 import ReferralsTab from "./superadmin/ReferralsTab";
 import ActivityTab from "./superadmin/ActivityTab";
+import UnlockGate from "./superadmin/UnlockGate";
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
@@ -1647,8 +1648,29 @@ export default function SuperAdminPage() {
     }
   };
 
+  // null = still checking; true = show the email-and-code gate (UnlockGate).
+  const [locked, setLocked] = useState(null);
+
+  const openIfUnlocked = async () => {
+    try {
+      const { data } = await adminApi.unlockStatus();
+      if (data.unlocked) { setLocked(false); load(); } else { setLocked(true); }
+    } catch (err) {
+      // A backend deployed before the unlock step existed has no such endpoint
+      // (and no lock to open) — go straight in rather than bounce the admin.
+      if (err.response?.status === 404) { setLocked(false); load(); return; }
+      navigate("/dashboard");
+    }
+  };
+
   useEffect(() => {
-    if (user?.is_platform_admin) { load(); return; }
+    const relock = () => setLocked(true);
+    window.addEventListener("bewosai:superadmin-locked", relock);
+    return () => window.removeEventListener("bewosai:superadmin-locked", relock);
+  }, []);
+
+  useEffect(() => {
+    if (user?.is_platform_admin) { openIfUnlocked(); return; }
     // The saved copy of the account can be out of date (made an admin after this
     // browser signed in) — ask the server before sending them away.
     let cancelled = false;
@@ -1696,6 +1718,13 @@ export default function SuperAdminPage() {
       ],
     },
   ];
+
+  if (locked === null) {
+    return <div className="flex justify-center py-20"><Loader className="h-6 w-6 animate-spin text-orange-500" /></div>;
+  }
+  if (locked) {
+    return <UnlockGate onUnlocked={() => { setLocked(false); load(); }} />;
+  }
 
   return (
     <div className="space-y-6">

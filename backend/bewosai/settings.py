@@ -14,6 +14,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SUPERADMIN_EMAIL = "" if "test" in sys.argv[1:2] else config(
     "SUPERADMIN_EMAIL", default="mahatok008@gmail.com",
 ).strip().lower()
+# Opening Super Admin takes a fresh code emailed to that address, even when
+# already signed in; it stays open this many hours. 0 = no extra check (tests).
+SUPERADMIN_UNLOCK_HOURS = 0 if "test" in sys.argv[1:2] else config("SUPERADMIN_UNLOCK_HOURS", default=12, cast=int)
 
 # How long each server process may reuse the Super Admin feature switches before
 # re-reading them (see bewosai/feature_cache.py). Off under `manage.py test`, where

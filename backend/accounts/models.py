@@ -52,6 +52,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_platform_admin = models.BooleanField(default=False)
+    # Super Admin needs its own fresh emailed-code check on top of being signed
+    # in (see superadmin.views.SuperAdminUnlockVerifyView); open until this time.
+    superadmin_unlocked_until = models.DateTimeField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     last_login_at = models.DateTimeField(null=True, blank=True)

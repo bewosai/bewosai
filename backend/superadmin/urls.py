@@ -3,6 +3,11 @@ from . import views
 from billing import views as billing_views
 
 urlpatterns = [
+    # Opening Super Admin: a fresh emailed code even when already signed in
+    path("unlock/", views.SuperAdminUnlockStatusView.as_view()),
+    path("unlock/send/", views.SuperAdminUnlockSendView.as_view()),
+    path("unlock/verify/", views.SuperAdminUnlockVerifyView.as_view()),
+
     # Platform overview (admin only)
     path("stats/", views.PlatformStatsView.as_view()),
 

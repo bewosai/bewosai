@@ -1,6 +1,8 @@
 from datetime import timedelta
 
+from django.conf import settings
 from rest_framework import generics, permissions, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db import models
@@ -21,18 +23,104 @@ from .serializers import (
 )
 
 
+def is_admin_account(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and user.is_platform_admin
+        # Also refuses an account whose flag was set before the
+        # SUPERADMIN_EMAIL rule existed (see User.save).
+        and user.may_be_platform_admin
+    )
+
+
+def superadmin_unlocked(user):
+    """Signed in isn't enough for Super Admin: it also needs a fresh emailed
+    code (SuperAdminUnlockVerifyView) within SUPERADMIN_UNLOCK_HOURS."""
+    if not getattr(settings, "SUPERADMIN_UNLOCK_HOURS", 0):
+        return True
+    until = user.superadmin_unlocked_until
+    return bool(until and until > timezone.now())
+
+
 class IsPlatformAdmin(permissions.BasePermission):
-    """Grants access only to users with is_platform_admin=True."""
+    """The Super Admin account, signed in *and* unlocked with a fresh code."""
 
     def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.is_platform_admin
-            # Also refuses an account whose flag was set before the
-            # SUPERADMIN_EMAIL rule existed (see User.save).
-            and request.user.may_be_platform_admin
-        )
+        if not is_admin_account(request.user):
+            return False
+        if not superadmin_unlocked(request.user):
+            raise PermissionDenied({
+                "detail": "Verify your email to open Super Admin.", "unlock_required": True,
+            })
+        return True
+
+
+class _IsAdminAccount(permissions.BasePermission):
+    """The Super Admin account, locked or not — for the unlock views themselves."""
+
+    def has_permission(self, request, view):
+        return is_admin_account(request.user)
+
+
+class SuperAdminUnlockStatusView(APIView):
+    permission_classes = [_IsAdminAccount]
+
+    def get(self, request):
+        return Response({
+            "unlocked": superadmin_unlocked(request.user),
+            "unlocked_until": request.user.superadmin_unlocked_until,
+        })
+
+
+class SuperAdminUnlockSendView(APIView):
+    """Step 1: the admin types their email; a code is sent to it."""
+    permission_classes = [_IsAdminAccount]
+    throttle_scope = "otp_send"
+
+    def post(self, request):
+        from accounts.models import OTPCode
+        from bewosai.email import send_otp_email
+
+        email = (request.data.get("email") or "").strip().lower()
+        if email != (request.user.email or "").strip().lower():
+            return Response({"message": "That's not the Super Admin email."}, status=status.HTTP_400_BAD_REQUEST)
+        wait = OTPCode.seconds_until_resend(email)
+        if wait > 0:
+            return Response({"message": f"Please wait {wait}s before requesting another code."},
+                            status=status.HTTP_429_TOO_MANY_REQUESTS)
+        if OTPCode.sends_in_last_hour(email) >= OTPCode.MAX_SENDS_PER_HOUR:
+            return Response({"message": "Too many codes requested. Please try again in an hour."},
+                            status=status.HTTP_429_TOO_MANY_REQUESTS)
+        otp, code = OTPCode.generate(email, request.user.account_type)
+        if not send_otp_email(email, code):
+            otp.delete()
+            return Response({"message": "Couldn't send the code right now. Please try again in a moment."},
+                            status=status.HTTP_502_BAD_GATEWAY)
+        return Response({"message": f"Code sent to {email}. Valid for 10 minutes."})
+
+
+class SuperAdminUnlockVerifyView(APIView):
+    """Step 2: the emailed code opens Super Admin for SUPERADMIN_UNLOCK_HOURS."""
+    permission_classes = [_IsAdminAccount]
+    throttle_scope = "otp_verify"
+
+    def post(self, request):
+        from accounts.models import OTPCode
+
+        code = (request.data.get("code") or "").strip()
+        _, error = OTPCode.verify_and_consume((request.user.email or "").strip().lower(), code)
+        if error:
+            messages = {
+                "too_many_attempts": "Too many incorrect attempts. Please request a new code.",
+                "expired": "This code has expired. Please request a new one.",
+            }
+            return Response({"message": messages.get(error, "Incorrect code. Please check and try again.")},
+                            status=status.HTTP_400_BAD_REQUEST)
+        hours = getattr(settings, "SUPERADMIN_UNLOCK_HOURS", 0) or 12
+        request.user.superadmin_unlocked_until = timezone.now() + timedelta(hours=hours)
+        request.user.save(update_fields=["superadmin_unlocked_until"])
+        return Response({"unlocked": True, "unlocked_until": request.user.superadmin_unlocked_until})
 
 
 # ── Platform overview ──────────────────────────────────────────────────────────
