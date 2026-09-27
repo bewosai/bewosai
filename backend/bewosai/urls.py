@@ -14,8 +14,15 @@ def _health(request):
     "Not Found" that looked like the service was broken, when it was just
     that no view existed at "/" at all. This also works as a Render Health
     Check Path (Settings -> Health Checks), which needs a URL that always
-    returns 200 when the service is actually up."""
-    return JsonResponse({"status": "ok", "service": "bewosai-backend"})
+    returns 200 when the service is actually up.
+
+    With ?where=1 it also reports which AWS region the server is nearest and
+    its database round-trip time (see bewosai/where.py)."""
+    payload = {"status": "ok", "service": "bewosai-backend"}
+    if request.GET.get("where") == "1":
+        from .where import where
+        payload.update(where())
+    return JsonResponse(payload)
 
 
 urlpatterns = [
