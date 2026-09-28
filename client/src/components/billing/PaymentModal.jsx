@@ -53,7 +53,7 @@ export default function PaymentModal({ plan, userEmail, businessName, onClose })
           <li>Pay <b className="text-white">Rs {price.amount}</b> with eSewa or your bank app (ConnectIPS).</li>
           <li>Put your email <b className="text-white">{userEmail}</b> in the payment remarks.</li>
           <li>Send the payment screenshot to us — we'll activate {label} and send you a coupon code.</li>
-          <li>Enter that code below under <b className="text-white">Have a Coupon?</b></li>
+          <li>Enter that code in the coupon box on this page — your plan starts straight away.</li>
         </ol>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2">

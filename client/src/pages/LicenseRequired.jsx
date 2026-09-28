@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import bewosaiLogo from "../assessts/images/bewosai.png";
-import { KeyRound, Check, AlertCircle, LogOut } from "lucide-react";
+import { KeyRound, Check, AlertCircle, LogOut, Crown } from "lucide-react";
+import PaymentModal from "../components/billing/PaymentModal";
+import { PLAN_PRICES } from "../constants/payments";
 import { billing as billingApi, licenses as licensesApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useLicense } from "../context/LicenseContext";
@@ -24,9 +26,16 @@ const CODE_LENGTH = 5;
 const COUPON_LENGTH = 6;
 const isValidLength = (c) => c.length === CODE_LENGTH || c.length === COUPON_LENGTH;
 
+// What the trial-ended screen offers first: pick a plan, pay by QR (PaymentModal).
+const PLANS = [
+  { key: "PREMIUM", label: "Premium", features: ["3 business profiles", "3 staff members", "Bulk import/export"] },
+  { key: "PREMIUMPLUS", label: "Premium Plus", features: ["5 business profiles", "5 staff members", "Everything in Premium"] },
+];
+
 export default function LicenseRequiredPage() {
   const navigate = useNavigate();
-  const { logout, refreshBusinesses } = useAuth();
+  const { logout, refreshBusinesses, user, currentBusiness } = useAuth();
+  const [payingFor, setPayingFor] = useState(null); // plan whose QR codes are open
   const { refresh: refreshLicense } = useLicense();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -62,7 +71,7 @@ export default function LicenseRequiredPage() {
   return (
     <div className="flex min-h-screen flex-col bg-navy-950">
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:py-12">
-        <div className="w-full max-w-sm">
+        <div className={`w-full ${activated ? "max-w-sm" : "max-w-2xl"}`}>
           <div className="mb-8 flex flex-col items-center gap-3 text-center">
             <img
               src={bewosaiLogo}
@@ -105,16 +114,39 @@ export default function LicenseRequiredPage() {
               </div>
             ) : (
               <>
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-orange-500/15">
-                  <KeyRound className="h-7 w-7 text-orange-400" />
-                </div>
                 <div className="mb-5 text-center">
-                  <h2 className="text-xl font-bold text-white">Premium License Required</h2>
-                  <p className="mt-2 text-sm text-navy-400">
-                    Your free trial has ended. Enter your Premium coupon code or the license code from your administrator to continue.
-                  </p>
+                  <h2 className="text-xl font-bold text-white">Your free trial has ended</h2>
+                  <p className="mt-2 text-sm text-navy-400">Choose a plan to keep using Bewosai.</p>
                 </div>
 
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {PLANS.map(p => (
+                    <div key={p.key} className="flex flex-col rounded-2xl border-2 border-orange-500/30 bg-navy-950 p-4">
+                      <span className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-orange-500/10 px-2.5 py-1 text-xs font-bold text-orange-400">
+                        <Crown className="h-3 w-3" /> {p.label}
+                      </span>
+                      <p className="mt-2 text-2xl font-extrabold text-white">
+                        Rs {PLAN_PRICES[p.key].amount.toLocaleString("en-IN")}
+                        <span className="text-sm font-medium text-navy-400"> / {PLAN_PRICES[p.key].period}</span>
+                      </p>
+                      <ul className="mt-2 flex-1 space-y-1 text-xs text-navy-400">
+                        {p.features.map(f => (
+                          <li key={f} className="flex items-center gap-1.5"><Check className="h-3 w-3 text-navy-500" /> {f}</li>
+                        ))}
+                      </ul>
+                      <button type="button" onClick={() => setPayingFor(p.key)}
+                        className="mt-3 w-full rounded-xl bg-orange-500 py-2.5 text-sm font-bold text-white hover:bg-orange-400">
+                        Upgrade to {p.label}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mx-auto mt-6 max-w-sm">
+                <div className="mb-3 flex items-center gap-2 text-sm text-navy-300">
+                  <KeyRound className="h-4 w-4 text-orange-400" />
+                  Already paid? Enter the coupon code we sent you (or a license code):
+                </div>
                 <form onSubmit={handleActivate} className="space-y-4">
                   <input
                     value={code}
@@ -123,7 +155,6 @@ export default function LicenseRequiredPage() {
                       setCode(e.target.value.toUpperCase().slice(0, COUPON_LENGTH));
                     }}
                     placeholder="A7K9P"
-                    autoFocus
                     maxLength={COUPON_LENGTH}
                     className="w-full rounded-2xl border border-navy-700 bg-navy-950 px-4 py-4 text-center text-2xl font-bold tracking-[0.4em] text-white placeholder:text-navy-700 focus:border-orange-500 focus:outline-none"
                   />
@@ -144,8 +175,15 @@ export default function LicenseRequiredPage() {
                   </button>
                 </form>
 
+                </div>
+
+                {payingFor && (
+                  <PaymentModal plan={payingFor} userEmail={user?.email} businessName={currentBusiness?.name}
+                    onClose={() => setPayingFor(null)} />
+                )}
+
                 <p className="mt-5 text-center text-xs text-navy-500">
-                  Need a code? Please contact your administrator.
+                  Need help? Please contact us.
                 </p>
 
                 <button
