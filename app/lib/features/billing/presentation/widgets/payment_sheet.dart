@@ -5,7 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 
 /// Plan prices (Rs per year) — keep in step with client/src/constants/payments.js.
-const planPrices = {'PREMIUM': 1999, 'PREMIUMPLUS': 1999};
+const planPrices = {'PREMIUM': 999, 'PREMIUMPLUS': 1999};
 
 /// QR images bundled from assets/payments/ — replace those files to change them.
 const _methods = [

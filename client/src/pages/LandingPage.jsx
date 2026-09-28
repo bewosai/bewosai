@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import bewosaiLogo from "../assessts/images/bewosai.png";
+import { PLAN_PRICES } from "../constants/payments";
 import {
   ShoppingCart, Users, Package, BarChart3, Monitor, UserCheck,
   Image, MessageCircle, Building2, ShieldCheck, Upload, FileText,
@@ -126,7 +127,7 @@ const plans = [
   },
   {
     name: "Premium",
-    price: "Rs. 1999",
+    price: `Rs. ${PLAN_PRICES.PREMIUM.amount}`,
     period: "per year",
     color: "border-orange-500",
     badge: "Most Popular",

@@ -4,7 +4,7 @@
 // "Have a coupon?" (see UpgradePlanPage).
 
 export const PLAN_PRICES = {
-  PREMIUM: { amount: 1999, period: "year" },
+  PREMIUM: { amount: 999, period: "year" },
   PREMIUMPLUS: { amount: 1999, period: "year" },
 };
 
