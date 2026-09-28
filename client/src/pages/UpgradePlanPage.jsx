@@ -7,6 +7,8 @@ import { useLicense } from "../context/LicenseContext";
 import PageHeader from "../components/shared/PageHeader";
 import SectionCard from "../components/shared/SectionCard";
 import PrimaryButton from "../components/shared/PrimaryButton";
+import PaymentModal from "../components/billing/PaymentModal";
+import { PLAN_PRICES } from "../constants/payments";
 import {
   ArrowLeft, Crown, Check, Copy, Gift, Loader, Sparkles, Ticket,
   MessageCircle, TrendingUp, AlertCircle,
@@ -23,13 +25,14 @@ function fmtDate(d) {
   return formatDateOnly(d);
 }
 
-/* ─── Free / Premium / Premium Plus comparison — informational only, no
-     payment gateway yet, so no "Buy" buttons: a coupon code (admin-issued
-     or earned via referral) is the only way to move a tier up right now.
+/* ─── Free / Premium / Premium Plus comparison. Premium and Premium Plus
+     show their price and an Upgrade button that opens PaymentModal (eSewa /
+     ConnectIPS QR codes). There's no payment gateway: once paid, Bewosai
+     sends a coupon code, which moves the tier up.
      On the viewer's own current tier, each limit line shows their actual
      usage against it (e.g. "2 of 2 business profiles") instead of just the
      number, so it's immediately clear whether upgrading would help them. */
-function PlanComparison({ effectivePlan, usage }) {
+function PlanComparison({ effectivePlan, usage, onUpgrade }) {
   const plans = [
     { key: "FREE", features: ["2 business profiles", "1 staff member", "Core sales & inventory"] },
     { key: "PREMIUM", features: ["3 business profiles", "3 staff members", "Bulk import/export", "Priority support"] },
@@ -59,6 +62,12 @@ function PlanComparison({ effectivePlan, usage }) {
               </span>
               {isCurrent && <span className="text-[10px] font-semibold text-green-400">CURRENT</span>}
             </div>
+            {PLAN_PRICES[key] && (
+              <p className="mb-2 text-lg font-extrabold text-white">
+                Rs {PLAN_PRICES[key].amount.toLocaleString("en-IN")}
+                <span className="text-xs font-medium text-navy-400"> / {PLAN_PRICES[key].period}</span>
+              </p>
+            )}
             <ul className="space-y-1.5">
               {features.map((f) => {
                 const u = usageFor(f, isCurrent);
@@ -71,12 +80,20 @@ function PlanComparison({ effectivePlan, usage }) {
                 );
               })}
             </ul>
+            {PLAN_PRICES[key] && PLAN_ORDER.indexOf(key) > PLAN_ORDER.indexOf(effectivePlan) && (
+              <button type="button" onClick={() => onUpgrade(key)}
+                className="mt-3 w-full rounded-xl bg-orange-500 py-2 text-sm font-bold text-white hover:bg-orange-400">
+                Upgrade to {meta.label}
+              </button>
+            )}
           </div>
         );
       })}
     </div>
   );
 }
+
+const PLAN_ORDER = ["FREE", "PREMIUM", "PREMIUMPLUS"];
 
 export default function UpgradePlanPage() {
   const navigate = useNavigate();
@@ -88,6 +105,7 @@ export default function UpgradePlanPage() {
   const [loading, setLoading] = useState(true);
 
   const [couponCode, setCouponCode] = useState("");
+  const [payingFor, setPayingFor] = useState(null); // plan key whose QR codes are open
   const [applying, setApplying] = useState(false);
   const [couponError, setCouponError] = useState("");
   const [couponSuccess, setCouponSuccess] = useState("");
@@ -218,7 +236,11 @@ Or enter my code ${referral.referral_code} when creating your business.`,
             </div>
           </div>
           <div className="mt-4">
-            <PlanComparison effectivePlan={effectivePlan} usage={subscription} />
+            <PlanComparison effectivePlan={effectivePlan} usage={subscription} onUpgrade={setPayingFor} />
+            {payingFor && (
+              <PaymentModal plan={payingFor} userEmail={user?.email} businessName={currentBusiness?.name}
+                onClose={() => setPayingFor(null)} />
+            )}
           </div>
           <p className="mt-3 text-xs text-navy-500">
             Want to buy Premium or Premium Plus directly?{" "}

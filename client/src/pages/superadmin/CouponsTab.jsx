@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { superadmin as adminApi } from "../../api";
 import { Badge, ConfirmDialog, PaginationFooter } from "../SuperAdminPage";
 import { Plus, Copy, Check, X, RefreshCw, Search, Loader, Ban, Ticket } from "lucide-react";
-import { todayStr, formatDateOnly } from "../../utils/dates";
+import { todayStr, formatDateOnly, formatNepalDateTime } from "../../utils/dates";
 
 const PAGE_SIZE = 50;
 
@@ -342,6 +342,7 @@ export default function CouponsTab() {
                 <th className="px-4 py-3 font-medium">Plan</th>
                 <th className="px-4 py-3 font-medium">Source</th>
                 <th className="px-4 py-3 font-medium">Valid Until</th>
+                <th className="px-4 py-3 font-medium">Used</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
@@ -357,6 +358,18 @@ export default function CouponsTab() {
                   <td className="px-4 py-3 text-navy-300">{PLAN_LABELS[c.plan] || c.plan}</td>
                   <td className="px-4 py-3 text-navy-400">{c.source === "REFERRAL" ? "Referral" : "Admin"}</td>
                   <td className="px-4 py-3 text-navy-400">{fmtDate(c.end_date)}</td>
+                  <td className="px-4 py-3 text-navy-400">
+                    {c.is_used ? (
+                      <>
+                        <p className="text-navy-300">{formatNepalDateTime(c.used_at)}</p>
+                        <p className="text-xs text-navy-500">
+                          by {c.user_name || c.user_email}{c.used_for_business_name ? ` · ${c.used_for_business_name}` : ""}
+                        </p>
+                      </>
+                    ) : (
+                      <span className="text-xs text-navy-600">Not used yet</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3"><Badge label={c.status} color={STATUS_COLORS[c.status]} /></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">

@@ -10,6 +10,7 @@ import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../shell/presentation/screens/contact_screen.dart';
 import '../providers/billing_provider.dart';
+import '../widgets/payment_sheet.dart';
 
 const _planLabels = {'FREE': 'Free', 'PREMIUM': 'Premium', 'PREMIUMPLUS': 'Premium Plus'};
 const _planFeatures = {
@@ -206,7 +207,21 @@ class _CurrentPlanCard extends StatelessWidget {
           for (final plan in ['FREE', 'PREMIUM', 'PREMIUMPLUS'])
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _PlanRow(plan: plan, isCurrent: plan == effectivePlan),
+              child: _PlanRow(
+                plan: plan,
+                isCurrent: plan == effectivePlan,
+                canUpgrade: planPrices.containsKey(plan) && _planOrder.indexOf(plan) > _planOrder.indexOf(effectivePlan),
+                onUpgrade: () {
+                  final auth = context.read<AuthProvider>();
+                  showPaymentSheet(
+                    context,
+                    plan: plan,
+                    planLabel: _planLabels[plan] ?? plan,
+                    userEmail: auth.user?.email ?? '',
+                    businessName: auth.currentBusiness?.name ?? '',
+                  );
+                },
+              ),
             ),
           const SizedBox(height: 4),
           InkWell(
@@ -228,10 +243,14 @@ class _CurrentPlanCard extends StatelessWidget {
   }
 }
 
+const _planOrder = ['FREE', 'PREMIUM', 'PREMIUMPLUS'];
+
 class _PlanRow extends StatelessWidget {
   final String plan;
   final bool isCurrent;
-  const _PlanRow({required this.plan, required this.isCurrent});
+  final bool canUpgrade;
+  final VoidCallback onUpgrade;
+  const _PlanRow({required this.plan, required this.isCurrent, required this.canUpgrade, required this.onUpgrade});
 
   @override
   Widget build(BuildContext context) {
@@ -253,6 +272,10 @@ class _PlanRow extends StatelessWidget {
               if (isCurrent) const Text('CURRENT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.success)),
             ],
           ),
+          if (planPrices[plan] != null) ...[
+            const SizedBox(height: 6),
+            Text('Rs ${planPrices[plan]} / year', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          ],
           const SizedBox(height: 8),
           for (final f in _planFeatures[plan] ?? [])
             Padding(
@@ -266,6 +289,10 @@ class _PlanRow extends StatelessWidget {
                 ],
               ),
             ),
+          if (canUpgrade) ...[
+            const SizedBox(height: 8),
+            PrimaryButton(label: 'Upgrade to ${_planLabels[plan] ?? plan}', onPressed: onUpgrade),
+          ],
         ],
       ),
     );
