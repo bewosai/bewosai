@@ -351,3 +351,19 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": "INFO"},
 }
+
+# ── Error alerts (Sentry) ─────────────────────────────────────────────────────
+# Off until SENTRY_DSN is set on the host (Sentry → Project settings → Client
+# Keys). Then every unhandled server error — with the request path and stack
+# trace, but no passwords/cookies/emails (send_default_pii off) — reaches the
+# Sentry project, which emails its owner.
+SENTRY_DSN = config("SENTRY_DSN", default="")
+if SENTRY_DSN and "test" not in sys.argv[1:2]:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment="production" if config("RENDER", default="") else "development",
+        send_default_pii=False,
+        traces_sample_rate=0.0,  # errors only; performance tracing would eat the free quota
+    )

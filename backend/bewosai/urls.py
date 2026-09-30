@@ -19,6 +19,17 @@ def _health(request):
     With ?where=1 it also reports which AWS region the server is nearest and
     its database round-trip time (see bewosai/where.py)."""
     payload = {"status": "ok", "service": "bewosai-backend"}
+    # ?db=1 — the uptime check: 503 if the database can't be reached, so a
+    # down database alerts just like a down server.
+    if request.GET.get("db") == "1":
+        from django.db import connection
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            payload["database"] = "ok"
+        except Exception:
+            return JsonResponse({"status": "error", "database": "unreachable"}, status=503)
     if request.GET.get("where") == "1":
         from .where import where
         payload.update(where())

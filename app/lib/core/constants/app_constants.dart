@@ -6,6 +6,12 @@ class AppConstants {
   // version 2.0.0+1). Change it whenever a new APK is built.
   static const String buildLabel = '2026-09-28-a';
 
+  /// Error alerts (Sentry). Empty = off. Paste the Flutter project's DSN from
+  /// Sentry → Project settings → Client Keys (it's meant to be public), or pass
+  /// --dart-define=SENTRY_DSN=... at build time. Then app crashes on any phone
+  /// reach the Sentry project, which emails its owner.
+  static const String sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
+
   // ── Server URL ──────────────────────────────────────────────────────────
   // Override at build time for a real device / a different backend (e.g.
   // the staging Render service instead of production), or a physical

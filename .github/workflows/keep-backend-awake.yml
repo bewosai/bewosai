@@ -1,7 +1,14 @@
-# Render's free plan puts the backend to sleep after 15 idle minutes, and the
-# next visitor then waits about a minute for it to start. Pinging the root URL
-# (a plain "ok", no database work) every few minutes keeps it awake. Free for a
-# public repo; one always-on service fits inside Render's 750 free hours/month.
+# Uptime monitor + keep-awake, every 5 minutes (free for a public repo).
+#
+# - Pings the backend, which also stops Render's free plan putting it to sleep
+#   (the next visitor would otherwise wait about a minute).
+# - Checks the website loads.
+# - Once an hour, checks the backend can reach its database (/?db=1). Not every
+#   5 minutes: that would keep the Neon database awake round the clock and use
+#   up its free compute allowance.
+#
+# Any check failing fails the run, and GitHub emails the account that owns this
+# workflow about the failed run (GitHub → Settings → Notifications → Actions).
 name: Keep backend awake
 
 on:
@@ -12,7 +19,24 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
+    env:
+      BACKEND: https://bewosai-backend-0esi.onrender.com
+      WEBSITE: https://bewosaiapp.vercel.app
     steps:
-      - name: Ping backend
-        run: curl -fsS --retry 3 --retry-delay 10 --max-time 90 https://bewosai-backend-0esi.onrender.com/
+      - name: Backend is up
+        run: curl -fsS --retry 3 --retry-delay 10 --max-time 90 "$BACKEND/"
+
+      - name: Website is up
+        run: |
+          page=$(curl -fsS --retry 3 --retry-delay 10 --max-time 60 "$WEBSITE/")
+          echo "$page" | grep -q '/assets/index-' || { echo "::error::Website returned a page without the app"; exit 1; }
+
+      - name: Database is reachable (hourly)
+        run: |
+          minute=$(date -u +%M)
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$minute" -ge 5 ]; then
+            echo "Not the top of the hour — skipping the database check."
+            exit 0
+          fi
+          curl -fsS --retry 3 --retry-delay 15 --max-time 90 "$BACKEND/?db=1"

@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
+import 'core/constants/app_constants.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'core/features/feature_provider.dart';
@@ -39,7 +42,21 @@ void main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await NotificationService.instance.init();
   ZeroFieldSelect.install();
-  runApp(const BewosaiApp());
+  if (AppConstants.sentryDsn.isEmpty) {
+    runApp(const BewosaiApp());
+    return;
+  }
+  // Error alerts: crashes on users' phones are reported to Sentry.
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = AppConstants.sentryDsn;
+      options.environment = kReleaseMode ? 'production' : 'debug';
+      options.release = 'bewosai@${AppConstants.buildLabel}';
+      options.sendDefaultPii = false;
+      options.tracesSampleRate = 0; // errors only; tracing would eat the free quota
+    },
+    appRunner: () => runApp(const BewosaiApp()),
+  );
 }
 
 class BewosaiApp extends StatefulWidget {
