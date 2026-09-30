@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_business
+from parties.allocations import release_allocations
 from .models import Purchase, PurchaseItem, PurchaseReturn
 from .serializers import PurchaseSerializer, PurchaseReturnSerializer
 
@@ -97,10 +98,21 @@ class PurchaseDetailView(_RequirePurchases, generics.RetrieveUpdateDestroyAPIVie
         biz = get_business(self.request)
         return Purchase.objects.filter(business=biz, is_deleted=False)
 
+    def perform_update(self, serializer):
+        # Cancelling a bill: later payments to the supplier applied to it go
+        # back as credit instead of vanishing with it (see parties.allocations).
+        was_confirmed = serializer.instance.status == "CONFIRMED"
+        with transaction.atomic():
+            purchase = serializer.save()
+            if was_confirmed and purchase.status != "CONFIRMED":
+                release_allocations(purchase=purchase)
+
     def perform_destroy(self, instance):
-        instance.is_deleted = True
-        instance.deleted_at = timezone.now()
-        instance.save(update_fields=["is_deleted", "deleted_at"])
+        with transaction.atomic():
+            release_allocations(purchase=instance)
+            instance.is_deleted = True
+            instance.deleted_at = timezone.now()
+            instance.save(update_fields=["is_deleted", "deleted_at"])
 
 
 class PurchaseReturnListCreateView(_RequirePurchases, generics.ListCreateAPIView):

@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Plus, Search, Edit2, Trash2, Eye, Printer, Share2, X,
-  ChevronDown, Check, AlertCircle, ShoppingCart, FileText, RotateCcw, Copy
+  ChevronDown, Check, AlertCircle, ShoppingCart, FileText, RotateCcw, Copy, HandCoins,
 } from "lucide-react";
+import ReceivePaymentModal from "../components/sales/ReceivePaymentModal";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext";
 import { useAuth } from "../context/AuthContext";
@@ -1006,6 +1007,8 @@ export default function SalesPage() {
   const [editSale, setEditSale] = useState(null);
   const [printSale, setPrintSale] = useState(null);
   const [deleteSale, setDeleteSale] = useState(null);
+  const [receiveFor, setReceiveFor] = useState(null); // invoice whose Receive Payment window is open
+  const [notice, setNotice] = useState("");
   const [confirmSale, setConfirmSale] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -1108,6 +1111,12 @@ export default function SalesPage() {
 
   return (
     <div>
+      {notice && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-2.5 text-sm text-green-300">
+          <span className="flex items-center gap-2"><Check size={15} /> {notice}</span>
+          <button onClick={() => setNotice("")} aria-label="Dismiss"><X size={14} /></button>
+        </div>
+      )}
       {/* Header */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -1241,6 +1250,12 @@ export default function SalesPage() {
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-orange-400">
                     <Copy size={13} />
                   </button>
+                  {sale.status === "CONFIRMED" && sale.customer && parseFloat(sale.due_amount || 0) > 0 && (
+                    <button onClick={(e) => { e.stopPropagation(); setReceiveFor(sale); }} title="Receive Payment"
+                      className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-green-400">
+                      <HandCoins size={13} />
+                    </button>
+                  )}
                   <button onClick={(e) => { e.stopPropagation(); setPrintSale(sale); }} title="Print"
                     className="p-1.5 rounded-lg hover:bg-navy-700 text-navy-500 hover:text-white">
                     <Printer size={13} />
@@ -1277,6 +1292,10 @@ export default function SalesPage() {
           onNew={() => { setConfirmSale(null); setEditSale(null); setShowModal(true); }}
           onClose={() => setConfirmSale(null)}
         />
+      )}
+      {receiveFor && (
+        <ReceivePaymentModal sale={receiveFor} onClose={() => setReceiveFor(null)}
+          onReceived={(message) => { setReceiveFor(null); setNotice(message); load(); }} />
       )}
       {deleteSale && (
         <ConfirmDialog

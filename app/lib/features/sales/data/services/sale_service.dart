@@ -31,6 +31,31 @@ class SaleService {
     }
   }
 
+  /// Receive (part of) what's due on one invoice. Saved server-side as a
+  /// payment from the invoice's customer that settles this invoice first.
+  /// Returns the server's message ("Rs 400 received … Still due: Rs 600").
+  Future<String> receivePayment(
+    int id, {
+    required double amount,
+    required String method,
+    int? bankAccount,
+    required DateTime date,
+    String note = '',
+  }) async {
+    try {
+      final res = await _dio.post('/sales/$id/receive-payment/', data: {
+        'amount': amount.toStringAsFixed(2),
+        'payment_method': method,
+        'bank_account': bankAccount,
+        'date': '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+        'note': note,
+      });
+      return (res.data as Map)['message']?.toString() ?? 'Payment received';
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
   Future<String> nextNumber() async {
     try {
       final res = await _dio.get('/sales/next-number/');

@@ -11,7 +11,9 @@ import '../../../../shared/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/models/sale_model.dart';
 import '../../data/services/sale_service.dart';
+import '../../../parties/presentation/providers/party_provider.dart';
 import '../providers/sale_provider.dart';
+import '../widgets/receive_payment_sheet.dart';
 
 class InvoiceDetailScreen extends StatefulWidget {
   final int saleId;
@@ -61,6 +63,19 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       _load();
       showAppSnackBar(context, 'Invoice cancelled');
     }
+  }
+
+  Future<void> _receivePayment() async {
+    final sale = _sale;
+    if (sale == null) return;
+    final message = await showReceivePaymentSheet(context, sale);
+    if (message == null || !mounted) return;
+    showAppSnackBar(context, message);
+    // The invoice's due, the sales list (which also cancels a reminder for a
+    // now fully paid invoice) and the customer's balance all changed.
+    context.read<SaleProvider>().load();
+    context.read<PartyProvider>().load();
+    _load();
   }
 
   void _shareWhatsApp() {
@@ -374,6 +389,14 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   if (s.notes.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     AppSectionCard(title: 'Notes', children: [Text(s.notes)]),
+                  ],
+                  if (s.status == 'CONFIRMED' && s.customer != null && s.dueAmount > 0) ...[
+                    const SizedBox(height: 20),
+                    PrimaryButton(
+                      label: 'Receive Payment',
+                      icon: Icons.payments_outlined,
+                      onPressed: _receivePayment,
+                    ),
                   ],
                   if (s.status != 'CANCELLED') ...[
                     const SizedBox(height: 20),

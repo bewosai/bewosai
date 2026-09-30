@@ -156,6 +156,8 @@ export const sales = {
   update: (id, d) => api.patch(`/sales/${id}/`, d),
   delete: (id) => api.delete(`/sales/${id}/`),
   get: (id) => api.get(`/sales/${id}/`),
+  // Repayment on one invoice: { amount, payment_method, bank_account, date, note }.
+  receivePayment: (id, d) => api.post(`/sales/${id}/receive-payment/`, d),
   nextNumber: () => api.get("/sales/next-number/"),
   returns: (p) => api.get("/sales/returns/", { params: p }),
   createReturn: (d) => api.post("/sales/returns/", d),

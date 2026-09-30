@@ -3,7 +3,7 @@ from django.db import transaction
 from django.db.models import Sum, F
 from django.db.models.functions import Greatest
 from rest_framework import serializers
-from bewosai.validators import check_discounts
+from bewosai.validators import check_discounts, check_paid
 from bewosai.utils import require_business, sync_bank_transaction
 from inventory.models import Product
 from .models import Sale, SaleItem, SaleReturn, SaleReturnItem, Quotation
@@ -81,6 +81,7 @@ class SaleSerializer(serializers.ModelSerializer):
             data.get("items"), data.get("discount"),
             fallback_subtotal=self.instance.subtotal if self.instance is not None else None,
         )
+        check_paid(data, self.instance)
         return data
 
     @staticmethod
@@ -94,10 +95,13 @@ class SaleSerializer(serializers.ModelSerializer):
     def _sync_bank(sale):
         # A SPLIT payment only banks the non-cash remainder — the cash
         # portion (sale.cash_amount) never touches the bank account.
+        # Only what was paid on this document itself — later repayments
+        # (reconciled_amount) already have their own PARTYPAYMENT bank entry.
+        paid_here = sale.paid_amount - sale.reconciled_amount
         if sale.payment_method == Sale.METHOD_SPLIT:
-            bank_amount = sale.paid_amount - sale.cash_amount
+            bank_amount = paid_here - sale.cash_amount
         elif sale.payment_method != "CASH":
-            bank_amount = sale.paid_amount
+            bank_amount = paid_here
         else:
             bank_amount = 0
         sync_bank_transaction(

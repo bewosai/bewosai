@@ -66,8 +66,13 @@ _RETURN_COGS_QTY = Case(
 # the Cash In Hand ledger) filtering on payment_method="CASH" alone silently
 # dropped a SPLIT sale/purchase's cash portion entirely — this is the
 # corrected replacement for a plain Sum("paid_amount")/Sum("cash_amount").
+#
+# Only what was paid *on the invoice itself*: paid_amount also includes later
+# repayments applied to it (reconciled_amount), and those are counted as the
+# PartyPayments they are — counting them here too showed every repayment twice.
+_PAID_AT_SALE = F("paid_amount") - F("reconciled_amount")
 _ACTUAL_CASH = Case(
-    When(payment_method="CASH", then=F("paid_amount")),
+    When(payment_method="CASH", then=_PAID_AT_SALE),
     When(payment_method="SPLIT", then=F("cash_amount")),
     default=0,
     output_field=DecimalField(),
@@ -134,7 +139,7 @@ class DashboardSummaryView(APIView):
         ).aggregate(
             today=Sum("total", filter=Q(sale_date=today)),
             month=Sum("total", filter=Q(sale_date__gte=month_start)),
-            collected_today=Sum("paid_amount", filter=Q(sale_date=today)),
+            collected_today=Sum(_PAID_AT_SALE, filter=Q(sale_date=today)),
             # CASH in full, plus the cash portion of a SPLIT payment — see _ACTUAL_CASH.
             cash_in=Sum(_ACTUAL_CASH, filter=Q(payment_method__in=["CASH", "SPLIT"])),
         )
@@ -593,7 +598,7 @@ class DayBookView(_RequireReports, APIView):
                 "date": target_date, "type": "SALE",
                 "ref": s.invoice_number,
                 "party": s.customer.name if s.customer else "Cash Sales",
-                "debit": float(s.paid_amount),
+                "debit": float(s.paid_amount - s.reconciled_amount),
                 "credit": 0.0,
                 "method": s.payment_method,
                 "note": s.notes or "",
@@ -608,7 +613,7 @@ class DayBookView(_RequireReports, APIView):
                 "ref": p.bill_number,
                 "party": p.supplier.name if p.supplier else "Supplier",
                 "debit": 0.0,
-                "credit": float(p.paid_amount),
+                "credit": float(p.paid_amount - p.reconciled_amount),
                 "method": p.payment_method,
                 "note": p.notes or "",
             })
@@ -819,14 +824,14 @@ class CashInHandView(_RequireReports, APIView):
 
         entries = []
         for s in sales_qs:
-            cash_amount = s.paid_amount if s.payment_method == "CASH" else s.cash_amount
+            cash_amount = s.paid_amount - s.reconciled_amount if s.payment_method == "CASH" else s.cash_amount
             entries.append({
                 "date": str(s.sale_date), "type": "SALE", "ref": s.invoice_number,
                 "party": s.customer.name if s.customer else "Cash Sales",
                 "debit": float(cash_amount), "credit": 0.0,
             })
         for p in purchases_qs:
-            cash_amount = p.paid_amount if p.payment_method == "CASH" else p.cash_amount
+            cash_amount = p.paid_amount - p.reconciled_amount if p.payment_method == "CASH" else p.cash_amount
             entries.append({
                 "date": str(p.purchase_date), "type": "PURCHASE", "ref": p.bill_number,
                 "party": p.supplier.name if p.supplier else "Supplier",

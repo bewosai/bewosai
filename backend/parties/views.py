@@ -121,8 +121,10 @@ class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
             PartyPaymentSerializer._sync_bank(payment)
 
     @staticmethod
-    def _reconcile_payment(payment):
-        """Apply payment to oldest outstanding invoices for the party."""
+    def _reconcile_payment(payment, first_sale=None):
+        """Apply payment to the party's outstanding invoices, oldest first —
+        or to `first_sale` first when the payment was received on that invoice
+        (SaleReceivePaymentView)."""
         from sales.models import Sale
         from purchases.models import Purchase
 
@@ -130,11 +132,14 @@ class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
         party = payment.party
 
         if payment.payment_type == "IN":
-            # Customer paid us → reduce outstanding sales (oldest first)
-            for sale in Sale.objects.filter(
+            # Customer paid us → reduce outstanding sales (the chosen one, then oldest first)
+            open_sales = list(Sale.objects.filter(
                 customer=party, status="CONFIRMED",
                 due_amount__gt=0, is_deleted=False,
-            ).order_by("sale_date"):
+            ).order_by("sale_date"))
+            if first_sale is not None:
+                open_sales.sort(key=lambda s: s.pk != first_sale.pk)
+            for sale in open_sales:
                 if remaining <= 0:
                     break
                 apply = min(remaining, sale.due_amount)

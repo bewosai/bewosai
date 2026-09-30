@@ -77,3 +77,44 @@ def check_discounts(items, invoice_discount, *, fallback_subtotal=None):
 
     if errors:
         raise serializers.ValidationError(errors)
+
+
+# ── Paid amount ───────────────────────────────────────────────────────────────
+
+def check_paid(data, instance):
+    """Paid can't be more than the invoice total, and on an edit can't drop below
+    what later party payments already put on it (instance.reconciled_amount).
+    Works on validated data for a sale or purchase, before anything is saved;
+    the total is worked out the same way Sale.save()/Purchase.save() do it.
+    Without this, an overpaid or cut-down invoice got a negative due, and
+    cutting paid below the party payments broke the party's balance."""
+    items = data.get("items")
+    if items is not None:
+        subtotal = sum(
+            ((i.get("quantity") or Decimal("0")) * (i.get("unit_price") or Decimal("0"))
+             - (i.get("discount_amount") or Decimal("0")) for i in items),
+            Decimal("0"),
+        )
+    else:
+        subtotal = instance.subtotal if instance is not None else Decimal("0")
+
+    def current(field, default=Decimal("0")):
+        if field in data:
+            return data[field] or Decimal("0")
+        return getattr(instance, field) if instance is not None else default
+
+    taxable = max(subtotal - current("discount"), Decimal("0"))
+    total = taxable + (taxable * current("tax_rate") / Decimal("100")).quantize(Decimal("0.01"))
+    paid = current("paid_amount")
+    reconciled = instance.reconciled_amount if instance is not None else Decimal("0")
+
+    if paid < 0:
+        raise serializers.ValidationError({"paid_amount": "Paid amount can't be negative."})
+    if paid > total + _TOLERANCE:
+        raise serializers.ValidationError(
+            {"paid_amount": f"Paid (Rs {paid}) can't be more than the total (Rs {total})."})
+    if paid < reconciled - _TOLERANCE:
+        raise serializers.ValidationError({"paid_amount": (
+            f"Rs {reconciled} of this was paid later through party payments, so the paid amount "
+            f"can't go below that. Edit or delete those payments instead."
+        )})

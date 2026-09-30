@@ -2,6 +2,7 @@ import re
 
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch
+from django.utils import timezone
 from rest_framework import generics, filters, permissions
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -11,6 +12,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_bid, require_business
+from parties.allocations import release_allocations
 from .models import Sale, SaleItem, SaleReturn, Quotation
 from .serializers import SaleSerializer, SaleReturnSerializer, QuotationSerializer
 
@@ -118,11 +120,22 @@ class SaleDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):
             is_deleted=False,
         ).select_related("customer")
 
+    def perform_update(self, serializer):
+        # Cancelling an invoice: later repayments applied to it go back to the
+        # customer as credit instead of vanishing with it (see parties.allocations).
+        was_confirmed = serializer.instance.status == Sale.STATUS_CONFIRMED
+        with transaction.atomic():
+            sale = serializer.save()
+            if was_confirmed and sale.status != Sale.STATUS_CONFIRMED:
+                release_allocations(sale=sale)
+
     def perform_destroy(self, instance):
         from django.utils import timezone
-        instance.is_deleted = True
-        instance.deleted_at = timezone.now()
-        instance.save(update_fields=["is_deleted", "deleted_at"])
+        with transaction.atomic():
+            release_allocations(sale=instance)
+            instance.is_deleted = True
+            instance.deleted_at = timezone.now()
+            instance.save(update_fields=["is_deleted", "deleted_at"])
 
 
 class SaleReturnListCreateView(_RequirePos, generics.ListCreateAPIView):
@@ -179,3 +192,67 @@ class QuotationDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):
         instance.is_deleted = True
         instance.deleted_at = timezone.now()
         instance.save(update_fields=["is_deleted", "deleted_at"])
+
+
+class SaleReceivePaymentView(APIView):
+    """Receive (part of) what's still due on one invoice — a repayment.
+
+    Recorded as a normal party payment from the invoice's customer, so it shows
+    in their ledger, the day book, cash/bank and the Payments list like any
+    other; but it settles *this* invoice rather than their oldest one. At most
+    the invoice's due amount; the invoice needs a customer to record it against.
+    """
+
+    permission_classes = [
+        permissions.IsAuthenticated, BusinessNotArchivedForWrites, HasActiveSubscription,
+        require_feature("payments"), require_staff_permission("payments"),
+    ]
+
+    def post(self, request, pk):
+        from decimal import Decimal, InvalidOperation
+        from parties.serializers import PartyPaymentSerializer
+        from parties.views import PartyPaymentListCreateView
+
+        def refuse(message):
+            return Response({"message": message}, status=400)
+
+        sale = Sale.objects.filter(
+            pk=pk, business_id=get_bid(request), business__staff__user=request.user,
+            business__staff__is_active=True, is_deleted=False,
+        ).select_related("customer").first()
+        if sale is None:
+            return Response({"message": "Invoice not found."}, status=404)
+        if sale.status != Sale.STATUS_CONFIRMED:
+            return refuse("Only a confirmed invoice can receive payments.")
+        if sale.customer_id is None:
+            return refuse("This invoice has no customer — edit it to add one, then record the payment.")
+        try:
+            amount = Decimal(str(request.data.get("amount", "")).replace(",", "").strip())
+        except InvalidOperation:
+            return refuse("Enter the amount received.")
+        if not amount.is_finite() or amount <= 0:
+            return refuse("Enter an amount above 0.")
+        if amount > sale.due_amount + Decimal("0.005"):
+            return refuse(f"Only Rs {sale.due_amount} is due on invoice {sale.invoice_number}.")
+
+        serializer = PartyPaymentSerializer(data={
+            "party": sale.customer_id,
+            "payment_type": "IN",
+            "amount": str(amount),
+            "payment_method": request.data.get("payment_method") or "CASH",
+            "bank_account": request.data.get("bank_account") or None,
+            "date": request.data.get("date") or timezone.localdate().isoformat(),
+            "note": request.data.get("note") or f"Payment for invoice {sale.invoice_number}",
+        }, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            payment = serializer.save(created_by=request.user)
+            PartyPaymentListCreateView._reconcile_payment(payment, first_sale=sale)
+            PartyPaymentSerializer._sync_bank(payment)
+        sale.refresh_from_db()
+        return Response({
+            "message": f"Rs {amount} received for invoice {sale.invoice_number}. Still due: Rs {sale.due_amount}.",
+            "payment_id": payment.id,
+            "paid_amount": sale.paid_amount,
+            "due_amount": sale.due_amount,
+        }, status=201)
