@@ -116,6 +116,11 @@ DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
+        # Neon suspends the database after a few idle minutes and closes open
+        # connections. Without this, the first request after a quiet spell
+        # reused the dead connection and failed; with it, Django checks a kept
+        # connection before reusing it and reconnects if it has gone.
+        conn_health_checks=True,
         # Only forced for Postgres — SQLite has no SSL concept, and requiring
         # it unconditionally (as a plain dj_database_url.parse(..., ssl_require=True)
         # would) breaks every local `manage.py runserver`, which has no

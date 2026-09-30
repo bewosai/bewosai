@@ -5,6 +5,13 @@ from rest_framework.test import APIClient
 
 
 class HealthCheckTests(TestCase):
+    def test_kept_database_connections_are_checked_before_reuse(self):
+        # Neon closes connections when it suspends after idling; without this
+        # the first request after a quiet spell failed (see settings.DATABASES).
+        from django.conf import settings
+
+        self.assertTrue(settings.DATABASES["default"]["CONN_HEALTH_CHECKS"])
+
     def test_plain_health_is_ok(self):
         res = APIClient().get("/")
         self.assertEqual(res.status_code, 200)
