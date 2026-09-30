@@ -124,7 +124,8 @@ export const inventory = {
   createProduct: (d) => api.post("/inventory/products/", d),
   updateProduct: (id, d) => api.patch(`/inventory/products/${id}/`, d),
   deleteProduct: (id) => api.delete(`/inventory/products/${id}/`),
-  bulkImportProducts: (products) => api.post("/inventory/products/bulk-import/", { products }),
+  // dryRun: check every row and report Ready / Will skip without saving anything.
+  bulkImportProducts: (products, dryRun = false) => api.post("/inventory/products/bulk-import/", { products, dry_run: dryRun }),
   categories: (p) => api.get("/inventory/categories/", { params: p }),
   createCategory: (d) => api.post("/inventory/categories/", d),
   updateCategory: (id, d) => api.patch(`/inventory/categories/${id}/`, d),
@@ -142,7 +143,7 @@ export const parties = {
   create: (d) => api.post("/parties/", d),
   update: (id, d) => api.patch(`/parties/${id}/`, d),
   delete: (id) => api.delete(`/parties/${id}/`),
-  bulkImport: (parties) => api.post("/parties/bulk-import/", { parties }),
+  bulkImport: (parties, dryRun = false) => api.post("/parties/bulk-import/", { parties, dry_run: dryRun }),
   ledger: (id, p) => api.get(`/parties/${id}/ledger/`, { params: p }),
   payments: (p) => api.get("/parties/payments/", { params: p }),
   addPayment: (d) => api.post("/parties/payments/", d),

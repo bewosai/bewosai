@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import generics, filters, status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -5,6 +7,7 @@ from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import F
 
+from bewosai import bulk_import
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, IsPremiumBusiness, require_feature, require_staff_permission
 from bewosai.utils import get_bid, require_business
@@ -170,11 +173,13 @@ class StockMovementListCreateView(_RequireInventory, generics.ListCreateAPIView)
 
 
 class ProductBulkImportView(APIView):
-    """Bulk create products from Excel import. Accepts list of product objects. Premium only."""
+    """Bulk create products from an Excel import (Premium). Each row is checked
+    on its own — see bewosai.bulk_import. Send "dry_run": true to get the
+    per-row Ready / Will-skip preview without saving anything."""
 
     permission_classes = [IsPremiumBusiness, HasActiveSubscription, require_feature("excel_import"), require_staff_permission("inventory")]
 
-    MAX_ROWS = 500
+    MAX_ROWS = bulk_import.MAX_ROWS
 
     def post(self, request):
         bid = get_bid(request)
@@ -189,56 +194,38 @@ class ProductBulkImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Case-insensitive so re-uploading the same file (or a file that
-        # overlaps an earlier import) doesn't silently create duplicate
-        # products — Product has no DB-level unique constraint on name, so
-        # without this check every re-run would double up the catalog.
-        existing_names = {
+        # Case-insensitive, so re-uploading the same file (or one overlapping an
+        # earlier import) can't double up the catalog — Product has no DB-level
+        # unique constraint on name.
+        existing = {
             n.lower() for n in Product.objects.filter(business_id=bid, is_deleted=False).values_list("name", flat=True)
         }
-        seen_in_file = set()
 
-        created, skipped = [], []
-        for row in rows:
-            name = (row.get("name") or "").strip()
-            if not name:
-                skipped.append({"row": row, "reason": "Missing name"})
-                continue
-            key = name.lower()
-            if key in existing_names:
-                skipped.append({"row": row, "reason": f'A product named "{name}" already exists'})
-                continue
-            if key in seen_in_file:
-                skipped.append({"row": row, "reason": f'Duplicate "{name}" elsewhere in this file'})
-                continue
-            seen_in_file.add(key)
-            try:
-                threshold = row.get("low_stock_threshold")
-                category_name = (row.get("category") or "").strip()
-                category = (
-                    Category.objects.get_or_create(business_id=bid, name=category_name)[0]
-                    if category_name else None
-                )
-                unit_name = (row.get("unit") or "").strip()
-                unit = (
-                    Unit.objects.get_or_create(business_id=bid, name=unit_name)[0]
-                    if unit_name else None
-                )
-                product = Product.objects.create(
-                    business_id=bid,
-                    name=name,
-                    category=category,
-                    unit=unit,
-                    sale_price=row.get("sale_price") or 0,
-                    purchase_price=row.get("purchase_price") or 0,
-                    stock_quantity=row.get("stock_quantity") or 0,
-                    low_stock_threshold=5 if threshold in (None, "") else threshold,
-                    barcode=row.get("barcode") or "",
-                    hs_code=row.get("hs_code") or "",
-                    description=row.get("description") or "",
-                )
-                created.append(product.id)
-            except Exception as e:
-                skipped.append({"row": row, "reason": str(e)})
+        def clean(row):
+            threshold = bulk_import.amount(row, "low_stock_threshold", "Low stock alert", default=Decimal("5"))
+            return {
+                "category_name": str(row.get("category") or "").strip(),
+                "unit_name": str(row.get("unit") or "").strip(),
+                "sale_price": bulk_import.amount(row, "sale_price", "Sale price"),
+                "purchase_price": bulk_import.amount(row, "purchase_price", "Purchase price"),
+                "secondary_sale_price": bulk_import.amount(
+                    row, "secondary_sale_price", "Sale price per secondary unit", blank_is_none=True),
+                "secondary_purchase_price": bulk_import.amount(
+                    row, "secondary_purchase_price", "Purchase price per secondary unit", blank_is_none=True),
+                "stock_quantity": bulk_import.amount(row, "stock_quantity", "Stock quantity"),
+                "low_stock_threshold": threshold,
+                "barcode": str(row.get("barcode") or "").strip(),
+                "hs_code": str(row.get("hs_code") or "").strip(),
+                "description": str(row.get("description") or "").strip(),
+            }
 
-        return Response({"created": len(created), "skipped": len(skipped), "skipped_details": skipped})
+        def create(c):
+            category_name, unit_name = c.pop("category_name"), c.pop("unit_name")
+            category = Category.objects.get_or_create(business_id=bid, name=category_name)[0] if category_name else None
+            unit = Unit.objects.get_or_create(business_id=bid, name=unit_name)[0] if unit_name else None
+            Product.objects.create(business_id=bid, category=category, unit=unit, **c)
+
+        return Response(bulk_import.run(
+            rows, existing_names=existing, noun="product", clean=clean, create=create,
+            dry_run=bool(request.data.get("dry_run")),
+        ))

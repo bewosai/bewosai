@@ -7,6 +7,7 @@ from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, IsPremiumBusiness, require_feature, require_staff_permission
+from bewosai import bulk_import
 from bewosai.utils import get_bid, get_business
 from .balances import party_balances
 from .models import Party, PartyPayment, PaymentAllocation
@@ -340,11 +341,13 @@ class PartyLedgerView(_RequireParties, APIView):
 
 
 class PartyBulkImportView(APIView):
-    """Bulk create parties from Excel import. Accepts list of party objects. Premium only."""
+    """Bulk create parties from an Excel import (Premium). Each row is checked
+    on its own — see bewosai.bulk_import. Send "dry_run": true to get the
+    per-row Ready / Will-skip preview without saving anything."""
 
     permission_classes = [IsPremiumBusiness, HasActiveSubscription, require_feature("excel_import"), require_staff_permission("parties")]
 
-    MAX_ROWS = 500
+    MAX_ROWS = bulk_import.MAX_ROWS
 
     def post(self, request):
         bid = get_bid(request)
@@ -359,44 +362,30 @@ class PartyBulkImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        valid_types = [t for t, _ in Party.TYPE_CHOICES]
-        # Case-insensitive so re-uploading the same file (or one that
-        # overlaps an earlier import) doesn't silently create duplicate
-        # parties — Party has no DB-level unique constraint on name.
-        existing_names = {
+        valid_types = {t for t, _ in Party.TYPE_CHOICES}
+        # Case-insensitive, so re-uploading the same file (or one overlapping an
+        # earlier import) can't create duplicate parties — Party has no
+        # DB-level unique constraint on name.
+        existing = {
             n.lower() for n in Party.objects.filter(business_id=bid, is_deleted=False).values_list("name", flat=True)
         }
-        seen_in_file = set()
 
-        created, skipped = [], []
-        for row in rows:
-            name = (row.get("name") or "").strip()
-            if not name:
-                skipped.append({"row": row, "reason": "Missing name"})
-                continue
-            key = name.lower()
-            if key in existing_names:
-                skipped.append({"row": row, "reason": f'A party named "{name}" already exists'})
-                continue
-            if key in seen_in_file:
-                skipped.append({"row": row, "reason": f'Duplicate "{name}" elsewhere in this file'})
-                continue
-            seen_in_file.add(key)
-            party_type = (row.get("party_type") or "CUSTOMER").strip().upper()
+        def clean(row):
+            party_type = str(row.get("party_type") or "CUSTOMER").strip().upper()
             if party_type not in valid_types:
-                party_type = "CUSTOMER"
-            try:
-                party = Party.objects.create(
-                    business_id=bid,
-                    name=name,
-                    party_type=party_type,
-                    phone=row.get("phone") or "",
-                    email=row.get("email") or "",
-                    address=row.get("address") or "",
-                    opening_balance=row.get("opening_balance") or 0,
-                )
-                created.append(party.id)
-            except Exception as e:
-                skipped.append({"row": row, "reason": str(e)})
+                raise bulk_import.RowError(
+                    f'Party type "{row.get("party_type")}" is not one of CUSTOMER, SUPPLIER or BOTH')
+            return {
+                "party_type": party_type,
+                "phone": str(row.get("phone") or "").strip(),
+                "email": bulk_import.email(row),
+                "address": str(row.get("address") or "").strip(),
+                # Negative = we owe them (To Give), same as the party form.
+                "opening_balance": bulk_import.amount(row, "opening_balance", "Opening balance", allow_negative=True),
+            }
 
-        return Response({"created": len(created), "skipped": len(skipped), "skipped_details": skipped})
+        return Response(bulk_import.run(
+            rows, existing_names=existing, noun="party", clean=clean,
+            create=lambda c: Party.objects.create(business_id=bid, **c),
+            dry_run=bool(request.data.get("dry_run")),
+        ))
