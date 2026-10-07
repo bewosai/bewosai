@@ -51,19 +51,26 @@ class RepaymentTests(TestCase):
     def due(self, sale_id):
         return Sale.objects.get(pk=sale_id).due_amount
 
-    # ── paid can't exceed the total or drop below repayments ──
-    def test_an_overpaid_invoice_is_refused(self):
+    # ── paying more than the total is an advance; paid can't drop below repayments ──
+    def test_paying_more_than_the_total_records_an_advance(self):
         res = self.sell(paid=1200)  # total is 1000
-        self.assertEqual(res.status_code, 400)
-        self.assertIn("can't be more than the total", str(res.data["paid_amount"]))
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(self.due(res.data["id"]), Decimal("-200"))
+        self.assertEqual(self.balance(), Decimal("-200"))  # Ram has Rs 200 credit with us
 
-    def test_editing_the_total_below_what_was_paid_is_refused(self):
+    def test_cutting_the_total_below_what_was_paid_turns_the_rest_into_an_advance(self):
         sale = self.sell(paid=800).data
         res = self.api.patch(f"/api/sales/{sale['id']}/", {
             "items": [{"product_name": "Rice", "quantity": "5", "unit_price": "100"}],
         }, format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(self.due(sale["id"]), Decimal("-300"))
+        self.assertEqual(self.balance(), Decimal("-300"))
+
+    def test_a_negative_paid_amount_is_refused(self):
+        res = self.sell(paid=-5)
         self.assertEqual(res.status_code, 400)
-        self.assertEqual(self.due(sale["id"]), Decimal("200"))
+        self.assertIn("can't be negative", str(res.data["paid_amount"]))
 
     def test_paid_cannot_be_cut_below_what_repayments_put_on_it(self):
         sale = self.sell(paid=300).data
