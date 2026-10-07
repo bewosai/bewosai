@@ -14,6 +14,45 @@ const api = axios.create({
 // Wrap so offline mutations are queued and re-synced automatically
 wrapWithOfflineQueue(api);
 
+/* ── Short memory for page data ────────────────────────────────────────────
+   Moving between pages (Sales → Parties → back to Sales) used to download the
+   same data again every time. A GET answered in the last 30 seconds is reused
+   (per business); identical requests already on their way share one. Any
+   save/edit/delete clears it at once, so your own changes always show; changes
+   made on another device appear within 30 seconds, or on reload. Account,
+   plan and lock checks are never cached. Each caller gets its own copy, so one
+   screen changing the data can't affect another. */
+const GET_CACHE_MS = 30 * 1000;
+const NEVER_CACHE = /\/(auth\/(me|businesses|licenses\/me)|superadmin\/unlock|billing\/subscription)\//;
+const getCache = new Map(); // key -> { at, promise }
+const plainGet = api.get.bind(api);
+
+api.get = (url, config = {}) => {
+  if (NEVER_CACHE.test(url)) return plainGet(url, config);
+  let bid = "";
+  try { bid = localStorage.getItem("business_id") || ""; } catch { /* storage blocked */ }
+  const key = JSON.stringify([bid, url, config.params || null]);
+  const hit = getCache.get(key);
+  let promise;
+  if (hit && Date.now() - hit.at < GET_CACHE_MS) {
+    promise = hit.promise;
+  } else {
+    promise = plainGet(url, config);
+    getCache.set(key, { at: Date.now(), promise });
+    promise.catch(() => { if (getCache.get(key)?.promise === promise) getCache.delete(key); });
+  }
+  return promise.then((res) => ({ ...res, data: structuredClone(res.data) }));
+};
+
+export function clearPageDataCache() {
+  getCache.clear();
+}
+
+api.interceptors.request.use((config) => {
+  if ((config.method || "get").toLowerCase() !== "get") getCache.clear();
+  return config;
+});
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("access");
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -224,25 +263,10 @@ export const banking = {
   deleteTransaction: (id) => api.delete(`/banking/transactions/${id}/`),
 };
 
-// The dashboard report is the heaviest request (~23 database queries), and the
-// Dashboard page and the top bar's reminder bell both ask for it when the app
-// opens. Asks within 3 seconds for the same business share one request.
-let sharedDashboard = null; // { key, at, promise }
-function dashboardOnce() {
-  let key = "";
-  try { key = localStorage.getItem("business_id") || ""; } catch { /* storage blocked */ }
-  const now = Date.now();
-  if (sharedDashboard && sharedDashboard.key === key && now - sharedDashboard.at < 3000) {
-    return sharedDashboard.promise;
-  }
-  const promise = api.get("/reports/dashboard/");
-  sharedDashboard = { key, at: now, promise };
-  promise.catch(() => { if (sharedDashboard?.promise === promise) sharedDashboard = null; });
-  return promise;
-}
-
 export const reports = {
-  dashboard: dashboardOnce,
+  // The Dashboard page and the reminder bell both ask for this heavy report
+  // when the app opens; the page-data memory above makes them share one request.
+  dashboard: () => api.get("/reports/dashboard/"),
   sales: (p) => api.get("/reports/sales/", { params: p }),
   expenses: (p) => api.get("/reports/expenses/", { params: p }),
   inventory: () => api.get("/reports/inventory/"),
