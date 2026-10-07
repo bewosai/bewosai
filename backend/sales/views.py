@@ -12,6 +12,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_bid, require_business
+from inventory import stock
 from parties.allocations import release_allocations
 from .models import Sale, SaleItem, SaleReturn, Quotation
 from .serializers import SaleSerializer, SaleReturnSerializer, QuotationSerializer
@@ -133,6 +134,8 @@ class SaleDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):
         from django.utils import timezone
         with transaction.atomic():
             release_allocations(sale=instance)
+            if instance.status == Sale.STATUS_CONFIRMED:
+                stock.undo_sale(instance.items.all())
             instance.is_deleted = True
             instance.deleted_at = timezone.now()
             instance.save(update_fields=["is_deleted", "deleted_at"])

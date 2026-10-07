@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
 from bewosai.utils import get_business
+from inventory import stock
 from parties.allocations import release_allocations
 from .models import Purchase, PurchaseItem, PurchaseReturn
 from .serializers import PurchaseSerializer, PurchaseReturnSerializer
@@ -110,6 +111,8 @@ class PurchaseDetailView(_RequirePurchases, generics.RetrieveUpdateDestroyAPIVie
     def perform_destroy(self, instance):
         with transaction.atomic():
             release_allocations(purchase=instance)
+            if instance.status == "CONFIRMED":
+                stock.undo_purchase(instance.items.all())
             instance.is_deleted = True
             instance.deleted_at = timezone.now()
             instance.save(update_fields=["is_deleted", "deleted_at"])
@@ -281,6 +284,12 @@ class RecycleBinRestoreView(APIView):
         obj.is_deleted = False
         obj.deleted_at = None
         obj.save(update_fields=["is_deleted", "deleted_at"])
+
+        # Deleting a confirmed sale/purchase undid its stock; restoring it applies it again.
+        if record_type == "sale" and obj.status == "CONFIRMED":
+            stock.apply_sale(obj.items.all())
+        elif record_type == "purchase" and obj.status == "CONFIRMED":
+            stock.apply_purchase(obj.items.all())
 
         if record_type == "payment":
             # Mirror image of _unreconcile_payment (parties.views) — re-apply

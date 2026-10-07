@@ -207,7 +207,7 @@ class DashboardSummaryView(APIView):
         # min_stock_level defaults to 0 and is unused by any UI, so filtering on it
         # here (as this used to) silently hid every low-stock product from the dashboard.
         low_stock_count = Product.objects.filter(
-            business=biz, is_active=True, is_deleted=False,
+            business=biz, is_active=True, is_deleted=False, item_type=Product.PRODUCT,
             stock_quantity__lte=F("low_stock_threshold"),
         ).count()
 

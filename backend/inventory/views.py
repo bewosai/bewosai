@@ -104,7 +104,8 @@ class ProductListCreateView(_RequireInventory, generics.ListCreateAPIView):
             is_deleted=False,
         ).select_related("category", "unit")
         if self.request.query_params.get("low_stock"):
-            qs = qs.filter(stock_quantity__lte=F("low_stock_threshold"))
+            # Real products only: a service always has stock 0 ≤ alert level 0.
+            qs = qs.filter(item_type=Product.PRODUCT, stock_quantity__lte=F("low_stock_threshold"))
         return qs
 
     def perform_create(self, serializer):

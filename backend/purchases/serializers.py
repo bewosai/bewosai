@@ -5,6 +5,7 @@ from django.db.models.functions import Greatest
 from rest_framework import serializers
 from bewosai.validators import IMAGE_VALIDATORS, check_discounts, check_paid
 from bewosai.utils import require_business, sync_bank_transaction
+from inventory import stock
 from inventory.models import Product
 from .models import Purchase, PurchaseItem, PurchaseReturn, PurchaseReturnItem
 
@@ -125,51 +126,58 @@ class PurchaseSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop("items", [])
         purchase = Purchase.objects.create(**validated_data)
+
         subtotal = Decimal("0")
+        items = []
         for item_data in items_data:
             item = PurchaseItem(purchase=purchase, **item_data)
             self._set_base_quantity(item)
-            item.save()                     # computes item.total
+            item.save()                     # computes item.total = qty*price - discount
             subtotal += item.total
-            if item.product_id:
-                Product.objects.filter(pk=item.product_id).update(
-                    stock_quantity=F("stock_quantity") + item.base_quantity
-                )
+            items.append(item)
+        # Stock moves only for a confirmed purchase, never a draft — see inventory.stock.
+        if purchase.status == stock.CONFIRMED:
+            stock.apply_purchase(items)
+
         purchase.subtotal = subtotal
-        purchase.save()                     # model.save() recomputes tax_amount, total, due_amount
+        # model.save() recomputes tax_amount, total, due_amount
+        purchase.save()
         self._sync_bank(purchase)
         return purchase
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop("items", None)
+        # Whether stock currently reflects this purchase, before and after the edit
+        # (only a confirmed one moves stock — see inventory.stock).
+        was_applied = instance.status == stock.CONFIRMED
+        old_items = list(instance.items.all())
 
-        # Reverse old stock increments before replacing items — using the
-        # original base_quantity snapshot, not a fresh conversion.
         if items_data is not None:
-            for old_item in instance.items.all():
-                if old_item.product_id:
-                    reverse_qty = old_item.base_quantity if old_item.base_quantity is not None else old_item.quantity
-                    Product.objects.filter(pk=old_item.product_id).update(
-                        stock_quantity=Greatest(F("stock_quantity") - reverse_qty, Decimal("0"))
-                    )
+            if was_applied:
+                stock.undo_purchase(old_items)
             instance.items.all().delete()
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        now_applied = instance.status == stock.CONFIRMED
 
         if items_data is not None:
             subtotal = Decimal("0")
+            new_items = []
             for item_data in items_data:
                 item = PurchaseItem(purchase=instance, **item_data)
                 self._set_base_quantity(item)
                 item.save()
                 subtotal += item.total
-                if item.product_id:
-                    Product.objects.filter(pk=item.product_id).update(
-                        stock_quantity=F("stock_quantity") + item.base_quantity
-                    )
+                new_items.append(item)
+            if now_applied:
+                stock.apply_purchase(new_items)
             instance.subtotal = subtotal
             # model.save() recomputes tax_amount, total, due_amount
+        elif was_applied and not now_applied:      # cancelled (or back to draft)
+            stock.undo_purchase(old_items)
+        elif now_applied and not was_applied:      # a draft confirmed
+            stock.apply_purchase(old_items)
 
         instance.save()
         self._sync_bank(instance)

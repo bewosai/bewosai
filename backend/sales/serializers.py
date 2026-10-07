@@ -5,6 +5,7 @@ from django.db.models.functions import Greatest
 from rest_framework import serializers
 from bewosai.validators import check_discounts, check_paid
 from bewosai.utils import require_business, sync_bank_transaction
+from inventory import stock
 from inventory.models import Product
 from .models import Sale, SaleItem, SaleReturn, SaleReturnItem, Quotation
 
@@ -119,21 +120,16 @@ class SaleSerializer(serializers.ModelSerializer):
         sale = Sale.objects.create(**validated_data)
 
         subtotal = Decimal("0")
+        items = []
         for item_data in items_data:
             item = SaleItem(sale=sale, **item_data)
             self._set_base_quantity(item)
             item.save()                     # computes item.total = qty*price - discount
             subtotal += item.total
-
-            # Decrement stock for linked products via an atomic F()-expression
-            # UPDATE (not read-modify-write) so two concurrent sales of the
-            # same product can't race and silently lose one decrement.
-            # base_quantity is the primary-unit equivalent (see
-            # Unit.base_quantity_for) — stock is always tracked in that unit.
-            if item.product_id:
-                Product.objects.filter(pk=item.product_id).update(
-                    stock_quantity=Greatest(F("stock_quantity") - item.base_quantity, Decimal("0"))
-                )
+            items.append(item)
+        # Stock moves only for a confirmed sale, never a draft — see inventory.stock.
+        if sale.status == stock.CONFIRMED:
+            stock.apply_sale(items)
 
         sale.subtotal = subtotal
         # model.save() recomputes tax_amount, total, due_amount
@@ -143,39 +139,37 @@ class SaleSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop("items", None)
+        # Whether stock currently reflects this sale, before and after the edit
+        # (only a confirmed one moves stock — see inventory.stock).
+        was_applied = instance.status == stock.CONFIRMED
+        old_items = list(instance.items.all())
 
-        # Reverse old stock decrements before deleting items — using the
-        # same base_quantity snapshot that was originally deducted (not a
-        # fresh conversion), so a conversion_factor change on the product
-        # since then can't throw stock off.
         if items_data is not None:
-            for old_item in instance.items.all():
-                if old_item.product_id:
-                    reverse_qty = old_item.base_quantity if old_item.base_quantity is not None else old_item.quantity
-                    Product.objects.filter(pk=old_item.product_id).update(
-                        stock_quantity=F("stock_quantity") + reverse_qty
-                    )
+            if was_applied:
+                stock.undo_sale(old_items)
             instance.items.all().delete()
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        now_applied = instance.status == stock.CONFIRMED
 
         if items_data is not None:
             subtotal = Decimal("0")
+            new_items = []
             for item_data in items_data:
                 item = SaleItem(sale=instance, **item_data)
                 self._set_base_quantity(item)
                 item.save()
                 subtotal += item.total
-
-                # Apply new stock decrements
-                if item.product_id:
-                    Product.objects.filter(pk=item.product_id).update(
-                        stock_quantity=Greatest(F("stock_quantity") - item.base_quantity, Decimal("0"))
-                    )
-
+                new_items.append(item)
+            if now_applied:
+                stock.apply_sale(new_items)
             instance.subtotal = subtotal
             # model.save() recomputes tax_amount, total, due_amount
+        elif was_applied and not now_applied:      # cancelled (or back to draft)
+            stock.undo_sale(old_items)
+        elif now_applied and not was_applied:      # a draft confirmed
+            stock.apply_sale(old_items)
 
         instance.save()
         self._sync_bank(instance)
