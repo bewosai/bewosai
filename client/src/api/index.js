@@ -224,8 +224,25 @@ export const banking = {
   deleteTransaction: (id) => api.delete(`/banking/transactions/${id}/`),
 };
 
+// The dashboard report is the heaviest request (~23 database queries), and the
+// Dashboard page and the top bar's reminder bell both ask for it when the app
+// opens. Asks within 3 seconds for the same business share one request.
+let sharedDashboard = null; // { key, at, promise }
+function dashboardOnce() {
+  let key = "";
+  try { key = localStorage.getItem("business_id") || ""; } catch { /* storage blocked */ }
+  const now = Date.now();
+  if (sharedDashboard && sharedDashboard.key === key && now - sharedDashboard.at < 3000) {
+    return sharedDashboard.promise;
+  }
+  const promise = api.get("/reports/dashboard/");
+  sharedDashboard = { key, at: now, promise };
+  promise.catch(() => { if (sharedDashboard?.promise === promise) sharedDashboard = null; });
+  return promise;
+}
+
 export const reports = {
-  dashboard: () => api.get("/reports/dashboard/"),
+  dashboard: dashboardOnce,
   sales: (p) => api.get("/reports/sales/", { params: p }),
   expenses: (p) => api.get("/reports/expenses/", { params: p }),
   inventory: () => api.get("/reports/inventory/"),
