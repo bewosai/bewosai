@@ -7,3 +7,4 @@ release/
 apk-release/
 .neon
 .env.local
+RENDER-DATABASE-URL.txt

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/validators.dart';
 
@@ -41,25 +42,52 @@ class LineDiscountField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final amount = Validators.discountAmount(controller.text, gross, percent: isPercent);
-    return TextFormField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      autovalidateMode: AutovalidateMode.onUserInteraction,
-      decoration: InputDecoration(
-        labelText: isPercent ? 'Discount (%)' : 'Discount (Rs)',
-        helperText: amount > 0 && gross > 0
-            ? isPercent
-                ? '= ${Formatters.currency(amount)} off'
-                : '= ${(amount / gross * 100).toStringAsFixed(1)}% of the line'
-            : null,
-        suffixIcon: TextButton(
-          onPressed: _toggle,
-          child: Text(isPercent ? '%' : 'Rs', style: const TextStyle(fontWeight: FontWeight.w800)),
+    // The two modes are a clearly labelled choice above the field (same as the
+    // invoice-level "Discount as" on the sale screen) — a % and a rupee amount
+    // look identical while typing, so which one is meant must be obvious.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Discount as', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('Amount (Rs)'),
+              selected: !isPercent,
+              selectedColor: AppColors.orangeLight,
+              onSelected: (_) { if (isPercent) _toggle(); },
+            ),
+            ChoiceChip(
+              label: const Text('% of line'),
+              selected: isPercent,
+              selectedColor: AppColors.orangeLight,
+              onSelected: (_) { if (!isPercent) _toggle(); },
+            ),
+          ],
         ),
-      ),
-      // Re-checked as quantity/price change too, since the cap moves with them.
-      validator: (v) => isPercent ? Validators.discountPercent(v) : Validators.discount(v, gross),
-      onChanged: (_) => onChanged(),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          decoration: InputDecoration(
+            labelText: isPercent ? 'Discount percent' : 'Discount amount',
+            prefixText: isPercent ? null : 'Rs ',
+            suffixText: isPercent ? '%' : null,
+            helperText: amount > 0 && gross > 0
+                ? isPercent
+                    ? '= ${Formatters.currency(amount)} off'
+                    : '= ${(amount / gross * 100).toStringAsFixed(1)}% of the line'
+                : null,
+          ),
+          // Re-checked as quantity/price change too, since the cap moves with them.
+          validator: (v) => isPercent ? Validators.discountPercent(v) : Validators.discount(v, gross),
+          onChanged: (_) => onChanged(),
+        ),
+      ],
     );
   }
 }

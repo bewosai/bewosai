@@ -362,6 +362,11 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
   final _paidController = TextEditingController(text: '0');
   final _cashAmountController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
+  // Whole-bill discount: a % of the subtotal or a flat Rs amount, chosen with
+  // the "Discount as" chips — same as the sale screen. It used to be missing,
+  // and editing a bill saved its discount as 0, raising the total.
+  final _discountController = TextEditingController(text: '0');
+  bool _discountIsAmount = false;
   bool _vatEnabled = false;
   Party? _supplier;
   DateTime _purchaseDate = NepalTime.now();
@@ -397,6 +402,12 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
         _creditSale = p.dueAmount > 0;
         _notesController.text = p.notes;
         _billImageUrl = p.billImageUrl;
+        // Shown as the exact saved amount: converting to a rounded % and back
+        // would nudge the discount by a few paisa on every re-save.
+        if (p.discount > 0) {
+          _discountIsAmount = true;
+          _discountController.text = _fmtNumber(p.discount);
+        }
         _vatEnabled = p.taxRate > 0;
         if (p.taxRate > 0) {
           _taxRateController.text = p.taxRate == p.taxRate.roundToDouble()
@@ -440,9 +451,36 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
   }
 
   double get _subtotal => _items.fold(0.0, (sum, i) => sum + i.total);
+  double get _discountValue => double.tryParse(_discountController.text) ?? 0;
+  // Either a % of the subtotal or a flat amount, capped to [0, subtotal] so a
+  // typo can't push the taxable amount negative.
+  double get _discountAmount {
+    final raw = _discountIsAmount ? _discountValue : _subtotal * _discountValue / 100;
+    return raw.clamp(0, _subtotal < 0 ? 0 : _subtotal).toDouble();
+  }
+
+  static String _fmtNumber(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
+  /// Switches the discount between % and a flat amount, converting what's
+  /// typed so the discount itself doesn't change — only how it's shown.
+  void _setDiscountMode(bool asAmount) {
+    if (asAmount == _discountIsAmount) return;
+    final current = _discountAmount;
+    setState(() {
+      _discountIsAmount = asAmount;
+      _discountController.text = current == 0
+          ? '0'
+          : asAmount
+              ? _fmtNumber(current)
+              : _fmtNumber(_subtotal > 0 ? current / _subtotal * 100 : 0);
+    });
+  }
+
+  double get _taxable => _subtotal - _discountAmount;
   double get _taxRate => double.tryParse(_taxRateController.text) ?? 0;
-  double get _taxAmount => _vatEnabled ? _subtotal * _taxRate / 100 : 0;
-  double get _total => _subtotal + _taxAmount;
+  double get _taxAmount => _vatEnabled ? _taxable * _taxRate / 100 : 0;
+  double get _total => _taxable + _taxAmount;
   double get _paid => double.tryParse(_paidController.text) ?? 0;
   double get _cashAmount =>
       (double.tryParse(_cashAmountController.text) ?? 0).clamp(0, _paid);
@@ -849,7 +887,7 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
       purchaseDate: _purchaseDate,
       dueDate: _dueDate,
       subtotal: _subtotal,
-      discount: 0,
+      discount: _discountAmount,
       taxRate: _vatEnabled ? _taxRate : 0,
       taxAmount: _taxAmount,
       total: _total,
@@ -1017,6 +1055,55 @@ class _PurchaseFormScreenState extends State<_PurchaseFormScreen> {
                           Text(Formatters.currency(_subtotal)),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      Text('Discount as', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('% of total'),
+                            selected: !_discountIsAmount,
+                            selectedColor: AppColors.orangeLight,
+                            onSelected: (_) => _setDiscountMode(false),
+                          ),
+                          ChoiceChip(
+                            label: const Text('Flat Amount (Rs)'),
+                            selected: _discountIsAmount,
+                            selectedColor: AppColors.orangeLight,
+                            onSelected: (_) => _setDiscountMode(true),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _discountController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: _discountIsAmount ? 'Discount amount' : 'Discount percent',
+                          prefixText: _discountIsAmount ? 'Rs ' : null,
+                          suffixText: _discountIsAmount ? null : '%',
+                          // Show the other mode's equivalent too, so "20%" and
+                          // "Rs 200 off" are never ambiguous.
+                          helperText: _subtotal > 0 && _discountAmount > 0
+                              ? _discountIsAmount
+                                  ? '= ${(_discountAmount / _subtotal * 100).toStringAsFixed(1)}% of Rs ${_subtotal.toStringAsFixed(0)}'
+                                  : '= ${Formatters.currency(_discountAmount)} off Rs ${_subtotal.toStringAsFixed(0)}'
+                              : null,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      if (_discountAmount > 0) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Discount'),
+                            Text('- ${Formatters.currency(_discountAmount)}'),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
