@@ -11,7 +11,7 @@ import {
 
 // Direct download of the Android app (APK). Override with VITE_APK_URL in the
 // Vercel project's environment variables when the file moves.
-const APK_URL = import.meta.env.VITE_APK_URL || "https://files.catbox.moe/mr25f2.apk";
+const APK_URL = import.meta.env.VITE_APK_URL || "https://files.catbox.moe/fc5aix.apk";
 
 const features = [
   {
