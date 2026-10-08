@@ -18,6 +18,11 @@ class PurchaseProvider extends ChangeNotifier {
   bool isLoadingReturns = false;
   String? error;
 
+  /// Called after anything that changes stock on the server (a bill saved,
+  /// cancelled, deleted or returned) so Inventory reloads the real numbers —
+  /// and the low-stock alert fires — without the user pulling to refresh.
+  VoidCallback? onStockChanged;
+
   Future<void> load() async {
     isLoading = true;
     error = null;
@@ -64,6 +69,7 @@ class PurchaseProvider extends ChangeNotifier {
       }
       isLoading = false;
       notifyListeners();
+      onStockChanged?.call();
       return result;
     } catch (e) {
       isLoading = false;
@@ -108,6 +114,7 @@ class PurchaseProvider extends ChangeNotifier {
   Future<bool> delete(int id) => _guard(() async {
         await _useCases.deletePurchase(id);
         purchases = purchases.where((p) => p.id != id).toList();
+        onStockChanged?.call();
         return true;
       });
 
@@ -127,6 +134,7 @@ class PurchaseProvider extends ChangeNotifier {
   Future<bool> createReturn(PurchaseReturn purchaseReturn) => _guard(() async {
         await _useCases.createReturn(purchaseReturn);
         await loadReturns();
+        onStockChanged?.call();
         return true;
       });
 

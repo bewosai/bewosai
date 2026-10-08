@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/notifications/low_stock_alerts.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/offline/app_database.dart';
 import '../../../../core/offline/connectivity_service.dart';
@@ -82,6 +83,9 @@ class InventoryProvider extends ChangeNotifier {
           businessId,
           products.map((p) => p.toCacheJson()).toList(),
         );
+        // Fresh, full catalog: notify for any product that just reached its
+        // low-stock level (once each — see LowStockAlerts).
+        LowStockAlerts.check(products, businessId: businessId).catchError((_) {});
       }
     } catch (e) {
       if (businessId.isNotEmpty) {

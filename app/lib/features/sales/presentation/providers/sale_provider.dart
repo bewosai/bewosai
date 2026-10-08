@@ -20,6 +20,11 @@ class SaleProvider extends ChangeNotifier {
   bool isLoading = false;
   String? error;
 
+  /// Called after anything that changes stock on the server (a bill saved,
+  /// cancelled, deleted or returned) so Inventory reloads the real numbers —
+  /// and the low-stock alert fires — without the user pulling to refresh.
+  VoidCallback? onStockChanged;
+
   Future<String> _businessId() async {
     final business = await TokenStorage.instance.currentBusiness;
     return '${business?['id'] ?? ''}';
@@ -138,6 +143,7 @@ class SaleProvider extends ChangeNotifier {
       }
       isLoading = false;
       notifyListeners();
+      onStockChanged?.call();
       return result;
     } catch (e) {
       isLoading = false;
@@ -234,6 +240,7 @@ class SaleProvider extends ChangeNotifier {
         // Nothing about following up on this invoice's balance makes sense
         // once it's deleted — same "stale reminder" reasoning as _cancelSettledReminders.
         await NotificationService.instance.cancel(id);
+        onStockChanged?.call();
         return true;
       });
 
@@ -250,6 +257,7 @@ class SaleProvider extends ChangeNotifier {
                 notes: s.notes, items: s.items, createdAt: s.createdAt,
               )
             : s).toList();
+        onStockChanged?.call();
         return true;
       });
 
@@ -274,6 +282,7 @@ class SaleProvider extends ChangeNotifier {
         final created = await _useCases.createReturn(saleReturn);
         returns = [created, ...returns];
         await load();
+        onStockChanged?.call();
         return true;
       });
 

@@ -95,6 +95,10 @@ class _BewosaiAppState extends State<BewosaiApp> {
       _bankingProvider.load();
     };
     SyncService.instance.init();
+    // Sales and purchases change stock on the server; reload Inventory so the
+    // POS, stock list and low-stock alert never show yesterday's numbers.
+    _saleProvider.onStockChanged = _inventoryProvider.load;
+    _purchaseProvider.onStockChanged = _inventoryProvider.load;
     // The backend blocks every business-scoped call with the same 403 once
     // a trial/license lapses — this is the only signal for a lapse that
     // happens mid-session, well after LicenseProvider's last explicit check.

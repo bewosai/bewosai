@@ -47,6 +47,7 @@ class NotificationService {
   /// Android 13+ requires this to be requested at runtime; returns true if
   /// granted (or already granted / not required on this platform version).
   Future<bool> requestPermission() async {
+    await init();
     final androidImpl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     if (androidImpl != null) {
       final granted = await androidImpl.requestNotificationsPermission();
@@ -94,5 +95,30 @@ class NotificationService {
   Future<void> cancel(int id) async {
     await init();
     await _plugin.cancel(id);
+  }
+
+  /// Shows a notification right away (e.g. a product just hit its low-stock
+  /// level). Silently does nothing if the user hasn't allowed notifications.
+  Future<void> showNow({required int id, required String title, required String body}) async {
+    await init();
+    try {
+      await _plugin.show(
+        id,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelId,
+            _channelName,
+            channelDescription: _channelDescription,
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    } catch (_) {
+      // No permission / platform without notifications — never break the caller.
+    }
   }
 }
