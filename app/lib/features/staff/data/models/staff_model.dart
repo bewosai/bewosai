@@ -44,9 +44,50 @@ class StaffMember {
 
   // Never indexes into an empty string: a link-only staff member has no email,
   // and a blank name would otherwise crash the whole Staff list.
+  /// Joined before email invitations: signs in with a shared login link.
+  bool get usesLoginLink => userEmail.isEmpty;
+
   String get initial {
     if (userName.isNotEmpty) return userName[0].toUpperCase();
     if (userEmail.isNotEmpty) return userEmail[0].toUpperCase();
     return '?';
   }
+}
+
+/// An invitation waiting for the person to verify their email and accept.
+class StaffInvitation {
+  final int id;
+  final String name;
+  final String email;
+  final String role;
+  final String roleLabel;
+  final String status;
+  final bool isExpired;
+  final DateTime? expiresAt;
+  /// The secret link token - only present right after creating or resending.
+  final String? token;
+
+  StaffInvitation({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.role,
+    required this.roleLabel,
+    required this.status,
+    required this.isExpired,
+    this.expiresAt,
+    this.token,
+  });
+
+  factory StaffInvitation.fromJson(Map<String, dynamic> json) => StaffInvitation(
+        id: json['id'] as int,
+        name: json['name'] as String? ?? '',
+        email: json['email'] as String? ?? '',
+        role: json['role'] as String? ?? '',
+        roleLabel: json['role_label'] as String? ?? (json['role'] as String? ?? ''),
+        status: json['status'] as String? ?? 'PENDING',
+        isExpired: json['is_expired'] as bool? ?? false,
+        expiresAt: Formatters.parseDate(json['expires_at'] as String?),
+        token: json['token'] as String?,
+      );
 }

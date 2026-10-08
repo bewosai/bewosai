@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_widgets.dart';
@@ -12,15 +13,21 @@ import '../../data/services/staff_service.dart' show defaultPermissionsFor;
 import '../providers/staff_provider.dart';
 import '../widgets/staff_access_editor.dart';
 
+/// Old-style login link — only for staff added before email invitations.
 void _shareStaffLoginLink(String name, String token) {
   final url = AppConstants.staffLoginUrl(token);
   SharePlus.instance.share(ShareParams(
-    text: "Here's your staff login link for Bewosai${name.isNotEmpty ? ', $name' : ''} — "
-        "no password needed. On a computer, open it to sign in. In the Bewosai app, tap "
-        "\"Staff? Sign in with your login link\" on the first screen and paste it.\n\n$url\n\n"
+    text: "Here's your staff login link for Bewosai${name.isNotEmpty ? ', $name' : ''}. "
+        "In the Bewosai app, tap \"Staff? Use the link you were sent\" and paste it.\n\n$url\n\n"
         "Keep this link private — anyone with it can sign in as you.",
   ));
 }
+
+String _inviteMessage(String name, String businessName, String url) =>
+    "Hi${name.isNotEmpty ? ' $name' : ''}, you're invited to join ${businessName.isNotEmpty ? businessName : 'our business'} on Bewosai. "
+    'Open this link, verify your email and accept:\n$url\n\nThe link works once and expires in 7 days.';
+
+String _date(DateTime? d) => d == null ? '' : '${d.day}/${d.month}/${d.year}';
 
 class StaffScreen extends StatefulWidget {
   const StaffScreen({super.key});
@@ -40,36 +47,82 @@ class _StaffScreenState extends State<StaffScreen> {
     );
   }
 
+  void _openInvite(int businessId) => showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => _InviteStaffSheet(businessId: businessId),
+      );
+
+  Future<void> _resend(int businessId, StaffInvitation inv, String businessName) async {
+    final provider = context.read<StaffProvider>();
+    final ok = await provider.resendInvitation(businessId, inv.id);
+    if (!mounted) return;
+    final fresh = provider.lastInvitation;
+    if (ok && fresh?.token != null) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          child: _InviteShareView(
+            title: 'New invitation link',
+            subtitle: '${fresh!.name} · ${fresh.roleLabel} — the old link no longer works.',
+            name: fresh.name,
+            businessName: businessName,
+            token: fresh.token!,
+          ),
+        ),
+      );
+    } else {
+      showAppSnackBar(context, provider.error ?? 'Could not resend the invitation', isError: true);
+    }
+  }
+
+  Future<void> _cancel(int businessId, StaffInvitation inv) async {
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: 'Cancel invitation?',
+      message: 'The link sent to ${inv.name} will stop working.',
+      confirmLabel: 'Cancel invitation',
+    );
+    if (!confirmed || !mounted) return;
+    final provider = context.read<StaffProvider>();
+    final ok = await provider.cancelInvitation(businessId, inv.id);
+    if (!mounted) return;
+    showAppSnackBar(context, ok ? 'Invitation cancelled' : (provider.error ?? 'Could not cancel'), isError: !ok);
+  }
+
   @override
   Widget build(BuildContext context) {
     final sp = context.watch<StaffProvider>();
-    final currentBusiness = context.watch<AuthProvider>().currentBusiness;
+    final auth = context.watch<AuthProvider>();
+    final currentBusiness = auth.currentBusiness;
     final businessId = currentBusiness?.id;
+    final businessName = currentBusiness?.name ?? '';
 
-    // Mirrors the backend's own per-plan staff limit (accounts/views.py's
-    // STAFF_LIMIT_BY_PLAN / plan_staff_limit) — shown proactively so an owner
-    // isn't surprised by the rejection only after filling out the invite
-    // form. effectivePlan (not plan): a coupon/referral-granted upgrade must
-    // unlock the higher limit too. staffLimitOverride, when Super Admin has
-    // set one for this business, always wins over the plan default below.
-    const planStaffLimit = {'FREE': 1, 'PREMIUM': 3, 'PREMIUMPLUS': 5};
-    final effectivePlan = currentBusiness?.effectivePlan ?? currentBusiness?.plan;
-    final staffLimit = currentBusiness?.staffLimitOverride ?? planStaffLimit[effectivePlan] ?? 1;
-    final nonOwnerCount = sp.staff.where((s) => s.role != 'OWNER').length;
-    final atStaffLimit = nonOwnerCount >= staffLimit;
+    // Mirrors the backend (accounts/views.py PLATFORM_LIMITS): 3 staff per
+    // business from the app (5 on the website), on any plan; active staff plus
+    // invitations still waiting count. A Super Admin override wins.
+    final staffLimit = currentBusiness?.staffLimitOverride ?? 3;
+    final used = sp.staff.where((s) => s.role != 'OWNER' && s.isActive).length +
+        sp.invitations.where((i) => !i.isExpired).length;
+    final atStaffLimit = used >= staffLimit;
 
-    final filteredStaff = _search.isEmpty
-        ? sp.staff
-        : sp.staff.where((s) {
-            final q = _search.toLowerCase();
-            return s.userName.toLowerCase().contains(q) ||
-                s.userEmail.toLowerCase().contains(q) ||
-                s.role.toLowerCase().contains(q);
-          }).toList();
+    StaffMember? owner;
+    for (final s in sp.staff) {
+      if (s.role == 'OWNER') owner = s;
+    }
+    final team = sp.staff.where((s) => s.role != 'OWNER').where((s) {
+      if (_search.isEmpty) return true;
+      final q = _search.toLowerCase();
+      return s.userName.toLowerCase().contains(q) ||
+          s.userEmail.toLowerCase().contains(q) ||
+          staffRoleLabel(s.role).toLowerCase().contains(q);
+    }).toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Staff'),
+        title: const Text('Manage Staff'),
         actions: const [HomeLogoButton()],
       ),
       bottomNavigationBar: const AppBottomNav(currentIndex: 4),
@@ -81,55 +134,64 @@ class _StaffScreenState extends State<StaffScreen> {
             : atStaffLimit
                 ? () => showAppSnackBar(
                       context,
-                      effectivePlan == 'FREE'
-                          ? 'Your Free plan allows up to $staffLimit staff — upgrade to Premium to invite more.'
-                          : 'You\'ve reached the limit of $staffLimit staff members. Remove or deactivate someone to invite another.',
+                      'The app allows $staffLimit staff per business (waiting invitations count). Use the website to add up to 5, or remove someone first.',
                       isError: true,
                     )
-                : () => showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) => _InviteStaffSheet(businessId: businessId),
-                    ),
+                : () => _openInvite(businessId),
         backgroundColor: atStaffLimit ? AppColors.textSecondary : null,
         icon: const Icon(Icons.person_add_alt_outlined),
-        label: const Text('Invite'),
+        label: const Text('Add New Staff'),
       ),
       body: ResponsiveBody(
         child: sp.isLoading && sp.staff.isEmpty
             ? const LoadingView()
             : RefreshIndicator(
                 onRefresh: () => context.read<StaffProvider>().load(),
-                child: sp.staff.isEmpty
-                    // A failed load used to look identical to "no staff yet".
-                    ? (sp.error != null
-                        ? ListView(children: [
-                            const SizedBox(height: 80),
-                            EmptyState(
-                              icon: Icons.error_outline,
-                              title: 'Could not load staff',
-                              message: sp.error!,
-                              action: PrimaryButton(
-                                label: 'Retry',
-                                expand: false,
-                                onPressed: () => context.read<StaffProvider>().load(),
-                              ),
-                            ),
-                          ])
-                        : const EmptyState(
-                            icon: Icons.badge_outlined,
-                            title: 'No staff members yet',
-                            message: 'Invite teammates to help run your business.',
-                          ))
+                child: sp.staff.isEmpty && sp.error != null
+                    ? ListView(children: [
+                        const SizedBox(height: 80),
+                        EmptyState(
+                          icon: Icons.error_outline,
+                          title: 'Could not load staff',
+                          message: sp.error!,
+                          action: PrimaryButton(
+                            label: 'Retry',
+                            expand: false,
+                            onPressed: () => context.read<StaffProvider>().load(),
+                          ),
+                        ),
+                      ])
                     : ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                         children: [
-                          SearchField(
-                            hint: 'Search name, email, role',
-                            onChanged: (v) => setState(() => _search = v),
+                          const _SectionTitle('Admin'),
+                          AppCard(
+                            child: Row(
+                              children: [
+                                const CircleAvatar(
+                                  backgroundColor: AppColors.orangeLight,
+                                  child: Icon(Icons.workspace_premium, color: AppColors.orangeDark),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        (owner?.userName.isNotEmpty ?? false) ? owner!.userName : (auth.user?.name ?? 'Business Admin'),
+                                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text('Business Admin · Full business access',
+                                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           if (atStaffLimit) ...[
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 12),
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
@@ -137,136 +199,248 @@ class _StaffScreenState extends State<StaffScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                effectivePlan != 'FREE'
-                                    ? 'This business is limited to $staffLimit staff member${staffLimit == 1 ? '' : 's'} besides the owner.'
-                                    : 'Your Free plan allows up to $staffLimit staff member${staffLimit == 1 ? '' : 's'} besides the owner — upgrade to Premium to invite more.',
-                                style: const TextStyle(
-                                  color: AppColors.orangeDark,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                'The app allows $staffLimit staff member${staffLimit == 1 ? '' : 's'} per business besides the admin (waiting invitations count). Use the website to add up to 5.',
+                                style: const TextStyle(color: AppColors.orangeDark, fontSize: 13, fontWeight: FontWeight.w600),
                               ),
                             ),
                           ],
-                          const SizedBox(height: 10),
-                          if (filteredStaff.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 24),
-                              child: Center(
-                                child: Text(
-                                  'No matching staff',
-                                  style: TextStyle(color: AppColors.textSecondary),
-                                ),
-                              ),
-                            ),
-                          ...filteredStaff
-                            .map(
-                              (s) => Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: AppCard(
-                                  // The owner can't be edited or removed here (the
-                                  // backend refuses it too); everyone else opens the
-                                  // manage sheet: role, link, active, remove.
-                                  onTap: s.role == 'OWNER' || businessId == null
-                                      ? null
-                                      : () => showModalBottomSheet(
-                                            context: context,
-                                            isScrollControlled: true,
-                                            builder: (_) => _ManageStaffSheet(staffId: s.id, businessId: businessId),
-                                          ),
-                                  child: Row(
-                                    children: [
-                                      CircleAvatar(
-                                        backgroundColor: AppColors.orangeLight,
-                                        child: Text(
-                                          s.initial,
-                                          style: const TextStyle(
-                                            color: AppColors.orangeDark,
-                                            fontWeight: FontWeight.w800,
-                                          ),
+                          if (sp.invitations.isNotEmpty) ...[
+                            const SizedBox(height: 18),
+                            _SectionTitle('Invitations waiting (${sp.invitations.length})'),
+                            ...sp.invitations.map((inv) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: AppCard(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(inv.name, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary)),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${inv.roleLabel}${inv.email.isNotEmpty ? ' · ${inv.email}' : ''}',
+                                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                                         ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                        const SizedBox(height: 4),
+                                        Row(
                                           children: [
-                                            Text(
-                                              s.userName.isNotEmpty
-                                                  ? s.userName
-                                                  : s.userEmail,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.textPrimary,
-                                              ),
-                                            ),
-                                            // Link-only staff have no email — say what they can
-                                            // do instead of leaving a blank line.
-                                            Text(
-                                              s.userEmail.isNotEmpty
-                                                  ? s.userEmail
-                                                  : (s.isActive
-                                                      ? _roleSummary(s.role)
-                                                      : "Deactivated — can't sign in"),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: AppColors.textSecondary,
-                                                fontSize: 12,
+                                            Icon(Icons.schedule, size: 15, color: inv.isExpired ? AppColors.error : AppColors.orangeDark),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                inv.isExpired ? 'Expired — resend to send a new link' : 'Invitation pending · expires ${_date(inv.expiresAt)}',
+                                                style: TextStyle(
+                                                  fontSize: 12.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: inv.isExpired ? AppColors.error : AppColors.orangeDark,
+                                                ),
                                               ),
                                             ),
                                           ],
                                         ),
-                                      ),
-                                      if (!s.isActive)
-                                        const Padding(
-                                          padding: EdgeInsets.only(right: 6),
-                                          child: StatusBadge(label: 'INACTIVE', color: AppColors.error),
-                                        ),
-                                      StatusBadge(
-                                        label: s.role,
-                                        color: s.role == 'OWNER'
-                                            ? AppColors.orange
-                                            : AppColors.navy500,
-                                      ),
-                                      if (s.role != 'OWNER' &&
-                                          businessId != null)
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.ios_share,
-                                            size: 18,
-                                            color: AppColors.orange,
+                                        if (businessId != null) ...[
+                                          const SizedBox(height: 10),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: OutlinedButton.icon(
+                                                  icon: const Icon(Icons.send_outlined, size: 18),
+                                                  label: const Text('Resend'),
+                                                  onPressed: sp.isLoading ? null : () => _resend(businessId, inv, businessName),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: OutlinedButton.icon(
+                                                  style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                                                  icon: const Icon(Icons.close, size: 18),
+                                                  label: const Text('Cancel'),
+                                                  onPressed: sp.isLoading ? null : () => _cancel(businessId, inv),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                          tooltip: 'Share login link',
-                                          onPressed: () async {
-                                            final provider = context.read<StaffProvider>();
-                                            if (s.loginToken != null && s.loginToken!.isNotEmpty) {
-                                              _shareStaffLoginLink(s.userName, s.loginToken!);
-                                              return;
-                                            }
-                                            // No link generated yet (member predates this
-                                            // feature) — mint one, then share it.
-                                            final ok = await provider.regenerateLink(businessId, s.id);
-                                            if (!context.mounted) return;
-                                            if (ok && provider.lastInvited != null) {
-                                              _shareStaffLoginLink(s.userName, provider.lastInvited!.loginToken!);
-                                            } else {
-                                              showAppSnackBar(context, provider.error ?? 'Failed to create a login link', isError: true);
-                                            }
-                                          },
-                                        ),
-                                      if (s.role != 'OWNER' && businessId != null)
-                                        Icon(Icons.chevron_right, size: 20, color: AppColors.textSecondary),
-                                    ],
+                                        ],
+                                      ],
+                                    ),
                                   ),
+                                )),
+                          ],
+                          const SizedBox(height: 18),
+                          _SectionTitle('Staff (${sp.staff.where((s) => s.role != 'OWNER').length})'),
+                          if (sp.staff.where((s) => s.role != 'OWNER').length > 3) ...[
+                            SearchField(
+                              hint: 'Search name, email, role',
+                              onChanged: (v) => setState(() => _search = v),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                          if (team.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 24),
+                              child: Text(
+                                _search.isNotEmpty ? 'No matching staff' : 'No staff yet. Tap "Add New Staff" to invite someone.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                              ),
+                            ),
+                          ...team.map(
+                            (s) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: AppCard(
+                                onTap: businessId == null
+                                    ? null
+                                    : () => showModalBottomSheet(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          builder: (_) => _ManageStaffSheet(staffId: s.id, businessId: businessId),
+                                        ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      backgroundColor: AppColors.orangeLight,
+                                      child: Text(s.initial,
+                                          style: const TextStyle(color: AppColors.orangeDark, fontWeight: FontWeight.w800)),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            s.userName.isNotEmpty ? s.userName : s.userEmail,
+                                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '${staffRoleLabel(s.role)}${s.userEmail.isNotEmpty ? ' · ${s.userEmail}' : ' · old login link'}',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            s.isActive ? '✓ Active' : 'Inactive — can\'t use the business',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: s.isActive ? AppColors.success : AppColors.error,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (businessId != null) ...[
+                                      const SizedBox(width: 6),
+                                      Text('Manage', style: TextStyle(color: AppColors.orange, fontWeight: FontWeight.w700, fontSize: 13)),
+                                      Icon(Icons.chevron_right, size: 20, color: AppColors.textSecondary),
+                                    ],
+                                  ],
                                 ),
                               ),
                             ),
+                          ),
                         ],
                       ),
               ),
       ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(text, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textPrimary)),
+      );
+}
+
+/// The invitation link with every way to send it.
+class _InviteShareView extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String name;
+  final String businessName;
+  final String token;
+  const _InviteShareView({
+    required this.title,
+    required this.subtitle,
+    required this.name,
+    required this.businessName,
+    required this.token,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final url = AppConstants.staffInviteUrl(token);
+    final message = _inviteMessage(name, businessName, url);
+
+    Future<void> open(Uri uri) async {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication).catchError((_) => false);
+      if (!ok && context.mounted) {
+        showAppSnackBar(context, 'That app isn\'t available — use Copy or More instead.', isError: true);
+      }
+    }
+
+    Widget channel(IconData icon, String label, Color color, VoidCallback onTap) => Expanded(
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+            icon: Icon(icon, size: 20, color: color),
+            label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            onPressed: onTap,
+          ),
+        );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SheetHeader(title: title),
+        const SizedBox(height: 6),
+        Text(subtitle, style: TextStyle(color: AppColors.textSecondary, fontSize: 13.5)),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: AppColors.navy50, borderRadius: BorderRadius.circular(12)),
+          child: SelectableText(url, style: const TextStyle(fontSize: 13)),
+        ),
+        const SizedBox(height: 12),
+        PrimaryButton(
+          label: 'Copy link',
+          icon: Icons.copy_outlined,
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: url));
+            if (context.mounted) showAppSnackBar(context, 'Invitation link copied');
+          },
+        ),
+        const SizedBox(height: 10),
+        Row(children: [
+          channel(Icons.chat, 'WhatsApp', const Color(0xFF25D366),
+              () => open(Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}'))),
+          const SizedBox(width: 10),
+          channel(Icons.sms_outlined, 'SMS', AppColors.navy500, () => open(Uri(scheme: 'sms', queryParameters: {'body': message}))),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          channel(Icons.send, 'Messenger', const Color(0xFF0084FF),
+              () => open(Uri.parse('fb-messenger://share/?link=${Uri.encodeComponent(url)}'))),
+          const SizedBox(width: 10),
+          channel(Icons.ios_share, 'More', AppColors.orange, () => SharePlus.instance.share(ShareParams(text: message))),
+        ]),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: AppColors.orangeLight, borderRadius: BorderRadius.circular(12)),
+          child: const Text(
+            'They open the link, verify their email with a code, and accept. The link works once and expires in 7 days.',
+            style: TextStyle(color: AppColors.orangeDark, fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
+      ],
     );
   }
 }
@@ -282,15 +456,20 @@ class _InviteStaffSheet extends StatefulWidget {
 class _InviteStaffSheetState extends State<_InviteStaffSheet> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  String _role = 'CASHIER';
+  final _emailController = TextEditingController();
+  String _role = 'SALESPERSON';
   // What this person may use, starting from the role's preset and adjustable
-  // feature by feature before the link is created.
-  Map<String, dynamic> _permissions = defaultPermissionsFor('CASHIER');
+  // feature by feature before the invitation is created.
+  Map<String, dynamic> _permissions = defaultPermissionsFor('SALESPERSON');
   bool _saving = false;
-  // Set once the invite succeeds — a new staff member has no email/phone,
-  // so their login link is the only way for them to sign in, and it's
-  // shown here rather than the sheet just closing.
-  StaffMember? _created;
+  StaffInvitation? _created;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -299,30 +478,35 @@ class _InviteStaffSheetState extends State<_InviteStaffSheet> {
     final ok = await provider.invite(
       businessId: widget.businessId,
       name: _nameController.text.trim(),
+      email: _emailController.text.trim().toLowerCase(),
       role: _role,
       permissions: _permissions,
     );
     if (!mounted) return;
     setState(() {
       _saving = false;
-      if (ok) _created = provider.lastInvited;
+      if (ok) _created = provider.lastInvitation;
     });
     if (!ok) {
-      showAppSnackBar(context, provider.error ?? 'Failed to invite staff', isError: true);
+      showAppSnackBar(context, provider.error ?? 'Could not create the invitation', isError: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final created = _created;
+    final businessName = context.read<AuthProvider>().currentBusiness?.name ?? '';
     return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: created != null ? _buildSuccess(created) : _buildForm(),
+      padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+      child: created != null && created.token != null
+          ? _InviteShareView(
+              title: 'Staff added',
+              subtitle: '${created.name} · ${created.roleLabel}. Send them this invitation.',
+              name: created.name,
+              businessName: businessName,
+              token: created.token!,
+            )
+          : _buildForm(),
     );
   }
 
@@ -333,40 +517,56 @@ class _InviteStaffSheetState extends State<_InviteStaffSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SheetHeader(title: 'Invite Staff'),
+          const SheetHeader(title: 'Add New Staff'),
           const SizedBox(height: 16),
           TextFormField(
             controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Name *'),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Staff name *'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter the staff member\'s name' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'Their email (optional)',
+              helperText: 'If you add it, only this email can accept the invitation.',
+              helperMaxLines: 2,
+            ),
+            validator: (v) {
+              final t = (v ?? '').trim();
+              if (t.isEmpty) return null;
+              return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(t) ? null : 'Enter a valid email or leave it empty';
+            },
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: _role,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Role'),
-            items: AppConstants.staffRoles
-                .where((r) => r != 'OWNER')
-                .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                .toList(),
+            items: [
+              for (final (key, label, _) in staffRoleOptions) DropdownMenuItem(value: key, child: Text(label)),
+            ],
             onChanged: (v) => setState(() {
-              _role = v ?? 'CASHIER';
+              _role = v ?? 'SALESPERSON';
               _permissions = defaultPermissionsFor(_role); // a new role starts from its preset
             }),
           ),
           const SizedBox(height: 6),
-          Text(_roleSummary(_role), style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
+          Text(staffRoleSummary(_role), style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
           const SizedBox(height: 16),
-          const Text('What can they do?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+          const Text('Manage permissions', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
           const SizedBox(height: 2),
           Text(
-            'Pick how much of each feature this person gets. You can change it any time.',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+            'Set by the role. Change any section — you can edit it again later.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 6),
           StaffAccessEditor(value: _permissions, onChanged: (p) => setState(() => _permissions = p)),
           const SizedBox(height: 20),
           PrimaryButton(
-            label: 'Create link',
+            label: 'Save & create invitation',
             isLoading: _saving,
             onPressed: _submit,
           ),
@@ -374,80 +574,12 @@ class _InviteStaffSheetState extends State<_InviteStaffSheet> {
       ),
     );
   }
-
-  Widget _buildSuccess(StaffMember created) {
-    final url = AppConstants.staffLoginUrl(created.loginToken ?? '');
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SheetHeader(title: '${created.userName} is ready'),
-        const SizedBox(height: 8),
-        Text(
-          'Share this link with them — it\'s the only way they can sign in, since they have no email or password.',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.navy50,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(url, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.copy_outlined, size: 18),
-                label: const Text('Copy'),
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: url));
-                  if (!mounted) return;
-                  showAppSnackBar(context, 'Login link copied');
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: PrimaryButton(
-                label: 'Share',
-                icon: Icons.ios_share,
-                onPressed: () => _shareStaffLoginLink(created.userName, created.loginToken ?? ''),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Done'),
-        ),
-      ],
-    );
-  }
-}
-
-/// What each role can do, in plain words — kept in step with
-/// defaultPermissionsFor() in staff_service.dart.
-String _roleSummary(String role) {
-  switch (role) {
-    case 'MANAGER':
-      return "Sales, purchases, expenses, stock and parties (can't delete). View-only banking and reports.";
-    case 'CASHIER':
-      return 'Creates sales, expenses and payments. Views stock and reports. No purchases or banking.';
-    case 'VIEWER':
-      return 'View-only access to everything.';
-    default:
-      return 'Full access.';
-  }
 }
 
 /// Everything you can do to one staff member, in one place: change their role
-/// (which also resets their permissions to that role's defaults), share or
-/// replace their login link, switch them on/off, or remove them.
+/// (which also resets their permissions to that role's defaults), adjust
+/// access, switch them on/off, or remove them. Staff added before email
+/// invitations also get their old login-link options here.
 class _ManageStaffSheet extends StatefulWidget {
   final int staffId;
   final int businessId;
@@ -497,7 +629,7 @@ class _ManageStaffSheetState extends State<_ManageStaffSheet> {
     // Predates login links — mint one first.
     await _run((p) async {
       final ok = await p.regenerateLink(widget.businessId, m.id);
-      final token = p.lastInvited?.loginToken;
+      final token = p.lastLinkMember?.loginToken;
       if (ok && token != null && token.isNotEmpty) _shareStaffLoginLink(m.userName, token);
       return ok;
     });
@@ -513,7 +645,7 @@ class _ManageStaffSheetState extends State<_ManageStaffSheet> {
     if (!confirmed || !mounted) return;
     await _run((p) async {
       final ok = await p.regenerateLink(widget.businessId, m.id);
-      final token = p.lastInvited?.loginToken;
+      final token = p.lastLinkMember?.loginToken;
       if (ok && token != null && token.isNotEmpty) _shareStaffLoginLink(m.userName, token);
       return ok;
     }, success: 'New link created — the old one no longer works');
@@ -545,18 +677,22 @@ class _ManageStaffSheetState extends State<_ManageStaffSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SheetHeader(title: m.userName.isNotEmpty ? m.userName : 'Staff member'),
+          if (m.userEmail.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(m.userEmail, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          ],
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            initialValue: role,
+            initialValue: staffRoleOptions.any((r) => r.$1 == role) ? role : null,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Role'),
-            items: AppConstants.staffRoles
-                .where((r) => r != 'OWNER')
-                .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                .toList(),
+            items: [
+              for (final (key, label, _) in staffRoleOptions) DropdownMenuItem(value: key, child: Text(label)),
+            ],
             onChanged: _busy ? null : (v) => setState(() => _role = v),
           ),
           const SizedBox(height: 6),
-          Text(_roleSummary(role), style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
+          Text(staffRoleSummary(role), style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
           if (roleChanged) ...[
             const SizedBox(height: 12),
             PrimaryButton(
@@ -564,12 +700,12 @@ class _ManageStaffSheetState extends State<_ManageStaffSheet> {
               isLoading: _busy,
               onPressed: () => _run(
                 (p) => p.updateRole(widget.businessId, m.id, role),
-                success: 'Role changed to $role',
+                success: 'Role changed to ${staffRoleLabel(role)}',
               ),
             ),
           ],
           const Divider(height: 28),
-          const Text('What can they do?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+          const Text('Permissions', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
           const SizedBox(height: 4),
           StaffAccessEditor(
             value: access,
@@ -592,25 +728,27 @@ class _ManageStaffSheetState extends State<_ManageStaffSheet> {
             ),
           ],
           const Divider(height: 28),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.ios_share, color: AppColors.orange),
-            title: const Text('Share login link'),
-            subtitle: const Text('They open it to sign in — no password needed'),
-            onTap: _busy ? null : () => _share(m),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.autorenew, color: AppColors.textSecondary),
-            title: const Text('Get a new login link'),
-            subtitle: const Text('Use this if the link was shared by mistake'),
-            onTap: _busy ? null : () => _newLink(m),
-          ),
+          if (m.usesLoginLink) ...[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.ios_share, color: AppColors.orange),
+              title: const Text('Share old login link'),
+              subtitle: const Text('Added before email invitations. For better security, remove and invite them by email.'),
+              onTap: _busy ? null : () => _share(m),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.autorenew, color: AppColors.textSecondary),
+              title: const Text('Get a new login link'),
+              subtitle: const Text('Use this if the link was shared by mistake'),
+              onTap: _busy ? null : () => _newLink(m),
+            ),
+          ],
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             activeThumbColor: AppColors.orange,
             title: const Text('Active'),
-            subtitle: Text(m.isActive ? 'Can sign in' : "Blocked from signing in — their link won't work"),
+            subtitle: Text(m.isActive ? 'Can use this business' : "Blocked — can't use this business"),
             value: m.isActive,
             onChanged: _busy
                 ? null

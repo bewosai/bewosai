@@ -540,15 +540,12 @@ function CreateUserModal({ onClose, onSaved }) {
 /* ── Manage Limits Modal ─────────────────────────────────────────────────── */
 // Deliberately the only "edit" a platform admin has on a tenant's business —
 // its own profile/records (name, contact info, financial data) are
-// admin-view-only. This just overrides the plan-based caps: how many staff
-// this business can add (default Free=1/Premium=3/Premium Plus=5 — see
-// accounts.views.STAFF_LIMIT_BY_PLAN), and how many business profiles this
-// owner can create (default Free=2/Premium=5).
-const STAFF_PLAN_DEFAULT = { FREE: 1, PREMIUM: 3, PREMIUMPLUS: 5 };
+// admin-view-only. This just overrides the default caps (accounts.views
+// PLATFORM_LIMITS — the same on every plan): staff per business and business
+// profiles per owner are 5 when added from the website, 3 from the app. An
+// override here replaces both.
 
 function ManageLimitsModal({ biz, onClose, onSaved }) {
-  const planStaffDefault = STAFF_PLAN_DEFAULT[biz.plan] ?? STAFF_PLAN_DEFAULT.FREE;
-  const planBizDefault = biz.plan === "PREMIUM" || biz.plan === "PREMIUMPLUS" ? 5 : 2;
   const [staffLimit, setStaffLimit] = useState(biz.staff_limit_override ?? "");
   const [bizLimit, setBizLimit] = useState(biz.owner_business_limit_override ?? "");
   const [saving, setSaving] = useState(false);
@@ -579,17 +576,17 @@ function ManageLimitsModal({ biz, onClose, onSaved }) {
         {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
         <div>
           <label className="mb-1 block text-xs font-semibold text-navy-400">Staff limit for this business</label>
-          <input type="number" min="0" placeholder={`Plan default (${planStaffDefault})`}
+          <input type="number" min="0" placeholder="Default (5 website / 3 app)"
             className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
             value={staffLimit} onChange={e => setStaffLimit(e.target.value)} />
-          <p className="mt-1 text-[11px] text-navy-500">Leave blank to use the {biz.plan === "PREMIUMPLUS" ? "Premium Plus" : biz.plan === "PREMIUM" ? "Premium" : "Free"} plan default of {planStaffDefault}.</p>
+          <p className="mt-1 text-[11px] text-navy-500">Leave blank for the default: 5 when adding from the website, 3 from the app.</p>
         </div>
         <div>
           <label className="mb-1 block text-xs font-semibold text-navy-400">Business profiles this owner can create</label>
-          <input type="number" min="0" placeholder={`Plan default (${planBizDefault})`}
+          <input type="number" min="0" placeholder="Default (5 website / 3 app)"
             className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
             value={bizLimit} onChange={e => setBizLimit(e.target.value)} />
-          <p className="mt-1 text-[11px] text-navy-500">Applies across all businesses this owner has — leave blank to use their plan default.</p>
+          <p className="mt-1 text-[11px] text-navy-500">Applies across all businesses this owner has — leave blank for the default (5 website / 3 app).</p>
         </div>
         <div className="flex gap-3 justify-end">
           <button onClick={onClose} className="px-4 py-2 rounded-lg border border-navy-700 text-navy-400 hover:bg-navy-800 text-sm">Cancel</button>

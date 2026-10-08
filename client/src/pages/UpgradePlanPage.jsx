@@ -34,9 +34,11 @@ function fmtDate(d) {
      number, so it's immediately clear whether upgrading would help them. */
 function PlanComparison({ effectivePlan, usage, onUpgrade }) {
   const plans = [
-    { key: "FREE", features: ["2 business profiles", "1 staff member", "Core sales & inventory"] },
-    { key: "PREMIUM", features: ["3 business profiles", "3 staff members", "Bulk import/export", "Priority support"] },
-    { key: "PREMIUMPLUS", features: ["5 business profiles", "5 staff members", "Everything in Premium"] },
+    // Business and staff limits are the same on every plan (5 on the website,
+    // 3 in the app — accounts.views.PLATFORM_LIMITS).
+    { key: "FREE", features: ["5 business profiles", "5 staff members per business", "Core sales & inventory"] },
+    { key: "PREMIUM", features: ["5 business profiles", "5 staff members per business", "Bulk import/export", "Priority support"] },
+    { key: "PREMIUMPLUS", features: ["5 business profiles", "5 staff members per business", "Everything in Premium"] },
   ];
 
   const usageFor = (label, isCurrent) => {

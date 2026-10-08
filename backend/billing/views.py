@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import Business, StaffMember, User
-from accounts.views import BusinessListCreateView, plan_staff_limit
+from accounts.views import BusinessListCreateView, staff_limit_for
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.utils import require_business
 from superadmin.views import IsPlatformAdmin
@@ -26,12 +26,12 @@ def _usage_and_limits(request, business):
     """
     usage = {
         "business_count": Business.objects.filter(owner=request.user).count(),
-        "business_limit": BusinessListCreateView.limit_for(request.user),
+        "business_limit": BusinessListCreateView.limit_for(request.user, request),
     }
 
     if business is not None:
         non_owner_staff = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER).count()
-        staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_staff_limit(business.effective_plan)
+        staff_limit = staff_limit_for(business, request)
         usage["staff_count"] = non_owner_staff
         usage["staff_limit"] = staff_limit
 

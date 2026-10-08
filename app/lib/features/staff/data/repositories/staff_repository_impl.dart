@@ -10,8 +10,17 @@ class StaffRepositoryImpl implements StaffRepository {
   Future<List<StaffMember>> list() => _service.list();
 
   @override
-  Future<StaffMember> invite({required int businessId, required String name, String role = 'CASHIER', Map<String, dynamic>? permissions}) =>
-      _service.invite(businessId: businessId, name: name, role: role, permissions: permissions);
+  Future<StaffInvitation> invite({required int businessId, required String name, String role = 'SALESPERSON', String email = '', Map<String, dynamic>? permissions}) =>
+      _service.invite(businessId: businessId, name: name, role: role, email: email, permissions: permissions);
+
+  @override
+  Future<List<StaffInvitation>> listInvitations(int businessId) => _service.listInvitations(businessId);
+
+  @override
+  Future<StaffInvitation> resendInvitation(int businessId, int invitationId) => _service.resendInvitation(businessId, invitationId);
+
+  @override
+  Future<void> cancelInvitation(int businessId, int invitationId) => _service.cancelInvitation(businessId, invitationId);
 
   @override
   Future<StaffMember> updateStaff(int businessId, int staffId, {String? role, Map<String, dynamic>? permissions, bool? isActive}) =>

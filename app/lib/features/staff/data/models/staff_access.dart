@@ -9,12 +9,41 @@ const staffModules = <(String, String)>[
   ('purchases', 'Purchases'),
   ('expenses', 'Expenses'),
   ('inventory', 'Inventory'),
-  ('parties', 'Parties'),
+  ('parties', 'Customers & suppliers'),
   ('payments', 'Payments'),
   ('banking', 'Banking'),
   ('reports', 'Reports & profit'),
   ('staff', 'Staff management'),
 ];
+
+/// Roles the owner can pick, as (key, label, summary) - same as the website's
+/// client/src/utils/staffRoles.js. A role only sets the starting access.
+const staffRoleOptions = <(String, String, String)>[
+  ('PARTNER', 'Business Partner', "Everything in the business. Can't manage staff."),
+  ('MANAGER', 'Manager', "Runs daily work. Can't delete. Views banking and reports."),
+  ('ACCOUNTANT', 'Accountant', 'Money: expenses, payments, banking and reports.'),
+  ('SALESPERSON', 'Salesperson', 'Makes sales, adds customers, takes payments. Sees stock.'),
+  ('CASHIER', 'Cashier', 'Creates sales, expenses and payments. Views stock and reports.'),
+  ('ENTRY', 'Entry Person', "Enters sales, purchases, expenses and stock. Can't edit or delete."),
+  ('INVENTORY_MANAGER', 'Inventory Manager', 'Stock and purchases. Sees suppliers.'),
+  ('VIEWER', 'Viewer', 'Can look at everything, change nothing.'),
+];
+
+String staffRoleLabel(String role) {
+  if (role == 'OWNER') return 'Admin';
+  for (final (key, label, _) in staffRoleOptions) {
+    if (key == role) return label;
+  }
+  return role;
+}
+
+String staffRoleSummary(String role) {
+  if (role == 'OWNER') return 'Full business access.';
+  for (final (key, _, summary) in staffRoleOptions) {
+    if (key == role) return summary;
+  }
+  return '';
+}
 
 String accessLabel(StaffAccess a) => switch (a) {
       StaffAccess.none => 'No access',

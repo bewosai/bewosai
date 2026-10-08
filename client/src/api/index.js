@@ -14,6 +14,12 @@ const api = axios.create({
 // Wrap so offline mutations are queued and re-synced automatically
 wrapWithOfflineQueue(api);
 
+// For pages anyone can open (a staff invitation): no session, no business, no cache.
+const publicApi = axios.create({
+  baseURL: API_URL,
+  headers: { "Content-Type": "application/json", "X-Platform": "web" },
+});
+
 /* ── Short memory for page data ────────────────────────────────────────────
    Moving between pages (Sales → Parties → back to Sales) used to download the
    same data again every time. A GET answered in the last 30 seconds is reused
@@ -149,6 +155,16 @@ export const auth = {
   updateStaff: (bid, sid, d) => api.patch(`/auth/businesses/${bid}/staff/${sid}/`, d),
   removeStaff: (bid, sid) => api.delete(`/auth/businesses/${bid}/staff/${sid}/`),
   regenerateStaffLink: (bid, sid) => api.post(`/auth/businesses/${bid}/staff/${sid}/regenerate-link/`),
+  staffInvitations: (bid) => api.get(`/auth/businesses/${bid}/staff/invitations/`),
+  resendStaffInvite: (bid, id) => api.post(`/auth/businesses/${bid}/staff/invitations/${id}/resend/`),
+  cancelStaffInvite: (bid, id) => api.delete(`/auth/businesses/${bid}/staff/invitations/${id}/`),
+  // The invited person's side. Sent without this browser's session or business
+  // headers: whoever was signed in here before must not affect accepting.
+  staffInvite: (token) => publicApi.get(`/auth/staff-invite/${encodeURIComponent(token)}/`),
+  sendInviteOtp: (email) => publicApi.post("/auth/send-otp/", { identifier: email, is_signup: false }),
+  acceptStaffInvite: (token, email, code) =>
+    publicApi.post(`/auth/staff-invite/${encodeURIComponent(token)}/accept/`, { email, code, remember: true }),
+  declineStaffInvite: (token) => publicApi.post(`/auth/staff-invite/${encodeURIComponent(token)}/decline/`),
   closeFiscalYear: (bid) => api.post(`/auth/businesses/${bid}/close-fiscal-year/`),
   fiscalYears: (bid) => api.get(`/auth/businesses/${bid}/fiscal-years/`),
   staffLogin: (token) => api.post("/auth/staff-login/", { token }),

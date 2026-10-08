@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/storage/token_storage.dart';
 import '../../data/models/staff_model.dart';
 import '../../domain/usecases/staff_usecases.dart';
 
@@ -7,15 +8,29 @@ class StaffProvider extends ChangeNotifier {
   final _useCases = StaffUseCases();
 
   List<StaffMember> staff = [];
+  /// Invitations still waiting for the person to verify their email and accept.
+  List<StaffInvitation> invitations = [];
   bool isLoading = false;
   String? error;
+
+  Future<int?> _businessId() async {
+    final business = await TokenStorage.instance.currentBusiness;
+    final id = business?['id'];
+    return id is int ? id : int.tryParse('${id ?? ''}');
+  }
 
   Future<void> load() async {
     isLoading = true;
     error = null;
     notifyListeners();
     try {
-      staff = await _useCases.listStaff();
+      final businessId = await _businessId();
+      final results = await Future.wait([
+        _useCases.listStaff(),
+        if (businessId != null) _useCases.listInvitations(businessId),
+      ]);
+      staff = results[0] as List<StaffMember>;
+      invitations = results.length > 1 ? results[1] as List<StaffInvitation> : [];
     } catch (e) {
       error = e is ApiException ? e.message : e.toString();
     }
@@ -23,29 +38,47 @@ class StaffProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Set on a successful invite so the UI can immediately hand over the new
-  // staff member's login link (they have no email/phone to send it to any
-  // other way) — cleared the next time an invite starts.
-  StaffMember? lastInvited;
+  /// Set when an invitation is created or resent — the only time its link (token)
+  /// is available, so the UI can show and share it straight away.
+  StaffInvitation? lastInvitation;
+  /// Set after a legacy login link is regenerated.
+  StaffMember? lastLinkMember;
 
   Future<bool> invite({
     required int businessId,
     required String name,
-    String role = 'CASHIER',
+    String role = 'SALESPERSON',
+    String email = '',
     Map<String, dynamic>? permissions,
   }) =>
       _guard(() async {
-        lastInvited = null;
-        final created = await _useCases.inviteStaff(businessId: businessId, name: name, role: role, permissions: permissions);
-        staff = [...staff, created];
-        lastInvited = created;
+        lastInvitation = null;
+        final created = await _useCases.inviteStaff(
+          businessId: businessId, name: name, role: role, email: email, permissions: permissions,
+        );
+        invitations = [created, ...invitations];
+        lastInvitation = created;
+        return true;
+      });
+
+  Future<bool> resendInvitation(int businessId, int invitationId) => _guard(() async {
+        lastInvitation = null;
+        final updated = await _useCases.resendInvitation(businessId, invitationId);
+        invitations = invitations.map((i) => i.id == invitationId ? updated : i).toList();
+        lastInvitation = updated;
+        return true;
+      });
+
+  Future<bool> cancelInvitation(int businessId, int invitationId) => _guard(() async {
+        await _useCases.cancelInvitation(businessId, invitationId);
+        invitations = invitations.where((i) => i.id != invitationId).toList();
         return true;
       });
 
   Future<bool> regenerateLink(int businessId, int staffId) => _guard(() async {
         final updated = await _useCases.regenerateLink(businessId, staffId);
         staff = staff.map((s) => s.id == staffId ? updated : s).toList();
-        lastInvited = updated;
+        lastLinkMember = updated;
         return true;
       });
 

@@ -13,13 +13,16 @@ from datetime import date, timedelta
 from bewosai.email import send_otp_email
 from .admin_access import grant_platform_admin_if_listed
 # from bewosai.sms import send_otp_sms  # phone login/signup temporarily disabled (2026-09-16)
-from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, get_platform, require_feature, require_staff_permission, staff_can
-from bewosai.utils import client_ip, get_bid, get_business
-from .models import User, Business, FiscalYear, StaffMember, StaffActivity, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
+from bewosai.permissions import (
+    BusinessNotArchivedForWrites, HasActiveSubscription, PERMISSION_ACTIONS, PERMISSION_MODULES, get_platform,
+    matrix_from_permissions, permission_matrix, require_feature, require_staff_permission, staff_can,
+)
+from bewosai.utils import client_ip, get_bid, get_business, mask_email
+from .models import User, Business, FiscalYear, StaffMember, StaffActivity, StaffInvitation, OTPCode, LoginActivity, ACCOUNT_PERSONAL, ACCOUNT_BUSINESS
 from bewosai.pagination import LargePageNumberPagination
 from .serializers import (
-    UserSerializer, BusinessSerializer, FiscalYearSerializer, StaffMemberSerializer, InviteStaffSerializer,
-    SendOTPSerializer, VerifyOTPSerializer, GoogleLoginSerializer, StaffActivitySerializer,
+    UserSerializer, BusinessSerializer, FiscalYearSerializer, StaffMemberSerializer, InviteStaffSerializer, StaffInvitationSerializer,
+    SendOTPSerializer, VerifyOTPSerializer, GoogleLoginSerializer, StaffActivitySerializer, validate_login_identifier,
 )
 
 logger = logging.getLogger(__name__)
@@ -440,58 +443,49 @@ class MeView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
+# How many businesses one person may own, and staff one business may have
+# (besides its admin), by where they're being added from: the website allows
+# more than the phone app. The plan doesn't change these (owner's decision,
+# 2026-10-08); a platform admin's per-user / per-business override still wins.
+PLATFORM_LIMITS = {
+    "desktop": {"businesses": 5, "staff": 5},
+    "mobile": {"businesses": 3, "staff": 3},
+}
+
+
+def platform_limit(request, kind):
+    return PLATFORM_LIMITS[get_platform(request)][kind]
+
+
+def _where(request, kind):
+    """' in the app (5 on the website)' when the app's lower limit applies, else ''."""
+    if get_platform(request) != "mobile":
+        return ""
+    return f" in the app ({PLATFORM_LIMITS['desktop'][kind]} on the website)"
+
+
 class BusinessListCreateView(generics.ListCreateAPIView):
     serializer_class = BusinessSerializer
 
-    # Business profiles each plan allows, judged by the best effective_plan
-    # among the businesses the user owns (licence, coupon or referral reward).
-    # Matches the pricing shown on the Upgrade page.
-    FREE_LIMIT = 2
-    PREMIUM_LIMIT = 3
-    PREMIUMPLUS_LIMIT = 5
-
     @classmethod
-    def plan_for(cls, user):
-        """The best plan across everything `user` owns."""
-        plans = {b.effective_plan for b in Business.objects.filter(owner=user)}
-        for plan in (Business.PLAN_PREMIUMPLUS, Business.PLAN_PREMIUM):
-            if plan in plans:
-                return plan
-        return Business.PLAN_FREE
-
-    @classmethod
-    def limit_for(cls, user, plan=None):
-        """How many business profiles `user` may own. A platform admin can
-        raise (or lower) it per user via superadmin.UserActionView's
-        "set_business_limit" action."""
+    def limit_for(cls, user, request):
+        """How many business profiles `user` may own when adding from this
+        platform. A platform admin can raise (or lower) it per user via
+        superadmin.UserActionView's "set_business_limit" action."""
         if user.business_limit_override is not None:
             return user.business_limit_override
-        return {
-            Business.PLAN_PREMIUMPLUS: cls.PREMIUMPLUS_LIMIT,
-            Business.PLAN_PREMIUM: cls.PREMIUM_LIMIT,
-        }.get(plan or cls.plan_for(user), cls.FREE_LIMIT)
+        return platform_limit(request, "businesses")
 
     def get_queryset(self):
         return Business.objects.filter(staff__user=self.request.user, staff__is_active=True)
 
     def create(self, request, *args, **kwargs):
         owned = Business.objects.filter(owner=request.user)
-        plan = self.plan_for(request.user)
-        limit = self.limit_for(request.user, plan)
+        limit = self.limit_for(request.user, request)
         if owned.count() >= limit:
-            plan_name = plan_display_name(plan)
-            hint = (
-                "Upgrade to Premium Plus to create more." if plan == Business.PLAN_PREMIUM
-                else "Upgrade to Premium to create more." if plan == Business.PLAN_FREE
-                else "You've reached the maximum number of business profiles."
-            )
+            extra = "" if request.user.business_limit_override is not None else _where(request, "businesses")
             return Response(
-                {
-                    "error": (
-                        f"Your {plan_name} plan allows up to {limit} business profile"
-                        f"{'s' if limit != 1 else ''}. {hint}"
-                    )
-                },
+                {"error": f"You can have up to {limit} business profile{'s' if limit != 1 else ''}{extra}."},
                 status=status.HTTP_403_FORBIDDEN,
             )
         return super().create(request, *args, **kwargs)
@@ -609,7 +603,14 @@ def _staff_managed_business(request, bid, method):
     return business
 
 
-def _staff_limit_error(business, exclude_member=None):
+def staff_limit_for(business, request):
+    """Staff (besides the admin) `business` may have when adding from this platform."""
+    if business.staff_limit_override is not None:
+        return business.staff_limit_override
+    return platform_limit(request, "staff")
+
+
+def _staff_limit_error(business, request, exclude_member=None):
     """
     A 403 Response if `business` has no free staff slot (beyond the owner), else
     None. `exclude_member` is left out of the count — used when re-activating
@@ -618,40 +619,24 @@ def _staff_limit_error(business, exclude_member=None):
     others = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER)
     if exclude_member is not None:
         others = others.exclude(pk=exclude_member.pk)
-    staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_staff_limit(business.effective_plan)
-    if others.count() < staff_limit:
+    # An invitation still waiting to be accepted holds a slot, or an owner at
+    # the limit could send out any number of invites and all of them succeed.
+    waiting = business.staff_invitations.filter(
+        status=StaffInvitation.STATUS_PENDING, expires_at__gt=timezone.now(),
+    ).count()
+    staff_limit = staff_limit_for(business, request)
+    if others.count() + waiting < staff_limit:
         return None
-    plan_name = plan_display_name(business.effective_plan)
+    extra = "" if business.staff_limit_override is not None else _where(request, "staff")
     return Response(
         {
             "error": (
-                f"Your {plan_name} plan allows up to {staff_limit} staff member"
-                f"{'s' if staff_limit != 1 else ''} besides the owner."
+                f"A business can have up to {staff_limit} staff member{'s' if staff_limit != 1 else ''} "
+                f"besides the admin{extra}. Waiting invitations count too."
             )
         },
         status=status.HTTP_403_FORBIDDEN,
     )
-
-
-# Staff members allowed beyond the owner, per business, by plan — a platform
-# admin can raise or lower this for one specific business via
-# superadmin.BusinessActionView's "set_staff_limit" action, which always wins
-# over the plan default below.
-STAFF_LIMIT_BY_PLAN = {
-    Business.PLAN_FREE: 1,
-    Business.PLAN_PREMIUM: 3,
-    Business.PLAN_PREMIUMPLUS: 5,
-}
-
-
-def plan_staff_limit(effective_plan):
-    return STAFF_LIMIT_BY_PLAN.get(effective_plan, STAFF_LIMIT_BY_PLAN[Business.PLAN_FREE])
-
-
-def plan_display_name(effective_plan):
-    return {
-        Business.PLAN_FREE: "Free", Business.PLAN_PREMIUM: "Premium", Business.PLAN_PREMIUMPLUS: "Premium Plus",
-    }.get(effective_plan, effective_plan)
 
 
 class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
@@ -664,35 +649,242 @@ class StaffListView(_RequireStaffManagement, generics.ListCreateAPIView):
         return StaffMember.objects.filter(business_id=bid)
 
     def post(self, request, *args, **kwargs):
-        serializer = InviteStaffSerializer(data=request.data)
-        if serializer.is_valid():
-            data = serializer.validated_data
-            bid = kwargs["business_id"]
-            business = _staff_managed_business(request, bid, request.method)
-            if not business:
-                return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
+        business = _staff_managed_business(request, kwargs["business_id"], request.method)
+        if not business:
+            return Response({"error": "Business not found."}, status=status.HTTP_404_NOT_FOUND)
+        return _create_invitation(request, business, request.data)
 
-            limit_error = _staff_limit_error(business)
+
+def _grants_beyond_own_access(user, business, permissions):
+    """True if `permissions` would give someone more than `user` has here - a
+    manager allowed to manage staff can't hand out access they don't hold."""
+    if business.owner_id == user.id:
+        return False
+    mine = permission_matrix(user, business)
+    wanted = matrix_from_permissions(permissions)
+    return any(
+        wanted[m][a] and not mine[m][a] for m in PERMISSION_MODULES for a in PERMISSION_ACTIONS
+    )
+
+
+def _create_invitation(request, business, payload):
+    """Shared by both invite endpoints: make a StaffInvitation and return its
+    one-time secret token (the only time the link can be shown)."""
+    serializer = InviteStaffSerializer(data=payload)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    data = serializer.validated_data
+    if _grants_beyond_own_access(request.user, business, data["permissions"]):
+        return Response(
+            {"error": "You can't give someone access you don't have yourself. Ask the business owner."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    if data["email"] and business.staff.filter(user__email=data["email"], is_active=True).exists():
+        return Response({"error": "This person is already on your team."}, status=status.HTTP_400_BAD_REQUEST)
+    limit_error = _staff_limit_error(business, request)
+    if limit_error is not None:
+        return limit_error
+
+    invitation = StaffInvitation(
+        business=business, invited_by=request.user, name=data["name"].strip(), email=data["email"],
+        role=data["role"], permissions=data["permissions"],
+    )
+    token = invitation.issue_token()
+    invitation.save()
+    return Response({**StaffInvitationSerializer(invitation).data, "token": token}, status=status.HTTP_201_CREATED)
+
+
+class StaffInvitationListView(_RequireStaffManagement, generics.ListAPIView):
+    """Invitations still waiting for an answer (expired ones included, flagged,
+    so the owner can resend or cancel them)."""
+    serializer_class = StaffInvitationSerializer
+
+    def get_queryset(self):
+        bid = self.kwargs["business_id"]
+        if not _staff_managed_business(self.request, bid, "GET"):
+            return StaffInvitation.objects.none()
+        return StaffInvitation.objects.filter(
+            business_id=bid, status=StaffInvitation.STATUS_PENDING,
+        ).select_related("invited_by")
+
+
+def _managed_invitation(request, business_id, pk, method):
+    business = _staff_managed_business(request, business_id, method)
+    if not business:
+        return None, None
+    return business, StaffInvitation.objects.filter(pk=pk, business=business).first()
+
+
+class StaffInvitationResendView(_RequireStaffManagement, APIView):
+    """New link and a fresh 7 days - the old link stops working at once."""
+
+    def post(self, request, business_id, pk):
+        business, invitation = _managed_invitation(request, business_id, pk, "POST")
+        if not invitation:
+            return Response({"error": "Invitation not found."}, status=status.HTTP_404_NOT_FOUND)
+        if invitation.status == StaffInvitation.STATUS_ACCEPTED:
+            return Response({"error": "This invitation was already accepted."}, status=status.HTTP_400_BAD_REQUEST)
+        if not invitation.is_open:
+            # Expired/declined/cancelled ones don't hold a slot, so re-opening takes one.
+            limit_error = _staff_limit_error(business, request)
             if limit_error is not None:
                 return limit_error
+        token = invitation.issue_token()
+        invitation.save(update_fields=["token_hash", "expires_at", "status"])
+        return Response({**StaffInvitationSerializer(invitation).data, "token": token})
 
-            # A link-based staff member has no email/phone of their own — no
-            # existing account to match against, so every invite creates a
-            # brand new placeholder User. They authenticate purely through
-            # the login link (StaffMember.login_token / StaffLoginView),
-            # never via OTP, hence the unusable password + allow_no_identity.
-            user = User.objects.create_user(
-                name=data["name"], account_type=ACCOUNT_BUSINESS, is_verified=True,
-                allow_no_identity=True,
+
+class StaffInvitationCancelView(_RequireStaffManagement, APIView):
+    def delete(self, request, business_id, pk):
+        _, invitation = _managed_invitation(request, business_id, pk, "DELETE")
+        if not invitation:
+            return Response({"error": "Invitation not found."}, status=status.HTTP_404_NOT_FOUND)
+        if invitation.status == StaffInvitation.STATUS_ACCEPTED:
+            return Response({"error": "Already accepted - remove the staff member instead."}, status=status.HTTP_400_BAD_REQUEST)
+        invitation.status = StaffInvitation.STATUS_CANCELLED
+        invitation.save(update_fields=["status"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# -- The invited person's side (no account needed yet) ------------------------
+
+def _invitation_problem(invitation):
+    """(message, http status) if this invitation can't be used, else None."""
+    if invitation is None:
+        return "This invitation link is not valid. Ask the business owner to send it again.", status.HTTP_404_NOT_FOUND
+    if invitation.status == StaffInvitation.STATUS_ACCEPTED:
+        return "This invitation has already been accepted. Sign in with your email to continue.", status.HTTP_410_GONE
+    if invitation.status == StaffInvitation.STATUS_DECLINED:
+        return "This invitation was declined. Ask the business owner to send a new one.", status.HTTP_410_GONE
+    if invitation.status == StaffInvitation.STATUS_CANCELLED:
+        return "This invitation was cancelled by the business.", status.HTTP_410_GONE
+    if invitation.is_expired:
+        return "This invitation has expired. Ask the business owner to resend it.", status.HTTP_410_GONE
+    if invitation.business.status != Business.STATUS_ACTIVE:
+        return "This business account is no longer active.", status.HTTP_403_FORBIDDEN
+    return None
+
+
+class StaffInviteDetailView(APIView):
+    """What the person opening an invite link sees before deciding."""
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "otp_verify"
+
+    def get(self, request, token):
+        invitation = StaffInvitation.find(token)
+        problem = _invitation_problem(invitation)
+        if problem:
+            return api_response(False, problem[0], problem[1])
+        return api_response(
+            True, "Invitation found.", status.HTTP_200_OK,
+            business_name=invitation.business.name,
+            invited_by=(invitation.invited_by.name if invitation.invited_by else "") or "Business Admin",
+            name=invitation.name,
+            role=invitation.role,
+            role_label=invitation.get_role_display(),
+            access=matrix_from_permissions(invitation.permissions),
+            expires_at=invitation.expires_at,
+            email_hint=mask_email(invitation.email) if invitation.email else "",
+        )
+
+
+class StaffInviteAcceptView(APIView):
+    """
+    Accept an invitation: the email must be proven with the one-time code
+    (sent by the normal /auth/send-otp/) in the same request, and only then
+    is the StaffMember created. One use only - the row is locked while this
+    runs, so two people racing the same link can't both get in.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "otp_verify"
+
+    def post(self, request, token):
+        try:
+            email, _ = validate_login_identifier(str(request.data.get("email") or ""))
+        except Exception as e:
+            detail = getattr(e, "detail", None)
+            message = str(detail[0]) if isinstance(detail, list) and detail else "Enter a valid email address."
+            return api_response(False, message, status.HTTP_400_BAD_REQUEST)
+        code = str(request.data.get("code") or "").strip()
+        if not (len(code) == 6 and code.isdigit()):
+            return api_response(False, "Enter the 6-digit code from your email.", status.HTTP_400_BAD_REQUEST)
+        remember = request.data.get("remember", True) not in (False, "false", "0", 0)
+
+        with transaction.atomic():
+            found = StaffInvitation.find(token)
+            invitation = (
+                StaffInvitation.objects.select_for_update().select_related("business").get(pk=found.pk)
+                if found else None
             )
-            member = StaffMember.objects.create(
-                user=user, business=business,
-                role=data["role"], permissions=data.get("permissions") or {},
-                login_token=StaffMember.new_login_token(),
+            problem = _invitation_problem(invitation)
+            if problem:
+                return api_response(False, problem[0], problem[1])
+            if invitation.email and invitation.email != email:
+                return api_response(
+                    False, f"This invitation is for {mask_email(invitation.email)}. Use that email address.",
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+            otp, error_code = OTPCode.verify_and_consume(email, code)
+            if error_code == "too_many_attempts":
+                return api_response(False, "Too many incorrect attempts. Please request a new code.", status.HTTP_429_TOO_MANY_REQUESTS)
+            if error_code == "expired":
+                return api_response(False, "This code has expired. Please request a new one.", status.HTTP_400_BAD_REQUEST)
+            if error_code:
+                return api_response(False, "Incorrect code. Please check and try again.", status.HTTP_400_BAD_REQUEST)
+
+            business = invitation.business
+            user = User.objects.filter(email=email).first()
+            if user is None:
+                user = User.objects.create_user(
+                    email=email, name=invitation.name or email.split("@")[0].capitalize(),
+                    account_type=ACCOUNT_BUSINESS, is_verified=True,
+                )
+            if business.owner_id == user.id:
+                return api_response(False, "You already own this business.", status.HTTP_400_BAD_REQUEST)
+
+            member = StaffMember.objects.filter(user=user, business=business).first()
+            if member and member.is_active:
+                return api_response(False, "You're already on this business's team. Just sign in.", status.HTTP_400_BAD_REQUEST)
+            if member:
+                member.role, member.permissions, member.is_active = invitation.role, invitation.permissions, True
+                member.save(update_fields=["role", "permissions", "is_active"])
+            else:
+                StaffMember.objects.create(
+                    user=user, business=business, role=invitation.role, permissions=invitation.permissions,
+                )
+
+            invitation.status = StaffInvitation.STATUS_ACCEPTED
+            invitation.accepted_by = user
+            invitation.accepted_at = timezone.now()
+            invitation.save(update_fields=["status", "accepted_by", "accepted_at"])
+
+            user.last_login_at = timezone.now()
+            user.is_verified = True
+            user.save(update_fields=["last_login_at", "is_verified"])
+            LoginActivity.objects.create(
+                user=user, ip_address=client_ip(request),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""), platform=_login_platform(request),
             )
 
-            return Response(StaffMemberSerializer(member).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logger.info("Staff invitation %s accepted by user %s", invitation.pk, user.id)
+        response = _login_response(user, is_new=False, remember=remember)
+        response.data["business_id"] = business.id
+        return response
+
+
+class StaffInviteDeclineView(APIView):
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "otp_verify"
+
+    def post(self, request, token):
+        invitation = StaffInvitation.find(token)
+        problem = _invitation_problem(invitation)
+        if problem:
+            return api_response(False, problem[0], problem[1])
+        invitation.status = StaffInvitation.STATUS_DECLINED
+        invitation.save(update_fields=["status"])
+        return api_response(True, "Invitation declined.", status.HTTP_200_OK)
 
 
 class StaffDetailView(_RequireStaffManagement, generics.RetrieveUpdateDestroyAPIView):
@@ -717,8 +909,12 @@ class StaffDetailView(_RequireStaffManagement, generics.RetrieveUpdateDestroyAPI
         self._guard_owner(member)
         # Switching someone back on takes a staff slot, so it's subject to the
         # same plan limit as inviting a new member.
+        if "permissions" in serializer.validated_data and _grants_beyond_own_access(
+            self.request.user, member.business, serializer.validated_data["permissions"],
+        ):
+            raise PermissionDenied("You can't give someone access you don't have yourself. Ask the business owner.")
         if serializer.validated_data.get("is_active") and not member.is_active:
-            limit_error = _staff_limit_error(member.business, exclude_member=member)
+            limit_error = _staff_limit_error(member.business, self.request, exclude_member=member)
             if limit_error is not None:
                 raise PermissionDenied(limit_error.data["error"])
         serializer.save()
@@ -744,6 +940,10 @@ class StaffRegenerateLinkView(_RequireStaffManagement, APIView):
             return api_response(False, "Staff member not found.", status.HTTP_404_NOT_FOUND)
         if member.role == StaffMember.ROLE_OWNER:
             return api_response(False, "The business owner doesn't use a login link.", status.HTTP_400_BAD_REQUEST)
+        if member.user.email:
+            # Joined through an email invitation: they sign in with their email
+            # and a code. A bearer link would be a second, weaker way in.
+            return api_response(False, "This staff member signs in with their email - no login link needed.", status.HTTP_400_BAD_REQUEST)
 
         member.regenerate_login_token()
         return Response(StaffMemberSerializer(member).data, status=status.HTTP_200_OK)
@@ -840,55 +1040,20 @@ class BusinessStaffInviteView(_RequireStaffManagement, APIView):
         business = get_business(request)
         if not business:
             return Response({"error": "Business not found."}, status=status.HTTP_400_BAD_REQUEST)
-
-        email = request.data.get("email", "").strip().lower()
-        name = request.data.get("name", "").strip()
-        role = request.data.get("role", StaffMember.ROLE_CASHIER)
-        permissions = request.data.get("permissions")
-        if not isinstance(permissions, dict):
-            permissions = {}
-
+        # This used to attach any registered email straight to the business,
+        # without that person ever agreeing. Now it's an invitation like the
+        # Staff screen's, locked to the given email.
+        email = str(request.data.get("email") or "").strip().lower()
         if not email:
             return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        valid_roles = [r for r, _ in StaffMember.ROLE_CHOICES]
-        if role not in valid_roles:
-            role = StaffMember.ROLE_CASHIER
-
-        non_owner_count = business.staff.filter(is_active=True).exclude(role=StaffMember.ROLE_OWNER).count()
-        already_member = business.staff.filter(user__email=email, is_active=True).exists()
-        staff_limit = business.staff_limit_override if business.staff_limit_override is not None else plan_staff_limit(business.effective_plan)
-        if not already_member and non_owner_count >= staff_limit:
-            plan_name = plan_display_name(business.effective_plan)
-            return Response(
-                {
-                    "error": (
-                        f"Your {plan_name} plan allows up to {staff_limit} staff member"
-                        f"{'s' if staff_limit != 1 else ''} besides the owner."
-                    )
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        user, _ = User.objects.get_or_create(
-            email=email,
-            defaults={"name": name or email.split("@")[0].capitalize(), "account_type": ACCOUNT_BUSINESS},
-        )
-        if name and not user.name:
-            user.name = name
-            user.save(update_fields=["name"])
-
-        member, created = StaffMember.objects.get_or_create(
-            user=user, business=business,
-            defaults={"role": role, "permissions": permissions},
-        )
-        if not created:
-            member.role = role
-            member.is_active = True
-            member.permissions = permissions
-            member.save(update_fields=["role", "is_active", "permissions"])
-
-        return Response(StaffMemberSerializer(member).data, status=status.HTTP_201_CREATED)
+        permissions_in = request.data.get("permissions")
+        payload = {
+            "name": str(request.data.get("name") or "").strip() or email.split("@")[0].capitalize(),
+            "email": email,
+            "role": request.data.get("role") or StaffMember.ROLE_CASHIER,
+            "permissions": permissions_in if isinstance(permissions_in, dict) else {},
+        }
+        return _create_invitation(request, business, payload)
 
 
 class BusinessStaffActivityView(APIView):

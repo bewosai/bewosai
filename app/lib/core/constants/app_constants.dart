@@ -115,7 +115,9 @@ class AppConstants {
   static const List<String> partyTypes = ['CUSTOMER', 'SUPPLIER', 'BOTH'];
 
   // Staff roles — accounts.StaffMember ROLE_CHOICES
-  static const List<String> staffRoles = ['OWNER', 'MANAGER', 'CASHIER', 'VIEWER'];
+  static const List<String> staffRoles = [
+    'OWNER', 'PARTNER', 'MANAGER', 'ACCOUNTANT', 'SALESPERSON', 'CASHIER', 'ENTRY', 'INVENTORY_MANAGER', 'VIEWER',
+  ];
 
   // A staff member has no email/phone of their own — they sign in purely by
   // opening this link (see accounts.views.StaffLoginView), always served by
@@ -123,6 +125,13 @@ class AppConstants {
   // Mirrors client/src/pages/StaffPage.jsx's staffLoginUrl().
   static const String _webAppUrl = 'https://bewosaiapp.vercel.app';
   static String staffLoginUrl(String token) => '$_webAppUrl/staff-login/$token';
+
+  /// A staff invitation: opened in the browser, where the person verifies
+  /// their email and accepts. Mirrors client/src/utils/staffRoles.js.
+  static String staffInviteUrl(String token) => '$_webAppUrl/staff/invite/$token';
+
+  /// True when [input] is an invitation link rather than an old login link.
+  static bool isStaffInviteLink(String? input) => (input ?? '').contains('/staff/invite/');
 
   /// The login token from what a staff member pastes: the full link the owner
   /// shared (`https://.../staff-login/TOKEN`, on any host) or the bare token.

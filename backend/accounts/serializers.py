@@ -3,7 +3,7 @@ from django.core.validators import validate_email as django_validate_email
 from rest_framework import serializers
 from bewosai.validators import IMAGE_VALIDATORS
 from bewosai.utils import suggest_email_typo_fix
-from .models import User, Business, FiscalYear, StaffMember, StaffActivity
+from .models import User, Business, FiscalYear, StaffMember, StaffActivity, StaffInvitation
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -166,13 +166,21 @@ class StaffMemberSerializer(serializers.ModelSerializer):
 
 
 class InviteStaffSerializer(serializers.Serializer):
-    # No email/phone — staff created here have no identity of their own and
-    # sign in purely through the login link generated on creation (see
-    # StaffMember.login_token / StaffLoginView). Keeps "don't require an
-    # email for staff" honest instead of just hiding the field.
+    # Creates a StaffInvitation, not a member: the person proves their email
+    # with a code and accepts before they get any access (StaffInviteAcceptView).
     name = serializers.CharField(max_length=150)
     role = serializers.ChoiceField(choices=StaffMember.ROLE_CHOICES)
     permissions = serializers.JSONField(required=False, default=dict)
+    # Optional lock: only this address may accept.
+    email = serializers.EmailField(required=False, allow_blank=True, default="")
+
+    def validate_email(self, value):
+        return (value or "").strip().lower()
+
+    def validate_permissions(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Permissions must be an object.")
+        return value
 
     def validate_role(self, value):
         # See StaffMemberSerializer.validate_role — a new staff member must
@@ -180,6 +188,22 @@ class InviteStaffSerializer(serializers.Serializer):
         if value == StaffMember.ROLE_OWNER:
             raise serializers.ValidationError("A staff member can't be invited as an owner.")
         return value
+
+
+class StaffInvitationSerializer(serializers.ModelSerializer):
+    """The owner's view of an invitation (never includes the secret link)."""
+
+    role_label = serializers.CharField(source="get_role_display", read_only=True)
+    invited_by_name = serializers.CharField(source="invited_by.name", read_only=True, default="")
+    is_expired = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = StaffInvitation
+        fields = (
+            "id", "name", "email", "role", "role_label", "permissions", "status", "is_expired",
+            "expires_at", "invited_by_name", "created_at", "accepted_at",
+        )
+        read_only_fields = fields
 
 
 def validate_login_identifier(value):

@@ -190,9 +190,16 @@ def permission_matrix(user, business):
     if staff.role == StaffMember.ROLE_OWNER:
         return uniform(True)
 
+    return matrix_from_permissions(staff.permissions)
+
+
+def matrix_from_permissions(permissions):
+    """A stored {module: {action: bool}} map as the full table of booleans, with
+    the same defaults staff_can applies (unconfigured = allowed, except "staff")."""
+    permissions = permissions if isinstance(permissions, dict) else {}
     matrix = {}
     for module in PERMISSION_MODULES:
-        module_perms = staff.permissions.get(module)
+        module_perms = permissions.get(module)
         if not isinstance(module_perms, dict):
             matrix[module] = {a: module != "staff" for a in PERMISSION_ACTIONS}
         else:

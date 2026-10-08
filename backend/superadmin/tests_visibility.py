@@ -67,28 +67,24 @@ class EveryoneWhoSignsInShowsUpTests(TestCase):
         self.assertIsNotNone(row, "Google sign-in did not appear in Super Admin's Users list")
         self.assertEqual(row["login_count"], 1)
 
-    def test_staff_login_link_from_the_app(self):
+    def test_staff_invitation_accepted_from_the_app(self):
+        from accounts.staff_test_utils import accept_invite
         owner = User.objects.create_user(email="owner@example.com", name="Owner")
         business = Business.objects.create(owner=owner, name="Shop", plan=Business.PLAN_PREMIUM)
         StaffMember.objects.create(user=owner, business=business, role=StaffMember.ROLE_OWNER)
-        staff_client = APIClient(HTTP_X_BUSINESS_ID=str(business.id))
-        staff_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._token(owner)}")
-        invited = staff_client.post(
+        owner_client = APIClient(HTTP_X_BUSINESS_ID=str(business.id))
+        owner_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._token(owner)}")
+        invited = owner_client.post(
             f"/api/auth/businesses/{business.id}/staff/",
             {"name": "Sita", "role": "CASHIER", "permissions": {}}, format="json",
         )
         self.assertEqual(invited.status_code, 201, invited.content)
 
-        res = APIClient(HTTP_X_PLATFORM="mobile").post(
-            "/api/auth/staff-login/", {"token": invited.data["login_token"]}, format="json",
-        )
+        res = accept_invite(invited.data["token"], "sita.staff@example.com", HTTP_X_PLATFORM="mobile")
         self.assertEqual(res.status_code, 200, res.content)
 
-        # A link-only staff member has no email/phone — found by name, not search
-        # (search only matches email/name/phone, and name does match here).
-        rows = self.admin_client.get("/api/superadmin/users/", {"search": "Sita"}).data["results"]
-        row = next((r for r in rows if r["id"] == invited.data["user"]), None)
-        self.assertIsNotNone(row, "staff login-link sign-in did not appear in Super Admin's Users list")
+        row = self.admin_sees("sita.staff@example.com")
+        self.assertIsNotNone(row, "accepted staff invitation did not appear in Super Admin's Users list")
         self.assertEqual(row["login_count"], 1)
 
     # ── the list itself is never filtered by platform ──

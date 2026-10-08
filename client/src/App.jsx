@@ -16,6 +16,7 @@ const ReferralLanding = lazy(() => import("./pages/ReferralLanding"));
 const SelectBusinessPage = lazy(() => import("./pages/SelectBusiness"));
 const LicenseRequiredPage = lazy(() => import("./pages/LicenseRequired"));
 const StaffLoginPage = lazy(() => import("./pages/StaffLoginPage"));
+const StaffInvitePage = lazy(() => import("./pages/StaffInvitePage"));
 
 // Business layout + pages — lazy-loaded so a session only downloads the
 // module(s) it actually opens instead of every page's code up front. This
@@ -73,6 +74,8 @@ export default function App() {
           switch the session on this device even if someone else (or a
           previous staff member) is already logged in here. */}
       <Route path="/staff-login/:token" element={<StaffLoginPage />} />
+      {/* A staff invitation: email + code, then Accept or Decline. */}
+      <Route path="/staff/invite/:token" element={<StaffInvitePage />} />
 
       {/* Post-login setup */}
       <Route path="/create-business" element={<RequireAuth><CreateBusinessPage /></RequireAuth>} />

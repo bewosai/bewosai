@@ -121,6 +121,28 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  /** Accept a staff invitation (email proven by the code) and open the business
+   * they just joined — see accounts.views.StaffInviteAcceptView. */
+  const acceptStaffInvite = useCallback(async (token, email, code) => {
+    setLoading(true);
+    try {
+      const { data } = await authApi.acceptStaffInvite(token, email, code);
+      _storeSession(data);
+      const joined = data.businesses.find((b) => b.id === data.business_id);
+      if (joined) {
+        localStorage.setItem("current_business", JSON.stringify(joined));
+        localStorage.setItem("business_id", String(joined.id));
+        localStorage.setItem("last_business_id", String(joined.id));
+        setCurrentBusiness(joined);
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.response?.data?.message || "Couldn't accept the invitation. Please try again." };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   /** Step 3 (new users): choose Personal or Business profile */
   const setAccountType = useCallback(async (accountType) => {
     setLoading(true);
@@ -251,7 +273,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user, businesses, currentBusiness,
       loading, isLoggedIn,
-      sendOtp, verifyOtp, setAccountType, logout, selectBusiness, refreshUser, refreshBusinesses,
+      sendOtp, verifyOtp, setAccountType, logout, selectBusiness, refreshUser, refreshBusinesses, acceptStaffInvite,
       addBusiness, updateBusinessInList, replaceBusiness, loginWithStaffLink,
     }}>
       {children}

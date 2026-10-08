@@ -9,8 +9,14 @@ class StaffUseCases {
 
   Future<List<StaffMember>> listStaff() => _repository.list();
 
-  Future<StaffMember> inviteStaff({required int businessId, required String name, String role = 'CASHIER', Map<String, dynamic>? permissions}) =>
-      _repository.invite(businessId: businessId, name: name, role: role, permissions: permissions);
+  Future<StaffInvitation> inviteStaff({required int businessId, required String name, String role = 'SALESPERSON', String email = '', Map<String, dynamic>? permissions}) =>
+      _repository.invite(businessId: businessId, name: name, role: role, email: email, permissions: permissions);
+
+  Future<List<StaffInvitation>> listInvitations(int businessId) => _repository.listInvitations(businessId);
+
+  Future<StaffInvitation> resendInvitation(int businessId, int invitationId) => _repository.resendInvitation(businessId, invitationId);
+
+  Future<void> cancelInvitation(int businessId, int invitationId) => _repository.cancelInvitation(businessId, invitationId);
 
   // The role and its permission matrix have to change together: the backend
   // enforces the stored matrix (not the role label), so sending only the role

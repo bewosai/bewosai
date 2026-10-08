@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Business, StaffMember, LoginActivity, StaffActivity, FiscalYear, OTPCode
+from .models import User, Business, StaffMember, StaffInvitation, LoginActivity, StaffActivity, FiscalYear, OTPCode
 
 
 @admin.register(User)
@@ -59,6 +59,15 @@ class StaffMemberAdmin(admin.ModelAdmin):
     list_filter = ("role", "is_active")
     search_fields = ("user__email", "user__name", "business__name")
     readonly_fields = ("joined_at",)
+
+
+@admin.register(StaffInvitation)
+class StaffInvitationAdmin(admin.ModelAdmin):
+    list_display = ("name", "business", "role", "email", "status", "expires_at", "created_at")
+    list_filter = ("status", "role")
+    search_fields = ("name", "email", "business__name")
+    # The link's secret only exists as a hash; nothing here can recreate it.
+    readonly_fields = ("token_hash", "accepted_by", "accepted_at", "created_at")
 
 
 @admin.register(LoginActivity)

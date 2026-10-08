@@ -84,11 +84,38 @@ void main() {
       expect(accessFor(p, 'reports'), StaffAccess.view);
     });
 
-    test('Viewer: view-only everywhere', () {
+    test('Viewer: view-only everywhere except staff management', () {
       final p = defaultPermissionsFor('VIEWER');
       for (final (module, _) in staffModules) {
-        expect(accessFor(p, module), StaffAccess.view, reason: module);
+        expect(accessFor(p, module), module == 'staff' ? StaffAccess.none : StaffAccess.view, reason: module);
       }
+    });
+
+    test('no preset role can manage staff except a Manager viewing the list', () {
+      for (final (role, _, _) in staffRoleOptions) {
+        final level = accessFor(defaultPermissionsFor(role), 'staff');
+        expect(level, role == 'MANAGER' ? StaffAccess.view : StaffAccess.none, reason: role);
+      }
+    });
+
+    test('new roles start where their description says', () {
+      expect(accessFor(defaultPermissionsFor('PARTNER'), 'banking'), StaffAccess.full);
+      expect(accessFor(defaultPermissionsFor('SALESPERSON'), 'sales'), StaffAccess.edit);
+      expect(accessFor(defaultPermissionsFor('SALESPERSON'), 'purchases'), StaffAccess.none);
+      expect(accessFor(defaultPermissionsFor('ACCOUNTANT'), 'banking'), StaffAccess.edit);
+      expect(accessFor(defaultPermissionsFor('ACCOUNTANT'), 'sales'), StaffAccess.view);
+      expect(accessFor(defaultPermissionsFor('ENTRY'), 'purchases'), StaffAccess.add);
+      expect(accessFor(defaultPermissionsFor('INVENTORY_MANAGER'), 'inventory'), StaffAccess.edit);
+      expect(accessFor(defaultPermissionsFor('INVENTORY_MANAGER'), 'sales'), StaffAccess.none);
+    });
+
+    test('every role has a label and a summary', () {
+      for (final (role, label, summary) in staffRoleOptions) {
+        expect(staffRoleLabel(role), label);
+        expect(staffRoleSummary(role), summary);
+        expect(summary, isNotEmpty);
+      }
+      expect(staffRoleLabel('OWNER'), 'Admin');
     });
   });
 }

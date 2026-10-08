@@ -28,8 +28,8 @@ const isValidLength = (c) => c.length === CODE_LENGTH || c.length === COUPON_LEN
 
 // What the trial-ended screen offers first: pick a plan, pay by QR (PaymentModal).
 const PLANS = [
-  { key: "PREMIUM", label: "Premium", features: ["3 business profiles", "3 staff members", "Bulk import/export"] },
-  { key: "PREMIUMPLUS", label: "Premium Plus", features: ["5 business profiles", "5 staff members", "Everything in Premium"] },
+  { key: "PREMIUM", label: "Premium", features: ["5 business profiles", "5 staff members per business", "Bulk import/export"] },
+  { key: "PREMIUMPLUS", label: "Premium Plus", features: ["5 business profiles", "5 staff members per business", "Everything in Premium"] },
 ];
 
 export default function LicenseRequiredPage() {

@@ -94,11 +94,11 @@ class BusinessProfileLimitTests(TestCase):
     def create(self, api, n):
         return api.post("/api/auth/businesses/", {"name": f"Shop {n}"}, format="json")
 
-    def fill_to_limit(self, plan):
-        owner, business = make_business(f"{plan.lower()}@example.com", plan)
+    def fill_to_limit(self, plan, platform="web"):
+        owner, business = make_business(f"{plan.lower()}{platform}@example.com", plan)
         if plan != Business.PLAN_FREE:
             _extend_and_grant(business=business, plan=plan, coupon_user=owner)
-        api = APIClient()
+        api = APIClient(HTTP_X_PLATFORM=platform)
         api.force_authenticate(owner)
         created = 1
         while self.create(api, created).status_code == 201:
@@ -106,19 +106,29 @@ class BusinessProfileLimitTests(TestCase):
             self.assertLess(created, 20)
         return created, self.create(api, 99)
 
-    def test_free_allows_two(self):
-        count, refused = self.fill_to_limit(Business.PLAN_FREE)
-        self.assertEqual(count, 2)
-        self.assertIn("Upgrade to Premium", refused.data["error"])
+    # Limits depend on where the business is added from, not on the plan.
+    def test_the_website_allows_five_on_any_plan(self):
+        for plan in (Business.PLAN_FREE, Business.PLAN_PREMIUM, Business.PLAN_PREMIUMPLUS):
+            count, refused = self.fill_to_limit(plan)
+            self.assertEqual(count, 5, plan)
+            self.assertIn("up to 5 business profiles", refused.data["error"])
 
-    def test_premium_allows_three(self):
-        count, refused = self.fill_to_limit(Business.PLAN_PREMIUM)
-        self.assertEqual(count, 3)
-        self.assertIn("Upgrade to Premium Plus", refused.data["error"])
+    def test_the_app_allows_three_on_any_plan(self):
+        for plan in (Business.PLAN_FREE, Business.PLAN_PREMIUMPLUS):
+            count, refused = self.fill_to_limit(plan, platform="mobile")
+            self.assertEqual(count, 3, plan)
+            self.assertIn("5 on the website", refused.data["error"])
 
-    def test_premium_plus_allows_five(self):
-        count, _ = self.fill_to_limit(Business.PLAN_PREMIUMPLUS)
-        self.assertEqual(count, 5)
+    def test_a_super_admin_override_still_wins(self):
+        owner, _ = make_business("override@example.com", Business.PLAN_FREE)
+        owner.business_limit_override = 7
+        owner.save()
+        api = APIClient(HTTP_X_PLATFORM="mobile")
+        api.force_authenticate(owner)
+        created = 1
+        while self.create(api, created).status_code == 201:
+            created += 1
+        self.assertEqual(created, 7)
 
     def test_the_upgrade_page_shows_the_same_limit(self):
         owner, business = make_business("usage@example.com", "Usage")
@@ -126,4 +136,8 @@ class BusinessProfileLimitTests(TestCase):
         api = APIClient(HTTP_X_BUSINESS_ID=str(business.id))
         api.force_authenticate(owner)
         data = api.get("/api/billing/subscription/").data
-        self.assertEqual((data["business_count"], data["business_limit"]), (1, 3))
+        self.assertEqual((data["business_count"], data["business_limit"]), (1, 5))
+        app = APIClient(HTTP_X_BUSINESS_ID=str(business.id), HTTP_X_PLATFORM="mobile")
+        app.force_authenticate(owner)
+        data = app.get("/api/billing/subscription/").data
+        self.assertEqual((data["business_limit"], data["staff_limit"]), (3, 3))

@@ -1,5 +1,5 @@
 """
-A staff member signs in with the link the owner shared and gets exactly what the
+A staff member accepts the owner's invitation (email + code) and gets exactly what the
 owner allowed: the app is told what they may use (so it can hide the rest), the
 server refuses everything else — including the corners that used to leak (the
 recycle bin, dashboard totals, colleagues' login history, coupons) — and whatever
@@ -12,6 +12,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from accounts.models import Business, StaffMember, User
+from accounts.staff_test_utils import accept_invite, signed_in_client
 from bewosai.permissions import PERMISSION_ACTIONS, PERMISSION_MODULES, permission_matrix, staff_can
 from expenses.models import Expense
 from inventory.models import Product
@@ -38,24 +39,21 @@ class StaffAccessTests(TestCase):
 
     # ── helpers ──────────────────────────────────────────────────────────
     def invite(self, name="Sita", role="CASHIER", permissions=None):
+        """Invite and accept (email + code). Returns the new member's ids and login."""
         res = self.owner_api.post(
             self.staff_url, {"name": name, "role": role, "permissions": permissions or {}}, format="json",
         )
         self.assertEqual(res.status_code, 201, res.content)
-        return res.data
-
-    def sign_in(self, token):
-        """Log in with the shared link. Returns (client, login response data)."""
-        res = APIClient().post("/api/auth/staff-login/", {"token": token}, format="json")
-        self.assertEqual(res.status_code, 200, res.content)
-        client = APIClient(**self.header)
-        client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
-        return client, res.data
+        email = f"{name.lower()}@example.com"
+        accepted = accept_invite(res.data["token"], email)
+        self.assertEqual(accepted.status_code, 200, accepted.content)
+        member = StaffMember.objects.get(user__email=email, business=self.business)
+        return {"id": member.id, "user": member.user_id, "login": accepted.data}
 
     def staff(self, permissions, role="CASHIER"):
         member = self.invite(role=role, permissions=permissions)
-        client, login = self.sign_in(member["login_token"])
-        return client, login, member
+        client = signed_in_client(member["login"]["access"], self.business.id)
+        return client, member["login"], member
 
     # ── the client is told what the staff member may do ──────────────────
     def test_login_response_carries_the_role_and_what_is_allowed(self):

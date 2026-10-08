@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 from django.db import models, transaction
 from django.contrib.auth.hashers import make_password, check_password
@@ -444,10 +445,22 @@ class StaffMember(models.Model):
     ROLE_MANAGER = "MANAGER"
     ROLE_CASHIER = "CASHIER"
     ROLE_VIEWER = "VIEWER"
+    ROLE_PARTNER = "PARTNER"
+    ROLE_ACCOUNTANT = "ACCOUNTANT"
+    ROLE_SALESPERSON = "SALESPERSON"
+    ROLE_ENTRY = "ENTRY"
+    ROLE_INVENTORY_MANAGER = "INVENTORY_MANAGER"
+    # A role only picks the starting permissions in the Staff screens; what a
+    # member may actually do is always their `permissions` matrix.
     ROLE_CHOICES = [
         (ROLE_OWNER, "Owner"),
+        (ROLE_PARTNER, "Business Partner"),
         (ROLE_MANAGER, "Manager"),
+        (ROLE_ACCOUNTANT, "Accountant"),
+        (ROLE_SALESPERSON, "Salesperson"),
         (ROLE_CASHIER, "Cashier"),
+        (ROLE_ENTRY, "Entry Person"),
+        (ROLE_INVENTORY_MANAGER, "Inventory Manager"),
         (ROLE_VIEWER, "Viewer"),
     ]
 
@@ -480,6 +493,78 @@ class StaffMember(models.Model):
     def regenerate_login_token(self):
         self.login_token = self.new_login_token()
         self.save(update_fields=["login_token"])
+
+
+class StaffInvitation(models.Model):
+    """
+    An owner's invitation for someone to join their business as staff.
+
+    Nobody gets access from the link alone: the person opening it must prove
+    an email address with a one-time code and then accept (see
+    accounts.views.StaffInviteAcceptView) — only then is a StaffMember made.
+    The link's token is stored only as a SHA-256 hash, so a database leak
+    can't be turned into working invite links; the owner sees the link once,
+    when creating or resending (which issues a new token and kills the old).
+    """
+
+    STATUS_PENDING = "PENDING"
+    STATUS_ACCEPTED = "ACCEPTED"
+    STATUS_DECLINED = "DECLINED"
+    STATUS_CANCELLED = "CANCELLED"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_DECLINED, "Declined"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+    VALID_DAYS = 7
+
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="staff_invitations")
+    invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    name = models.CharField(max_length=150)
+    # Optional: when the owner fills it in, only this address can accept.
+    email = models.EmailField(blank=True, default="")
+    role = models.CharField(max_length=20, choices=StaffMember.ROLE_CHOICES, default=StaffMember.ROLE_CASHIER)
+    permissions = models.JSONField(default=dict)
+    token_hash = models.CharField(max_length=64, unique=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    expires_at = models.DateTimeField()
+    accepted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Invite {self.name} → {self.business.name} ({self.status})"
+
+    @staticmethod
+    def hash_token(token):
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    @classmethod
+    def find(cls, token):
+        token = (token or "").strip()
+        if not token:
+            return None
+        return cls.objects.filter(token_hash=cls.hash_token(token)).select_related("business", "invited_by").first()
+
+    def issue_token(self):
+        """New secret link (old one stops working) and a fresh 7 days. Returns the token."""
+        token = secrets.token_urlsafe(32)
+        self.token_hash = self.hash_token(token)
+        self.expires_at = timezone.now() + timedelta(days=self.VALID_DAYS)
+        self.status = self.STATUS_PENDING
+        return token
+
+    @property
+    def is_expired(self):
+        return self.expires_at <= timezone.now()
+
+    @property
+    def is_open(self):
+        return self.status == self.STATUS_PENDING and not self.is_expired
 
 
 class LoginActivity(models.Model):

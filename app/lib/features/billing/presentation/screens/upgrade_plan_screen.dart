@@ -14,9 +14,11 @@ import '../widgets/payment_sheet.dart';
 
 const _planLabels = {'FREE': 'Free', 'PREMIUM': 'Premium', 'PREMIUMPLUS': 'Premium Plus'};
 const _planFeatures = {
-  'FREE': ['2 business profiles', '1 staff member', 'Core sales & inventory'],
-  'PREMIUM': ['3 business profiles', '3 staff members', 'Bulk import/export', 'Priority support'],
-  'PREMIUMPLUS': ['5 business profiles', '5 staff members', 'Everything in Premium'],
+  // Business and staff limits are the same on every plan: 3 each in the app
+  // (5 on the website) - accounts.views.PLATFORM_LIMITS.
+  'FREE': ['3 business profiles in the app', '3 staff members per business', 'Core sales & inventory'],
+  'PREMIUM': ['3 business profiles in the app', '3 staff members per business', 'Bulk import/export', 'Priority support'],
+  'PREMIUMPLUS': ['3 business profiles in the app', '3 staff members per business', 'Everything in Premium'],
 };
 
 Color _planColor(String plan) {

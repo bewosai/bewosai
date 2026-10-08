@@ -46,9 +46,10 @@ void main() {
       expect(can(p, 'staff', 'edit'), isFalse);
     });
 
-    test('a Viewer can only view, everywhere', () {
+    test('a Viewer can only view, everywhere except staff management', () {
       final p = defaultPermissionsFor('VIEWER');
-      for (final module in p.keys) {
+      expect(can(p, 'staff', 'view'), isFalse, reason: "colleagues' logins stay private");
+      for (final module in p.keys.where((m) => m != 'staff')) {
         expect(can(p, module, 'view'), isTrue, reason: module);
         expect(can(p, module, 'create'), isFalse, reason: module);
         expect(can(p, module, 'edit'), isFalse, reason: module);

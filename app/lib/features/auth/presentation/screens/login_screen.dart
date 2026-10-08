@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_constants.dart';
 // import '../../../../core/constants/country_codes.dart'; // phone login/signup temporarily disabled (2026-09-16)
 import '../../../../core/theme/app_colors.dart';
@@ -164,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Paste the login link the business owner sent you.'),
+            const Text('Paste the link the business sent you. Got an invitation link? It opens in your browser to verify your email and accept; then sign in here with that email.'),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
@@ -182,6 +183,20 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
     if (link == null || !mounted) return;
+    if (AppConstants.isStaffInviteLink(link)) {
+      // Invitations are accepted in the browser (email + code), not here.
+      final match = RegExp(r'https?://\S+').firstMatch(link.trim());
+      final uri = Uri.tryParse(match?.group(0) ?? link.trim());
+      final opened = uri != null && await launchUrl(uri, mode: LaunchMode.externalApplication).catchError((_) => false);
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        opened
+            ? 'Accept the invitation in your browser, then sign in here with the same email.'
+            : 'Open the invitation link in your browser to accept it, then sign in here with that email.',
+      );
+      return;
+    }
     final auth = context.read<AuthProvider>();
     final ok = await auth.signInWithStaffLink(link);
     if (!mounted) return;
@@ -539,7 +554,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Center(
             child: TextButton(
               onPressed: auth.isLoading ? null : _signInWithStaffLink,
-              child: const Text('Staff? Sign in with your login link'),
+              child: const Text('Staff? Use the link you were sent'),
             ),
           ),
         ],

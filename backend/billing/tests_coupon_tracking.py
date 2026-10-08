@@ -35,17 +35,17 @@ class CouponPlanAndTrackingTests(TestCase):
         self.assertEqual(res.status_code, 200, res.content)
         sub = api.get("/api/billing/subscription/").data
         self.assertEqual(sub["effective_plan"], plan)
-        self.assertEqual(sub["business_limit"], business_limit)
+        self.assertEqual(sub["business_limit"], business_limit)  # 5 on the website, whatever the plan
         return owner, business
 
     def test_a_premium_coupon_activates_premium(self):
-        self.check_plan(Business.PLAN_PREMIUM, 3)
+        self.check_plan(Business.PLAN_PREMIUM, 5)
 
     def test_a_premium_plus_coupon_activates_premium_plus(self):
         self.check_plan(Business.PLAN_PREMIUMPLUS, 5)
 
     def test_super_admin_sees_who_used_which_coupon(self):
-        owner, business = self.check_plan(Business.PLAN_PREMIUM, 3)
+        owner, business = self.check_plan(Business.PLAN_PREMIUM, 5)
         unused_for = make_business("waiting@example.com", "Waiting")[0]
         unused_code = self.make_coupon(unused_for, Business.PLAN_PREMIUMPLUS)
 
