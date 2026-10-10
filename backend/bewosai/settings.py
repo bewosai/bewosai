@@ -263,6 +263,13 @@ else:
         default=r"^https://bewosaiapp[a-zA-Z0-9-]*\.vercel\.app$",
     ).split(",")
 
+# The site's own domain (bought 2026-10-09). Added in code, not only via the
+# env vars above, so a Render setting that predates the domain can't lock the
+# website out of its own API.
+SITE_ORIGINS = ["https://bewosai.com", "https://www.bewosai.com"]
+if not DEBUG:
+    CORS_ALLOWED_ORIGINS += [o for o in SITE_ORIGINS if o not in CORS_ALLOWED_ORIGINS]
+
 CORS_ALLOW_CREDENTIALS = True
 
 # Needed for Django's CSRF checks (admin login, session-based requests) to
@@ -273,6 +280,7 @@ CSRF_TRUSTED_ORIGINS = config(
 ).split(",")
 if _platform_domain:
     CSRF_TRUSTED_ORIGINS.append(f"https://{_platform_domain}")
+CSRF_TRUSTED_ORIGINS += [o for o in SITE_ORIGINS if o not in CSRF_TRUSTED_ORIGINS]
 
 # ── Production security (Render terminates TLS at its edge proxy, so Django
 # itself sees plain HTTP — X-Forwarded-Proto tells it the real scheme) ─────────
@@ -310,7 +318,7 @@ PLATFORM_ADMIN_EMAILS = [
 ]
 
 # Where the website lives — referral links point here (the backend has no pages).
-FRONTEND_URL = config("FRONTEND_URL", default="https://bewosaiapp.vercel.app").rstrip("/")
+FRONTEND_URL = config("FRONTEND_URL", default="https://bewosai.com").rstrip("/")
 
 SENDGRID_API_KEY = config("SENDGRID_API_KEY", default="")
 SENDGRID_FROM_EMAIL = config("SENDGRID_FROM_EMAIL", default="noreply@bewosai.com")
