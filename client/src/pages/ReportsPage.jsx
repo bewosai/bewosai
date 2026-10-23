@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Printer, TrendingUp, TrendingDown, DollarSign, Package, Download, FileText, Calendar,
-  Boxes, ListChecks, BookOpen, Users, Wallet, Landmark, Receipt, ChevronRight, Search, ArrowLeft,
+  Boxes, ListChecks, BookOpen, Users, Wallet, Landmark, Receipt, ChevronRight, Search, ArrowLeft, Scale,
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -103,6 +103,11 @@ export default function ReportsPage() {
   // Cash In Hand tab
   const [cashHandData, setCashHandData] = useState(null);
   const [cashHandLoading, setCashHandLoading] = useState(false);
+
+  // Balance Sheet tab — as of the range's end date, profit since its start
+  const [balanceSheet, setBalanceSheet] = useState(null);
+  const [balanceSheetLoading, setBalanceSheetLoading] = useState(false);
+  const [balanceSheetError, setBalanceSheetError] = useState("");
 
   // Bank Statement tab
   const [bankAccounts, setBankAccounts] = useState([]);
@@ -224,6 +229,23 @@ export default function ReportsPage() {
       .finally(() => setCashHandLoading(false));
   }, [activeReport, dateFrom, dateTo]);
 
+  // Balance Sheet tab — refetch on date range change. The backend refuses a
+  // future date or a start after the end with a message; show it as given.
+  useEffect(() => {
+    if (activeReport !== "balance-sheet") return;
+    setBalanceSheetLoading(true);
+    setBalanceSheetError("");
+    reportsApi.balanceSheet({ as_of: dateTo, date_from: dateFrom })
+      .then((res) => setBalanceSheet(res.data))
+      .catch((err) => {
+        setBalanceSheet(null);
+        const data = err.response?.data || {};
+        const first = Object.values(data).flat().find((v) => typeof v === "string");
+        setBalanceSheetError(data.message || first || "Could not load the balance sheet.");
+      })
+      .finally(() => setBalanceSheetLoading(false));
+  }, [activeReport, dateFrom, dateTo]);
+
   // Bank Statement tab — load account list once when first opened
   useEffect(() => {
     if (activeReport !== "bank-statement" || bankAccounts.length || bankAccountsLoading) return;
@@ -341,6 +363,29 @@ export default function ReportsPage() {
     `bank_statement_${selectedAccount?.account_name || ""}_${dateFrom}_${dateTo}.csv`
   );
 
+  const exportBalanceSheet = () => {
+    const bs = balanceSheet;
+    if (!bs) return;
+    const a = bs.assets, l = bs.liabilities, e = bs.equity;
+    exportCSV(
+      ["Section", "Item", "Amount"],
+      [
+        ["Assets", "Cash in hand", a.cash_in_hand],
+        ...a.bank_accounts.map((b) => ["Assets", b.name, b.balance]),
+        ["Assets", "Receivables (customers owe you)", a.receivables],
+        ["Assets", a.stock_is_estimate ? "Stock (estimated)" : "Stock", a.stock],
+        ["Assets", "Total assets", a.total],
+        ["Liabilities", "Payables (you owe suppliers)", l.payables],
+        ["Liabilities", "Total liabilities", l.total],
+        ["Equity", `Profit ${bs.date_from} to ${bs.as_of}`, e.period_profit],
+        ["Equity", "Owner's capital & earlier profit", e.capital_and_earlier_profit],
+        ["Equity", "Total equity", e.total],
+        ["", "Liabilities + equity", bs.liabilities_and_equity_total],
+      ],
+      `balance_sheet_${bs.as_of}.csv`
+    );
+  };
+
   const exportPartyStatement = () => exportCSV(
     ["Date", "Type", "Ref", "Debit", "Credit", "Balance", "Note"],
     (partyLedger?.entries || []).map(e => [e.date, e.type, e.ref, e.debit, e.credit, e.balance, e.note]),
@@ -356,6 +401,7 @@ export default function ReportsPage() {
   const TABS = [
     { key: "overview", label: "Overview" },
     { key: "profit", label: "Profit & Loss" },
+    { key: "balance-sheet", label: "Balance Sheet" },
     { key: "stock", label: "Stock" },
     { key: "aging", label: "Aging" },
     { key: "sales", label: "Sales Detail" },
@@ -375,6 +421,7 @@ export default function ReportsPage() {
     { key: "daybook", label: "Day Book", desc: "Daily cash register", icon: BookOpen },
     { key: "all-transactions", label: "All Transaction Report", desc: "Every transaction, one feed", icon: ListChecks },
     { key: "profit", label: "Profit & Loss Report", desc: "Revenue, COGS, net profit", icon: DollarSign },
+    { key: "balance-sheet", label: "Balance Sheet", desc: "What you own and owe on a date", icon: Scale },
     { key: "party-statement", label: "Party Statement", desc: "Per-party running ledger", icon: Users },
     { key: "cash-in-hand", label: "Cash In Hand Statement", desc: "Running cash balance", icon: Wallet },
     { key: "bank-statement", label: "Bank Statement", desc: "Per-account running balance", icon: Landmark },
@@ -386,7 +433,7 @@ export default function ReportsPage() {
     { label: "Parties Report", items: ["party-statement", "aging"] },
     { label: "Inventory Report", items: ["stock"] },
     { label: "Income & Expenses Report", items: ["profit", "expenses"] },
-    { label: "Business Status Report", items: ["overview", "cash-in-hand"] },
+    { label: "Business Status Report", items: ["overview", "balance-sheet", "cash-in-hand"] },
   ];
   const [openCategory, setOpenCategory] = useState(null);
 
@@ -1213,6 +1260,100 @@ export default function ReportsPage() {
           )}
         </div>
       )}
+
+      {/* Balance Sheet Tab — as of the range's end date; profit since its start */}
+      {activeReport === "balance-sheet" && (() => {
+        const rs = (v) => maskAmount(v, (x) => `Rs. ${Number(x).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+        const Row = ({ label, value, bold, sub, negative }) => (
+          <div className={`flex items-center justify-between gap-3 px-4 py-2.5 border-t border-navy-800/40 text-sm ${bold ? "font-bold text-white" : "text-navy-300"}`}>
+            <div className="min-w-0">
+              <p className="truncate">{label}</p>
+              {sub && <p className="text-xs text-navy-500 font-normal">{sub}</p>}
+            </div>
+            <p className={`shrink-0 ${negative || value < 0 ? "text-red-400" : bold ? "text-white" : "text-navy-100"}`}>{rs(value)}</p>
+          </div>
+        );
+        const Section = ({ title, children, total, totalLabel }) => (
+          <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+            <h3 className="px-4 py-3 text-sm font-semibold text-white">{title}</h3>
+            {children}
+            <div className="flex items-center justify-between px-4 py-3 border-t border-navy-700 bg-navy-800/40 text-sm font-bold">
+              <span className="text-white">{totalLabel}</span>
+              <span className={total < 0 ? "text-red-400" : "text-orange-400"}>{rs(total)}</span>
+            </div>
+          </div>
+        );
+        if (balanceSheetLoading) {
+          return <div className="flex h-48 items-center justify-center text-sm text-navy-400">Loading…</div>;
+        }
+        if (!balanceSheet) {
+          return (
+            <div className="rounded-xl border border-navy-800 bg-navy-900 py-10 text-center text-sm text-red-400">
+              {balanceSheetError || "Could not load the balance sheet."}
+            </div>
+          );
+        }
+        const { assets: a, liabilities: l, equity: e } = balanceSheet;
+        return (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-white">Balance Sheet as of {balanceSheet.as_of}</h3>
+                <p className="text-xs text-navy-500">
+                  Change the dates above: the end date is the balance sheet date, the start date sets the profit period.
+                </p>
+              </div>
+              <button onClick={exportBalanceSheet}
+                className="flex items-center gap-1.5 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/20 transition">
+                <Download className="h-3.5 w-3.5" /> Download CSV
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              <Section title="Assets — what you own" total={a.total} totalLabel="Total assets">
+                <Row label="Cash in hand" value={a.cash_in_hand} />
+                {a.bank_accounts.map((b) => <Row key={b.id} label={b.name} sub={b.type} value={b.balance} />)}
+                <Row label="Receivables" sub={`${a.receivable_parties.length} customer(s) owe you`} value={a.receivables} />
+                <Row
+                  label="Stock (at purchase price)"
+                  sub={a.stock_is_estimate
+                    ? "Estimated for a past date — worked back from today's stock"
+                    : `${a.stock_items.length} product(s) in stock`}
+                  value={a.stock}
+                />
+              </Section>
+
+              <div className="space-y-5">
+                <Section title="Liabilities — what you owe" total={l.total} totalLabel="Total liabilities">
+                  <Row label="Payables" sub={`You owe ${l.payable_parties.length} supplier(s)`} value={l.payables} />
+                </Section>
+                <Section title="Owner's equity" total={e.total} totalLabel="Total equity">
+                  <Row label={`Profit ${balanceSheet.date_from} to ${balanceSheet.as_of}`} value={e.period_profit} />
+                  <Row label="Owner's capital & earlier profit" value={e.capital_and_earlier_profit} />
+                </Section>
+                <div className="flex items-center justify-between rounded-xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-sm font-bold">
+                  <span className="text-white">Liabilities + equity</span>
+                  <span className="text-orange-400">{rs(balanceSheet.liabilities_and_equity_total)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              {[
+                { title: "Who owes you", rows: a.receivable_parties, empty: "No customer owes you on this date" },
+                { title: "Who you owe", rows: l.payable_parties, empty: "You owe no supplier on this date" },
+              ].map(({ title, rows, empty }) => (
+                <div key={title} className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+                  <h3 className="px-4 py-3 text-sm font-semibold text-white">{title}</h3>
+                  {rows.length === 0
+                    ? <p className="px-4 pb-4 text-xs text-navy-500">{empty}</p>
+                    : rows.slice(0, 50).map((p) => <Row key={p.id} label={p.name} value={p.amount} />)}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Cash In Hand Tab — running cash balance over the date range */}
       {activeReport === "cash-in-hand" && (

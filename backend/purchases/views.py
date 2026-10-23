@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
+from bewosai.locking import LockedWritesMixin, lock
 from bewosai.utils import get_business
 from inventory import stock
 from parties.allocations import release_allocations
@@ -89,7 +90,7 @@ class PurchaseListCreateView(_RequirePurchases, generics.ListCreateAPIView):
         raise ValidationError("Could not assign a unique bill number — please try again.")
 
 
-class PurchaseDetailView(_RequirePurchases, generics.RetrieveUpdateDestroyAPIView):
+class PurchaseDetailView(LockedWritesMixin, _RequirePurchases, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PurchaseSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
     fiscal_lock_date_field = "purchase_date"
@@ -116,6 +117,7 @@ class PurchaseDetailView(_RequirePurchases, generics.RetrieveUpdateDestroyAPIVie
             instance.is_deleted = True
             instance.deleted_at = timezone.now()
             instance.save(update_fields=["is_deleted", "deleted_at"])
+            PurchaseSerializer._sync_bank(instance)
 
 
 class PurchaseReturnListCreateView(_RequirePurchases, generics.ListCreateAPIView):
@@ -127,6 +129,15 @@ class PurchaseReturnListCreateView(_RequirePurchases, generics.ListCreateAPIView
         if not biz:
             return PurchaseReturn.objects.none()
         return PurchaseReturn.objects.filter(business=biz).select_related("original_purchase").prefetch_related("items")
+
+    def create(self, request, *args, **kwargs):
+        # See SaleReturnListCreateView.create: the original bill stays locked
+        # while the "not more than was bought" check runs.
+        with transaction.atomic():
+            original = str(request.data.get("original_purchase") or "")
+            if original.isdigit():
+                lock(Purchase.objects.filter(pk=original, business=get_business(request))).first()
+            return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         biz = get_business(self.request)
@@ -243,6 +254,15 @@ class RecycleBinView(APIView):
 
 class RecycleBinRestoreView(APIView):
     def post(self, request, record_type, pk):
+        # All or nothing, and the record stays locked while it's restored: a
+        # double-tapped "Restore" must not apply its stock or payment twice.
+        with transaction.atomic():
+            response = self._restore(request, record_type, pk)
+            if response.status_code >= 400:
+                transaction.set_rollback(True)
+            return response
+
+    def _restore(self, request, record_type, pk):
         from sales.models import Sale, Quotation
         from parties.models import Party, PartyPayment
         from parties.serializers import PartyPaymentSerializer
@@ -257,39 +277,39 @@ class RecycleBinRestoreView(APIView):
         if denied:
             return denied
 
-        try:
-            if record_type == "sale":
-                obj = Sale.objects.get(id=pk, business=biz, is_deleted=True)
-            elif record_type == "purchase":
-                obj = Purchase.objects.get(id=pk, business=biz, is_deleted=True)
-            elif record_type == "party":
-                obj = Party.objects.get(id=pk, business=biz, is_deleted=True)
-            elif record_type == "expense":
-                obj = Expense.objects.get(id=pk, business=biz, is_deleted=True)
-            elif record_type == "product":
-                obj = Product.objects.get(id=pk, business=biz, is_deleted=True)
-            elif record_type == "payment":
-                obj = PartyPayment.objects.get(id=pk, party__business=biz, is_deleted=True)
-            elif record_type == "quotation":
-                obj = Quotation.objects.get(id=pk, business=biz, is_deleted=True)
-            elif record_type == "bank_account":
-                obj = BankAccount.objects.get(id=pk, business=biz, is_deleted=True)
-            elif record_type == "bank_transaction":
-                obj = BankTransaction.objects.get(id=pk, account__business=biz, is_deleted=True)
-            else:
-                return Response({"error": "Unknown record type."}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception:
+        lookups = {
+            "sale": (Sale, {"business": biz}),
+            "purchase": (Purchase, {"business": biz}),
+            "party": (Party, {"business": biz}),
+            "expense": (Expense, {"business": biz}),
+            "product": (Product, {"business": biz}),
+            "payment": (PartyPayment, {"party__business": biz}),
+            "quotation": (Quotation, {"business": biz}),
+            "bank_account": (BankAccount, {"business": biz}),
+            "bank_transaction": (BankTransaction, {"account__business": biz}),
+        }
+        if record_type not in lookups:
+            return Response({"error": "Unknown record type."}, status=status.HTTP_400_BAD_REQUEST)
+        model, scope = lookups[record_type]
+        obj = lock(model.objects.filter(id=pk, is_deleted=True, **scope)).first()
+        if obj is None:
             return Response({"error": "Record not found."}, status=status.HTTP_404_NOT_FOUND)
 
         obj.is_deleted = False
         obj.deleted_at = None
         obj.save(update_fields=["is_deleted", "deleted_at"])
 
-        # Deleting a confirmed sale/purchase undid its stock; restoring it applies it again.
-        if record_type == "sale" and obj.status == "CONFIRMED":
-            stock.apply_sale(obj.items.all())
-        elif record_type == "purchase" and obj.status == "CONFIRMED":
-            stock.apply_purchase(obj.items.all())
+        # Deleting a confirmed sale/purchase undid its stock and bank entry;
+        # restoring it applies both again.
+        if record_type == "sale":
+            from sales.serializers import SaleSerializer
+            if obj.status == "CONFIRMED":
+                stock.apply_sale(obj.items.all())
+            SaleSerializer._sync_bank(obj)
+        elif record_type == "purchase":
+            if obj.status == "CONFIRMED":
+                stock.apply_purchase(obj.items.all())
+            PurchaseSerializer._sync_bank(obj)
 
         if record_type == "payment":
             # Mirror image of _unreconcile_payment (parties.views) — re-apply
@@ -297,14 +317,14 @@ class RecycleBinRestoreView(APIView):
             # against, and recreate the mirrored BankTransaction, so the
             # party's balance and bank balance go back to exactly what they
             # were before this payment was deleted.
-            for allocation in obj.allocations.select_related("sale", "purchase"):
-                if allocation.sale is not None:
-                    sale = allocation.sale
+            for allocation in obj.allocations.all():
+                if allocation.sale_id is not None:
+                    sale = lock(Sale.objects.filter(pk=allocation.sale_id)).get()
                     sale.paid_amount += allocation.amount
                     sale.reconciled_amount += allocation.amount
                     sale.save()
-                elif allocation.purchase is not None:
-                    purchase = allocation.purchase
+                elif allocation.purchase_id is not None:
+                    purchase = lock(Purchase.objects.filter(pk=allocation.purchase_id)).get()
                     purchase.paid_amount += allocation.amount
                     purchase.reconciled_amount += allocation.amount
                     purchase.save()

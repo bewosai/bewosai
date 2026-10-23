@@ -44,3 +44,22 @@ class NepalTodayTests(TestCase):
         # 17:00 UTC on the 18th = 22:45 on the 18th in Nepal: the 19th hasn't started.
         data = self._dashboard_at(datetime(2026, 9, 18, 17, 0, tzinfo=dt_timezone.utc))
         self.assertEqual(Decimal(str(data["sales_today"])), Decimal("0"))
+
+
+class InvalidDateFilterTests(TestCase):
+    """A date that isn't a real date (?date_from=2026-02-30, a typo) is the
+    caller's mistake: a plain 400, never a server error."""
+
+    def test_reports_and_lists_answer_400(self):
+        owner = User.objects.create_user(email="owner@example.com", name="Owner")
+        business = Business.objects.create(owner=owner, name="Shop")
+        StaffMember.objects.create(user=owner, business=business, role=StaffMember.ROLE_OWNER)
+        api = APIClient(HTTP_X_BUSINESS_ID=str(business.id))
+        api.force_authenticate(owner)
+        for url in ("/api/reports/sales/?date_from=abc", "/api/reports/profit/?date_from=2026-02-30",
+                    "/api/reports/cash-flow/?date_to=xyz", "/api/reports/cash-in-hand/?date_from=1",
+                    "/api/reports/all-transactions/?date_to=2026-13-01", "/api/sales/?date_from=abc",
+                    "/api/purchases/?date_to=abc"):
+            res = api.get(url)
+            self.assertEqual(res.status_code, 400, url)
+            self.assertIn("date", res.data["message"].lower(), url)

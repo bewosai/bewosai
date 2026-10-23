@@ -253,6 +253,8 @@ const ENTRY_META = {
   PAYMENT_IN:      { icon: ArrowDownLeft, label: "Payment In",     color: "text-green-400",  bg: "bg-green-500/10" },
   PAYMENT_OUT:     { icon: ArrowUpRight,  label: "Payment Out",    color: "text-red-400",    bg: "bg-red-500/10" },
   SALE_RETURN:     { icon: ShoppingCart,  label: "Sale Return",    color: "text-green-400",  bg: "bg-green-500/10" },
+  REFUND_OUT:      { icon: ArrowUpRight,  label: "Refund Paid",    color: "text-red-400",    bg: "bg-red-500/10" },
+  REFUND_IN:       { icon: ArrowDownLeft, label: "Refund Received", color: "text-green-400", bg: "bg-green-500/10" },
   PURCHASE_RETURN: { icon: Package,       label: "Purchase Return", color: "text-red-400",   bg: "bg-red-500/10" },
 };
 

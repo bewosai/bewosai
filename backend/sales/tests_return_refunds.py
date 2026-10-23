@@ -64,6 +64,21 @@ class SaleReturnRefundTests(TestCase):
         self.assertEqual(Decimal(str(res.data["refunded_amount"])), D(300))
         self.assertFalse(BankTransaction.objects.exists())  # cash needs no bank row
 
+    def test_customer_balance_after_a_refund_is_settled(self):
+        # Paid in full, 300 returned and handed back in cash: neither side owes
+        # anything. Counting the return as credit without the refund that paid
+        # it out showed "you owe them Rs 300".
+        sale = self.make_sale(total=1000, paid=1000)
+        self.return_via_api(sale, amount=300, refund_method="CASH")
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.balance, D(0))
+
+    def test_customer_balance_after_a_partly_refunded_return(self):
+        sale = self.make_sale(total=1000, paid=800)   # owes 200
+        self.return_via_api(sale, amount=500)         # 200 cancels the debt, 300 refunded
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.balance, D(0))
+
     def test_return_partly_absorbed_refunds_only_the_leftover(self):
         sale = self.make_sale(total=1000, paid=800)   # due = 200
         res = self.return_via_api(sale, amount=500)   # 200 absorbed, 300 left over

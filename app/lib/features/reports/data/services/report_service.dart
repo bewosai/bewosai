@@ -1,4 +1,5 @@
 import '../../../../core/network/api_client.dart';
+import '../../../../core/utils/formatters.dart';
 import '../models/report_models.dart';
 
 class ReportService {
@@ -138,6 +139,20 @@ class ReportService {
         if (to != null) 'date_to': to.toIso8601String().split('T').first,
       });
       return BankStatement.fromJson(res.data as Map<String, dynamic>);
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
+  /// What the business owns and owes on [asOf]; profit counted from [from]
+  /// (default: the start of that fiscal year). See backend reports/balance_sheet.py.
+  Future<BalanceSheet> balanceSheet({required DateTime asOf, DateTime? from}) async {
+    try {
+      final res = await _dio.get('/reports/balance-sheet/', queryParameters: {
+        'as_of': Formatters.apiDate(asOf),
+        if (from != null) 'date_from': Formatters.apiDate(from),
+      });
+      return BalanceSheet.fromJson(res.data as Map<String, dynamic>);
     } catch (e) {
       throw ApiClient.toApiException(e);
     }

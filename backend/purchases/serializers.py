@@ -99,7 +99,10 @@ class PurchaseSerializer(serializers.ModelSerializer):
         # Only what was paid on this document itself — later repayments
         # (reconciled_amount) already have their own PARTYPAYMENT bank entry.
         paid_here = purchase.paid_amount - purchase.reconciled_amount
-        if purchase.payment_method == Purchase.METHOD_SPLIT:
+        if purchase.status != "CONFIRMED" or purchase.is_deleted:
+            # See SaleSerializer._sync_bank: only a confirmed, not-deleted bill moved money.
+            bank_amount = 0
+        elif purchase.payment_method == Purchase.METHOD_SPLIT:
             bank_amount = paid_here - purchase.cash_amount
         elif purchase.payment_method != "CASH":
             bank_amount = paid_here

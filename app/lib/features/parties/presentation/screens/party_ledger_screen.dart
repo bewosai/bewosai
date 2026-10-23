@@ -49,7 +49,10 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
       case 'PURCHASE':
         return Icons.shopping_bag_outlined;
       case 'PAYMENT_OUT':
+      case 'REFUND_OUT':
         return Icons.arrow_upward;
+      case 'REFUND_IN':
+        return Icons.arrow_downward;
       case 'PURCHASE_RETURN':
         return Icons.undo;
       default:

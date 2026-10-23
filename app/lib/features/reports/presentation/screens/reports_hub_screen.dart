@@ -33,6 +33,7 @@ class ReportsHubScreen extends StatelessWidget {
     _PopularReport('Party Statement', 'Per-party running ledger', Icons.people_outline, 8),
     _PopularReport('Cash In Hand Statement', 'Running cash balance', Icons.account_balance_wallet_outlined, 9),
     _PopularReport('Bank Statement', 'Per-account running balance', Icons.account_balance_outlined, 10),
+    _PopularReport('Balance Sheet', 'What you own and owe on a date', Icons.balance_outlined, 11),
   ];
 
   static const _categories = [
@@ -40,7 +41,7 @@ class ReportsHubScreen extends StatelessWidget {
     _ReportCategory('Parties Report', Icons.people_outline, [8, 3]),
     _ReportCategory('Inventory Report', Icons.inventory_2_outlined, [2]),
     _ReportCategory('Income & Expenses Report', Icons.account_balance_wallet_outlined, [1, 5]),
-    _ReportCategory('Business Status Report', Icons.insights_outlined, [0, 9]),
+    _ReportCategory('Business Status Report', Icons.insights_outlined, [0, 11, 9]),
   ];
 
   void _open(BuildContext context, int tabIndex) {

@@ -11,7 +11,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/date_range_utils.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../parties/presentation/providers/party_provider.dart';
+import '../../../../core/network/api_client.dart';
 import '../../data/models/report_models.dart';
+import '../../data/services/report_service.dart';
 import '../../domain/usecases/report_usecases.dart';
 import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
@@ -23,6 +25,7 @@ import '../../../../core/calendar/nepal_time.dart';
 const kReportTabs = [
   'Overview', 'Profit & Loss', 'Stock', 'Aging', 'Sales', 'Expenses',
   'Day Book', 'All Transactions', 'Party Statement', 'Cash In Hand', 'Bank Statement',
+  'Balance Sheet',
 ];
 
 class ReportsScreen extends StatefulWidget {
@@ -95,6 +98,7 @@ class _ReportsScreenState extends State<ReportsScreen>
             _PartyStatementTab(),
             _CashInHandTab(),
             _BankStatementTab(),
+            _BalanceSheetTab(),
           ],
         ),
       ),
@@ -1086,6 +1090,179 @@ class _CashInHandTab extends StatelessWidget {
           Text(label, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
           Text(Formatters.currency(value), style: TextStyle(fontWeight: FontWeight.w800, color: color, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Balance sheet on a date the user picks; the profit line counts from a start
+/// date they pick too (blank = the start of that fiscal year, server-side).
+class _BalanceSheetTab extends StatefulWidget {
+  const _BalanceSheetTab();
+  @override
+  State<_BalanceSheetTab> createState() => _BalanceSheetTabState();
+}
+
+class _BalanceSheetTabState extends State<_BalanceSheetTab> {
+  DateTime _asOf = NepalTime.today();
+  DateTime? _from;
+  BalanceSheet? _sheet;
+  String? _error;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final sheet = await ReportService().balanceSheet(asOf: _asOf, from: _from);
+      if (mounted) setState(() => _sheet = sheet);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _pickAsOf() async {
+    final today = NepalTime.today();
+    final picked = await AppDatePicker.pick(context, initialDate: _asOf, firstDate: DateTime(2000), lastDate: today);
+    if (picked == null) return;
+    setState(() {
+      _asOf = picked;
+      if (_from != null && _from!.isAfter(picked)) _from = null; // a start after the end isn't a period
+    });
+    _load();
+  }
+
+  Future<void> _pickFrom() async {
+    final picked = await AppDatePicker.pick(
+      context, initialDate: _from ?? _sheet?.dateFrom ?? _asOf, firstDate: DateTime(2000), lastDate: _asOf,
+    );
+    if (picked == null) return;
+    setState(() => _from = picked);
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _sheet;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: _pickAsOf,
+                  child: InputDecorator(
+                    decoration: const InputDecoration(labelText: 'Balance sheet date'),
+                    child: Text(Formatters.date(_asOf)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: InkWell(
+                  onTap: _pickFrom,
+                  child: InputDecorator(
+                    decoration: const InputDecoration(labelText: 'Profit from'),
+                    child: Text(Formatters.date(_from ?? s?.dateFrom ?? _asOf)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_loading && s == null)
+            const LoadingView()
+          else if (_error != null)
+            EmptyState(icon: Icons.error_outline, title: _error!)
+          else if (s != null) ...[
+            _section('Assets — what you own', [
+              _line('Cash in hand', s.cashInHand),
+              ...s.bankAccounts.map((b) => _line(b.name, b.amount, sub: b.detail)),
+              _line('Receivables', s.receivables, sub: '${s.receivableParties.length} customer(s) owe you'),
+              _line('Stock (at purchase price)', s.stock,
+                  sub: s.stockIsEstimate
+                      ? 'Estimated for a past date — worked back from today\'s stock'
+                      : '${s.stockItemCount} product(s) in stock'),
+            ], 'Total assets', s.totalAssets),
+            const SizedBox(height: 12),
+            _section('Liabilities — what you owe', [
+              _line('Payables', s.payables, sub: 'You owe ${s.payableParties.length} supplier(s)'),
+            ], 'Total liabilities', s.totalLiabilities),
+            const SizedBox(height: 12),
+            _section("Owner's equity", [
+              _line('Profit ${Formatters.date(s.dateFrom)} – ${Formatters.date(s.asOf)}', s.periodProfit),
+              _line("Owner's capital & earlier profit", s.capitalAndEarlierProfit),
+            ], 'Total equity', s.totalEquity),
+            const SizedBox(height: 12),
+            _section('Liabilities + equity', const [], 'Equals total assets', s.totalLiabilities + s.totalEquity),
+            const SizedBox(height: 20),
+            _section('Who owes you',
+                s.receivableParties.isEmpty
+                    ? [Text('No customer owes you on this date', style: TextStyle(color: AppColors.textSecondary, fontSize: 12))]
+                    : s.receivableParties.take(50).map((p) => _line(p.name, p.amount)).toList(),
+                null, null),
+            const SizedBox(height: 12),
+            _section('Who you owe',
+                s.payableParties.isEmpty
+                    ? [Text('You owe no supplier on this date', style: TextStyle(color: AppColors.textSecondary, fontSize: 12))]
+                    : s.payableParties.take(50).map((p) => _line(p.name, p.amount)).toList(),
+                null, null),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _section(String title, List<Widget> lines, String? totalLabel, double? total) {
+    return AppSectionCard(
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+        if (lines.isNotEmpty) const SizedBox(height: 8),
+        ...lines,
+        if (totalLabel != null && total != null) ...[
+          const Divider(height: 18),
+          Row(
+            children: [
+              Expanded(child: Text(totalLabel, style: const TextStyle(fontWeight: FontWeight.w800))),
+              Text(Formatters.currency(total),
+                  style: TextStyle(fontWeight: FontWeight.w800, color: total < 0 ? AppColors.error : AppColors.orange)),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _line(String label, double value, {String sub = ''}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                if (sub.isNotEmpty) Text(sub, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+          Text(Formatters.currency(value),
+              style: TextStyle(fontWeight: FontWeight.w600, color: value < 0 ? AppColors.error : null)),
         ],
       ),
     );

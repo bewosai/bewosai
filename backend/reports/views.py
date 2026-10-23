@@ -385,6 +385,87 @@ class InventoryReportView(_RequireReports, APIView):
         })
 
 
+def profit_summary(biz, date_from, date_to):
+    """Revenue, COGS, expenses and net profit from date_from to date_to (both
+    inclusive) — the Profit & Loss report's figures, also used by the balance sheet."""
+    confirmed_sales = Sale.objects.filter(
+        business=biz,
+        sale_date__range=[date_from, date_to],
+        status="CONFIRMED",
+        is_deleted=False,
+    )
+    gross_revenue = confirmed_sales.aggregate(total=Sum("total"))["total"] or 0
+
+    # COGS = sum of (qty × unit_cost snapshot) for each item sold
+    gross_cogs = SaleItem.objects.filter(
+        sale__business=biz,
+        sale__sale_date__range=[date_from, date_to],
+        sale__status="CONFIRMED",
+        sale__is_deleted=False,
+        product__isnull=False,
+    ).aggregate(
+        total=Sum(_COGS_QTY * _UNIT_COST)
+    )["total"] or 0
+
+    # Returned goods were never really "sold" — net them out of both
+    # revenue and COGS (the cost comes back out too since it was restocked).
+    returns_amount = _sale_returns_total(biz, date_from, date_to)
+    returns_cogs = _sale_returns_cogs(biz, date_from, date_to)
+    revenue = float(gross_revenue) - float(returns_amount)
+    cogs = float(gross_cogs) - float(returns_cogs)
+
+    expenses = Expense.objects.filter(
+        business=biz, date__range=[date_from, date_to], is_deleted=False
+    ).aggregate(total=Sum("amount"))["total"] or 0
+
+    gross_profit = float(revenue) - float(cogs)
+    net_profit = gross_profit - float(expenses)
+    return {
+        "revenue": round(float(revenue), 2),
+        "cogs": round(float(cogs), 2),
+        "gross_profit": round(gross_profit, 2),
+        "expenses": round(float(expenses), 2),
+        "net_profit": round(net_profit, 2),
+    }
+
+
+def parse_date_param(request, name, default):
+    """A ?name=YYYY-MM-DD query parameter as a date, or `default` when absent.
+    Raises a 400 (ValidationError) with a plain message when it isn't a real date."""
+    from rest_framework.exceptions import ValidationError
+
+    raw = (request.query_params.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise ValidationError({name: f"“{raw}” is not a valid date. Use YYYY-MM-DD, e.g. 2026-07-16."})
+
+
+class BalanceSheetView(_RequireReports, APIView):
+    """GET ?as_of=YYYY-MM-DD (default today) &date_from=YYYY-MM-DD (default: the
+    start of the fiscal year containing as_of) — see reports/balance_sheet.py."""
+
+    def get(self, request):
+        from accounts.views import _fiscal_year_bounds
+        from rest_framework.exceptions import ValidationError
+        from .balance_sheet import build
+
+        biz = get_business(request)
+        if not biz:
+            return Response({"error": "Business not found."}, status=404)
+
+        today = timezone.localdate()
+        as_of = parse_date_param(request, "as_of", today)
+        if as_of > today:
+            raise ValidationError({"as_of": "The balance sheet date can't be in the future."})
+        date_from = parse_date_param(request, "date_from", _fiscal_year_bounds(biz, today=as_of)[0])
+        if date_from > as_of:
+            raise ValidationError({"date_from": "The start date must be on or before the balance sheet date."})
+        return Response(build(biz, as_of, date_from))
+
+
 class ProfitReportView(_RequireReports, APIView):
     def get(self, request):
         biz = get_business(request)
@@ -394,38 +475,9 @@ class ProfitReportView(_RequireReports, APIView):
         date_from = request.query_params.get("date_from", timezone.localdate().replace(day=1).isoformat())
         date_to = request.query_params.get("date_to", timezone.localdate().isoformat())
 
-        confirmed_sales = Sale.objects.filter(
-            business=biz,
-            sale_date__range=[date_from, date_to],
-            status="CONFIRMED",
-            is_deleted=False,
-        )
-        gross_revenue = confirmed_sales.aggregate(total=Sum("total"))["total"] or 0
-
-        # COGS = sum of (qty × unit_cost snapshot) for each item sold
-        gross_cogs = SaleItem.objects.filter(
-            sale__business=biz,
-            sale__sale_date__range=[date_from, date_to],
-            sale__status="CONFIRMED",
-            sale__is_deleted=False,
-            product__isnull=False,
-        ).aggregate(
-            total=Sum(_COGS_QTY * _UNIT_COST)
-        )["total"] or 0
-
-        # Returned goods were never really "sold" — net them out of both
-        # revenue and COGS (the cost comes back out too since it was restocked).
-        returns_amount = _sale_returns_total(biz, date_from, date_to)
-        returns_cogs = _sale_returns_cogs(biz, date_from, date_to)
-        revenue = float(gross_revenue) - float(returns_amount)
-        cogs = float(gross_cogs) - float(returns_cogs)
-
-        expenses = Expense.objects.filter(
-            business=biz, date__range=[date_from, date_to], is_deleted=False
-        ).aggregate(total=Sum("amount"))["total"] or 0
-
-        gross_profit = float(revenue) - float(cogs)
-        net_profit   = gross_profit - float(expenses)
+        summary = profit_summary(biz, date_from, date_to)
+        revenue, cogs, expenses = summary["revenue"], summary["cogs"], summary["expenses"]
+        gross_profit, net_profit = summary["gross_profit"], summary["net_profit"]
 
         # Monthly trend (last 6 months)
         today = timezone.localdate()
@@ -909,7 +961,7 @@ class BankStatementView(_RequireReports, APIView):
         if not biz:
             return Response({"error": "Business not found."}, status=404)
 
-        accounts_qs = BankAccount.objects.filter(business=biz, is_active=True)
+        accounts_qs = BankAccount.objects.filter(business=biz, is_active=True, is_deleted=False)
         account_id = request.query_params.get("account")
 
         if not account_id:
@@ -928,15 +980,18 @@ class BankStatementView(_RequireReports, APIView):
         date_from = request.query_params.get("date_from", timezone.localdate().replace(day=1).isoformat())
         date_to = request.query_params.get("date_to", timezone.localdate().isoformat())
 
-        prior_credit = account.transactions.filter(
+        # Deleted transactions (in the Recycle Bin) don't count — the same rule
+        # as BankAccount.balance, so the statement's closing balance matches it.
+        live = account.transactions.filter(is_deleted=False)
+        prior_credit = live.filter(
             date__lt=date_from, transaction_type="CREDIT"
         ).aggregate(t=Sum("amount"))["t"] or 0
-        prior_debit = account.transactions.filter(
+        prior_debit = live.filter(
             date__lt=date_from, transaction_type="DEBIT"
         ).aggregate(t=Sum("amount"))["t"] or 0
         opening = float(account.opening_balance) + float(prior_credit) - float(prior_debit)
 
-        txns = account.transactions.filter(date__range=[date_from, date_to]).order_by("date", "created_at")
+        txns = live.filter(date__range=[date_from, date_to]).order_by("date", "created_at")
 
         entries = []
         balance = opening

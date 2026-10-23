@@ -295,6 +295,7 @@ export const reports = {
   cashInHand: (p) => api.get("/reports/cash-in-hand/", { params: p }),
   bankStatement: (p) => api.get("/reports/bank-statement/", { params: p }),
   allTransactions: (p) => api.get("/reports/all-transactions/", { params: p }),
+  balanceSheet: (p) => api.get("/reports/balance-sheet/", { params: p }),
   staffActivity: (p) => api.get("/auth/staff-activity/", { params: p }),
 };
 

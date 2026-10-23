@@ -570,3 +570,91 @@ class AllTransactionsReport {
     );
   }
 }
+
+/// One named amount on the balance sheet: a bank account, or a party who owes
+/// / is owed.
+class BalanceSheetLine {
+  final String name;
+  final String detail;
+  final double amount;
+  BalanceSheetLine({required this.name, this.detail = '', required this.amount});
+}
+
+/// GET /reports/balance-sheet/ — what the business owns and owes on [asOf].
+/// Assets always equal liabilities + equity (equity is the difference).
+class BalanceSheet {
+  final DateTime asOf;
+  final DateTime dateFrom;
+  final double cashInHand;
+  final List<BalanceSheetLine> bankAccounts;
+  final double bankTotal;
+  final double receivables;
+  final List<BalanceSheetLine> receivableParties;
+  final double stock;
+  final int stockItemCount;
+  final bool stockIsEstimate;
+  final double totalAssets;
+  final double payables;
+  final List<BalanceSheetLine> payableParties;
+  final double totalLiabilities;
+  final double periodProfit;
+  final double capitalAndEarlierProfit;
+  final double totalEquity;
+
+  BalanceSheet({
+    required this.asOf,
+    required this.dateFrom,
+    required this.cashInHand,
+    required this.bankAccounts,
+    required this.bankTotal,
+    required this.receivables,
+    required this.receivableParties,
+    required this.stock,
+    required this.stockItemCount,
+    required this.stockIsEstimate,
+    required this.totalAssets,
+    required this.payables,
+    required this.payableParties,
+    required this.totalLiabilities,
+    required this.periodProfit,
+    required this.capitalAndEarlierProfit,
+    required this.totalEquity,
+  });
+
+  factory BalanceSheet.fromJson(Map<String, dynamic> json) {
+    final a = json['assets'] as Map<String, dynamic>? ?? {};
+    final l = json['liabilities'] as Map<String, dynamic>? ?? {};
+    final e = json['equity'] as Map<String, dynamic>? ?? {};
+    List<BalanceSheetLine> parties(dynamic rows) => (rows as List? ?? [])
+        .map((r) => BalanceSheetLine(
+              name: (r as Map<String, dynamic>)['name'] as String? ?? '',
+              amount: Formatters.toDouble(r['amount']),
+            ))
+        .toList();
+    return BalanceSheet(
+      asOf: DateTime.parse(json['as_of'] as String),
+      dateFrom: DateTime.parse(json['date_from'] as String),
+      cashInHand: Formatters.toDouble(a['cash_in_hand']),
+      bankAccounts: (a['bank_accounts'] as List? ?? [])
+          .map((r) => BalanceSheetLine(
+                name: (r as Map<String, dynamic>)['name'] as String? ?? '',
+                detail: r['type'] as String? ?? '',
+                amount: Formatters.toDouble(r['balance']),
+              ))
+          .toList(),
+      bankTotal: Formatters.toDouble(a['bank_total']),
+      receivables: Formatters.toDouble(a['receivables']),
+      receivableParties: parties(a['receivable_parties']),
+      stock: Formatters.toDouble(a['stock']),
+      stockItemCount: (a['stock_items'] as List? ?? []).length,
+      stockIsEstimate: a['stock_is_estimate'] as bool? ?? false,
+      totalAssets: Formatters.toDouble(a['total']),
+      payables: Formatters.toDouble(l['payables']),
+      payableParties: parties(l['payable_parties']),
+      totalLiabilities: Formatters.toDouble(l['total']),
+      periodProfit: Formatters.toDouble(e['period_profit']),
+      capitalAndEarlierProfit: Formatters.toDouble(e['capital_and_earlier_profit']),
+      totalEquity: Formatters.toDouble(e['total']),
+    );
+  }
+}

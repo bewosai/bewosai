@@ -8,8 +8,10 @@ derive from here so they can never disagree.
     balance = opening_balance
             + open sale dues               (what they still owe on invoices)
             - open purchase dues           (what we still owe on bills)
-            - sale returns                 (credit for goods they sent back)
-            + purchase returns             (credit for goods we sent back)
+            - sale returns                 (credit for goods they sent back,
+                                            less what was refunded to them)
+            + purchase returns             (credit for goods we sent back,
+                                            less what they refunded to us)
             - unmatched money received     (a payment IN beyond the invoices
                                             it was applied to = an advance)
             + unmatched money paid         (a payment OUT beyond the bills it
@@ -22,7 +24,7 @@ balance could never be paid down and an advance never showed as a credit.
 """
 from decimal import Decimal
 
-from django.db.models import DecimalField, Sum, Value
+from django.db.models import DecimalField, F, Sum, Value
 from django.db.models.functions import Coalesce
 
 ZERO = Decimal("0")
@@ -71,8 +73,13 @@ def party_balances(business_id, party_id=None):
         ),
         "original_sale__customer_id",
     )
+    # Only what the return took off their debt: the part refunded in cash or
+    # by bank (refunded_amount) was handed back, so it isn't still owed to them.
     apply(
-        sale_returns.order_by().values_list("original_sale__customer_id").annotate(t=Sum("amount")), -1,
+        sale_returns.order_by().values_list("original_sale__customer_id").annotate(
+            t=Sum(F("amount") - F("refunded_amount")),
+        ),
+        -1,
     )
 
     purchase_returns = only(
@@ -82,7 +89,10 @@ def party_balances(business_id, party_id=None):
         "original_purchase__supplier_id",
     )
     apply(
-        purchase_returns.order_by().values_list("original_purchase__supplier_id").annotate(t=Sum("amount")), 1,
+        purchase_returns.order_by().values_list("original_purchase__supplier_id").annotate(
+            t=Sum(F("amount") - F("refunded_amount")),
+        ),
+        1,
     )
 
     payments = only(

@@ -11,6 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, require_feature, require_staff_permission
+from bewosai.locking import LockedWritesMixin, lock
 from bewosai.utils import get_bid, require_business
 from inventory import stock
 from parties.allocations import release_allocations
@@ -107,7 +108,7 @@ class SaleListCreateView(_RequirePos, generics.ListCreateAPIView):
             raise ValidationError({"invoice_number": [f'Invoice number "{inv}" already exists — please update it and try again.']})
 
 
-class SaleDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):
+class SaleDetailView(LockedWritesMixin, _RequirePos, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = SaleSerializer
     fiscal_lock_date_field = "sale_date"
     fiscal_lock_business_field = "business"
@@ -139,6 +140,7 @@ class SaleDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):
             instance.is_deleted = True
             instance.deleted_at = timezone.now()
             instance.save(update_fields=["is_deleted", "deleted_at"])
+            SaleSerializer._sync_bank(instance)
 
 
 class SaleReturnListCreateView(_RequirePos, generics.ListCreateAPIView):
@@ -151,6 +153,16 @@ class SaleReturnListCreateView(_RequirePos, generics.ListCreateAPIView):
             business__staff__user=self.request.user,
             business__staff__is_active=True,
         )
+
+    def create(self, request, *args, **kwargs):
+        # The original invoice stays locked while the "not more than was sold"
+        # check runs and the return is saved, so two returns at once can't
+        # both pass it.
+        with transaction.atomic():
+            original = str(request.data.get("original_sale") or "")
+            if original.isdigit():
+                lock(Sale.objects.filter(pk=original, business_id=get_bid(request))).first()
+            return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         bid = get_bid(self.request)
@@ -212,6 +224,16 @@ class SaleReceivePaymentView(APIView):
     ]
 
     def post(self, request, pk):
+        # The invoice stays locked from reading what's due to recording the
+        # payment: a double-tapped "Receive" (or two staff at once) must not
+        # both see the same amount due and pay it twice.
+        with transaction.atomic():
+            response = self._receive(request, pk)
+            if response.status_code >= 400:
+                transaction.set_rollback(True)
+            return response
+
+    def _receive(self, request, pk):
         from decimal import Decimal, InvalidOperation
         from parties.serializers import PartyPaymentSerializer
         from parties.views import PartyPaymentListCreateView
@@ -219,10 +241,10 @@ class SaleReceivePaymentView(APIView):
         def refuse(message):
             return Response({"message": message}, status=400)
 
-        sale = Sale.objects.filter(
+        sale = lock(Sale.objects.filter(
             pk=pk, business_id=get_bid(request), business__staff__user=request.user,
             business__staff__is_active=True, is_deleted=False,
-        ).select_related("customer").first()
+        )).first()
         if sale is None:
             return Response({"message": "Invoice not found."}, status=404)
         if sale.status != Sale.STATUS_CONFIRMED:
@@ -247,11 +269,11 @@ class SaleReceivePaymentView(APIView):
             "date": request.data.get("date") or timezone.localdate().isoformat(),
             "note": request.data.get("note") or f"Payment for invoice {sale.invoice_number}",
         }, context={"request": request})
-        serializer.is_valid(raise_exception=True)
-        with transaction.atomic():
-            payment = serializer.save(created_by=request.user)
-            PartyPaymentListCreateView._reconcile_payment(payment, first_sale=sale)
-            PartyPaymentSerializer._sync_bank(payment)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        payment = serializer.save(created_by=request.user)
+        PartyPaymentListCreateView._reconcile_payment(payment, first_sale=sale)
+        PartyPaymentSerializer._sync_bank(payment)
         sale.refresh_from_db()
         return Response({
             "message": f"Rs {amount} received for invoice {sale.invoice_number}. Still due: Rs {sale.due_amount}.",

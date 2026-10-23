@@ -49,6 +49,10 @@ class Formatters {
         return 'Received';
       case 'PAYMENT_OUT':
         return 'Given';
+      case 'REFUND_OUT':
+        return 'Refund Given';
+      case 'REFUND_IN':
+        return 'Refund Received';
       case 'BANK_CREDIT':
       case 'CREDIT':
         return 'Bank Credit';

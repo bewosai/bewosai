@@ -8,6 +8,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from bewosai.permissions import BusinessNotArchivedForWrites, FiscalYearLocked, HasActiveSubscription, IsPremiumBusiness, require_feature, require_staff_permission
 from bewosai import bulk_import
+from bewosai.locking import LockedWritesMixin, lock
 from bewosai.utils import get_bid, get_business
 from .balances import party_balances
 from .models import Party, PartyPayment, PaymentAllocation
@@ -58,7 +59,7 @@ class PartyListCreateView(_RequireParties, generics.ListCreateAPIView):
         serializer.save(business=business)
 
 
-class PartyDetailView(_RequireParties, generics.RetrieveUpdateDestroyAPIView):
+class PartyDetailView(LockedWritesMixin, _RequireParties, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PartySerializer
 
     def get_queryset(self):
@@ -131,12 +132,15 @@ class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
         remaining = Decimal(str(payment.amount))
         party = payment.party
 
+        # Callers run this inside a transaction. The open invoices stay locked
+        # until it ends, so two payments from one party at once can't both
+        # apply to the same amount due and overwrite each other's paid_amount.
         if payment.payment_type == "IN":
             # Customer paid us → reduce outstanding sales (the chosen one, then oldest first)
-            open_sales = list(Sale.objects.filter(
+            open_sales = list(lock(Sale.objects.filter(
                 customer=party, status="CONFIRMED",
                 due_amount__gt=0, is_deleted=False,
-            ).order_by("sale_date"))
+            )).order_by("sale_date", "pk"))
             if first_sale is not None:
                 open_sales.sort(key=lambda s: s.pk != first_sale.pk)
             for sale in open_sales:
@@ -151,10 +155,10 @@ class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
 
         elif payment.payment_type == "OUT":
             # We paid supplier → reduce outstanding purchases (oldest first)
-            for purchase in Purchase.objects.filter(
+            for purchase in lock(Purchase.objects.filter(
                 supplier=party, status="CONFIRMED",
                 due_amount__gt=0, is_deleted=False,
-            ).order_by("purchase_date"):
+            )).order_by("purchase_date", "pk"):
                 if remaining <= 0:
                     break
                 apply = min(remaining, purchase.due_amount)
@@ -165,7 +169,7 @@ class PartyPaymentListCreateView(_RequirePayments, generics.ListCreateAPIView):
                 remaining -= apply
 
 
-class PartyPaymentDetailView(_RequirePayments, generics.RetrieveUpdateDestroyAPIView):
+class PartyPaymentDetailView(LockedWritesMixin, _RequirePayments, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PartyPaymentSerializer
     fiscal_lock_date_field = "date"
     fiscal_lock_business_field = "party.business"
@@ -216,14 +220,19 @@ class PartyPaymentDetailView(_RequirePayments, generics.RetrieveUpdateDestroyAPI
         """Undo _reconcile_payment's effect so a deleted payment doesn't
         leave the sales/purchases it was applied to (and therefore the
         party's balance) permanently understated."""
-        for allocation in payment.allocations.select_related("sale", "purchase"):
-            if allocation.sale is not None:
-                sale = allocation.sale
+        from sales.models import Sale
+        from purchases.models import Purchase
+
+        for allocation in payment.allocations.all():
+            # Re-read each invoice under a lock: another payment may have
+            # changed its paid_amount since this one was applied.
+            if allocation.sale_id is not None:
+                sale = lock(Sale.objects.filter(pk=allocation.sale_id)).get()
                 sale.paid_amount -= allocation.amount
                 sale.reconciled_amount -= allocation.amount
                 sale.save()
-            elif allocation.purchase is not None:
-                purchase = allocation.purchase
+            elif allocation.purchase_id is not None:
+                purchase = lock(Purchase.objects.filter(pk=allocation.purchase_id)).get()
                 purchase.paid_amount -= allocation.amount
                 purchase.reconciled_amount -= allocation.amount
                 purchase.save()
@@ -281,6 +290,15 @@ class PartyLedgerView(_RequireParties, APIView):
                 "debit": 0.0, "credit": float(sr.amount), "balance": 0.0,
                 "note": sr.reason or "Sale return",
             })
+            # The part of the return paid back to them (beyond what it took off
+            # their debt) — money out to the customer, which settles that credit.
+            if sr.refunded_amount > 0:
+                entries.append({
+                    "date": str(sr.return_date), "type": "REFUND_OUT",
+                    "ref": sr.original_sale.invoice_number,
+                    "debit": float(sr.refunded_amount), "credit": 0.0, "balance": 0.0,
+                    "note": f"Refund via {sr.refund_method}",
+                })
 
         # ── Purchases ────────────────────────────────────────────────────────
         for p in Purchase.objects.filter(supplier=party, status="CONFIRMED", is_deleted=False).order_by("purchase_date"):
@@ -311,6 +329,13 @@ class PartyLedgerView(_RequireParties, APIView):
                 "debit": float(pr.amount), "credit": 0.0, "balance": 0.0,
                 "note": pr.reason or "Purchase return",
             })
+            if pr.refunded_amount > 0:
+                entries.append({
+                    "date": str(pr.return_date), "type": "REFUND_IN",
+                    "ref": pr.original_purchase.bill_number,
+                    "debit": 0.0, "credit": float(pr.refunded_amount), "balance": 0.0,
+                    "note": f"Refund via {pr.refund_method}",
+                })
 
         # ── Direct payments ──────────────────────────────────────────────────
         for pay in PartyPayment.objects.filter(party=party, is_deleted=False).order_by("date"):

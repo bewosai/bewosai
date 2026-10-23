@@ -5,11 +5,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
 from django.db.models import F
 
 from bewosai import bulk_import
 from bewosai.pagination import LargePageNumberPagination
 from bewosai.permissions import BusinessNotArchivedForWrites, HasActiveSubscription, IsPremiumBusiness, require_feature, require_staff_permission
+from bewosai.locking import lock
 from bewosai.utils import get_bid, require_business
 from .models import Category, Unit, Product, StockMovement
 from .serializers import CategorySerializer, UnitSerializer, ProductSerializer, StockMovementSerializer
@@ -158,19 +160,24 @@ class StockMovementListCreateView(_RequireInventory, generics.ListCreateAPIView)
         if product is None or product.business_id != business.id:
             raise ValidationError({"product": "Invalid product for this business."})
 
-        movement = serializer.save(created_by=self.request.user)
-        mt = movement.movement_type
+        # The product row stays locked from reading its stock to saving it: a
+        # sale or another adjustment of the same product at the same moment
+        # would otherwise be overwritten by this read-change-save.
+        with transaction.atomic():
+            product = lock(Product.objects.filter(pk=product.pk)).get()
+            movement = serializer.save(created_by=self.request.user)
+            mt = movement.movement_type
 
-        if mt in (StockMovement.STOCK_IN, StockMovement.OPENING):
-            product.stock_quantity = product.stock_quantity + movement.quantity
-        elif mt == StockMovement.STOCK_OUT:
-            product.stock_quantity = max(0, product.stock_quantity - movement.quantity)
-        elif mt in (StockMovement.DAMAGE, StockMovement.LOST, StockMovement.TRANSFER):
-            product.stock_quantity = max(0, product.stock_quantity - movement.quantity)
-        elif mt == StockMovement.ADJUSTMENT:
-            product.stock_quantity = movement.quantity  # absolute set
+            if mt in (StockMovement.STOCK_IN, StockMovement.OPENING):
+                product.stock_quantity = product.stock_quantity + movement.quantity
+            elif mt == StockMovement.STOCK_OUT:
+                product.stock_quantity = max(0, product.stock_quantity - movement.quantity)
+            elif mt in (StockMovement.DAMAGE, StockMovement.LOST, StockMovement.TRANSFER):
+                product.stock_quantity = max(0, product.stock_quantity - movement.quantity)
+            elif mt == StockMovement.ADJUSTMENT:
+                product.stock_quantity = movement.quantity  # absolute set
 
-        product.save(update_fields=["stock_quantity"])
+            product.save(update_fields=["stock_quantity"])
 
 
 class ProductBulkImportView(APIView):

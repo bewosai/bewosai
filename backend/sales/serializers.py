@@ -99,7 +99,12 @@ class SaleSerializer(serializers.ModelSerializer):
         # Only what was paid on this document itself — later repayments
         # (reconciled_amount) already have their own PARTYPAYMENT bank entry.
         paid_here = sale.paid_amount - sale.reconciled_amount
-        if sale.payment_method == Sale.METHOD_SPLIT:
+        if sale.status != Sale.STATUS_CONFIRMED or sale.is_deleted:
+            # Only a confirmed, not-deleted sale has moved money (the cash
+            # reports use the same rule) — a cancelled, draft or deleted one
+            # must not leave its takings in the bank account.
+            bank_amount = 0
+        elif sale.payment_method == Sale.METHOD_SPLIT:
             bank_amount = paid_here - sale.cash_amount
         elif sale.payment_method != "CASH":
             bank_amount = paid_here
