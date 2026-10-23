@@ -123,7 +123,7 @@ function PrintModal({ sale, onClose }) {
     <PrintPreviewModal title="Print Invoice" onClose={onClose}>
       <BillTemplate
         accentColor={accentColor}
-        documentLabel="Invoice"
+        documentLabel="Proforma Invoice"
         documentNumberLabel="Invoice No."
         documentNumber={sale.invoice_number || sale.id}
         dateLabel="Sale Date"
@@ -1116,7 +1116,7 @@ export default function SalesPage() {
   };
 
   const shareWhatsApp = (sale) => {
-    const msg = `Invoice #${sale.invoice_number || sale.id}\nCustomer: ${sale.customer_name || sale.party_name || "Cash Sales"}\nDate: ${sale.sale_date || sale.date}\nTotal: Rs. ${parseFloat(sale.total ?? sale.total_amount ?? 0).toFixed(2)}\nPaid: Rs. ${parseFloat(sale.paid_amount || 0).toFixed(2)}\nDue: Rs. ${parseFloat(sale.due_amount || 0).toFixed(2)}\nStatus: ${sale.status}`;
+    const msg = `Proforma Invoice #${sale.invoice_number || sale.id} (for internal use only — not a tax invoice)\nCustomer: ${sale.customer_name || sale.party_name || "Cash Sales"}\nDate: ${sale.sale_date || sale.date}\nTotal: Rs. ${parseFloat(sale.total ?? sale.total_amount ?? 0).toFixed(2)}\nPaid: Rs. ${parseFloat(sale.paid_amount || 0).toFixed(2)}\nDue: Rs. ${parseFloat(sale.due_amount || 0).toFixed(2)}\nStatus: ${sale.status}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 

@@ -82,7 +82,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     final s = _sale;
     if (s == null) return;
     final text = Uri.encodeComponent(
-      'Invoice ${s.invoiceNumber}\n'
+      'Proforma Invoice ${s.invoiceNumber} (for internal use only — not a tax invoice)\n'
       'Customer: ${s.customerName.isNotEmpty ? s.customerName : 'Cash Sales'}\n'
       'Total: ${Formatters.currency(s.total)}\n'
       'Paid: ${Formatters.currency(s.paidAmount)}\n'
@@ -190,6 +190,20 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  // Same notice the printed bill carries (shared/pdf/bill_pdf.dart).
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      proformaNotice,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  ),
                   AppSectionCard(
                     children: [
                       Row(

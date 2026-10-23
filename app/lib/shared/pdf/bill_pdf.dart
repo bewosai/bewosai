@@ -99,6 +99,9 @@ class BillPdfData {
 /// already expect (as opposed to a plain in-app-styled card). Always
 /// carries a small "*Proforma Invoice" note near the totals — permanent,
 /// not a per-print choice (see printBillPdf/showBillPrintDialog).
+/// Shown under the header of every bill, and in shared bill messages.
+const proformaNotice = 'Proforma Invoice — For internal use only · Not a VAT / Tax Invoice';
+
 Future<pw.Document> buildBillPdf({
   required BillPdfData data,
   required String documentTitle,
@@ -137,6 +140,20 @@ Future<pw.Document> buildBillPdf({
                     style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColors.white, letterSpacing: 1.1),
                   ),
                 ],
+              ),
+            ),
+
+            // Every Bewosai bill is a proforma for the business's own records
+            // (Bewosai isn't IRD-registered billing software) — matches the
+            // website's BillTemplate PROFORMA_NOTICE.
+            pw.Container(
+              color: PdfColors.grey200,
+              padding: const pw.EdgeInsets.symmetric(vertical: 5),
+              child: pw.Center(
+                child: pw.Text(
+                  proformaNotice.toUpperCase(),
+                  style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800, letterSpacing: 0.6),
+                ),
               ),
             ),
 

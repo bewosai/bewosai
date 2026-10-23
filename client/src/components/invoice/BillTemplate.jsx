@@ -1,5 +1,7 @@
 import { amountInWords } from "../../utils/amountInWords";
 
+export const PROFORMA_NOTICE = "Proforma Invoice — For internal use only · Not a VAT / Tax Invoice";
+
 /**
  * Shared "paper" content for every printed bill (Sales invoice, Purchase
  * bill, Quotation) — a solid accent-colored header/footer bar around a
@@ -17,7 +19,7 @@ import { amountInWords } from "../../utils/amountInWords";
  */
 export default function BillTemplate({
   accentColor = "#f97316",
-  documentLabel = "Invoice",
+  documentLabel = "Proforma Invoice",
   documentNumberLabel = "Invoice No.",
   documentNumber,
   dateLabel = "Date",
@@ -61,6 +63,13 @@ export default function BillTemplate({
         </div>
         <p className="text-sm font-bold uppercase tracking-wide text-[#ffffff]">{documentLabel}</p>
       </div>
+
+      {/* Every Bewosai bill is a proforma for the business's own records —
+          Bewosai isn't IRD-registered billing software, so nothing it prints
+          may pass as a VAT/tax invoice. Shown on every document type. */}
+      <p className="border-b border-gray-300 bg-gray-100 px-6 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-gray-700">
+        {PROFORMA_NOTICE}
+      </p>
 
       {/* Company address / contact — colored text under the bar, echoing a
           printed letterhead. */}
