@@ -4,7 +4,7 @@ class AppConstants {
   static const String appName = 'Bewosai';
   // Shown in Settings so anyone can tell which APK is installed (every build is
   // version 2.0.0+1). Change it whenever a new APK is built.
-  static const String buildLabel = '2026-10-10-a';
+  static const String buildLabel = '2026-10-17-a';
 
   /// Error alerts (Sentry). Empty = off. Paste the Flutter project's DSN from
   /// Sentry → Project settings → Client Keys (it's meant to be public), or pass
@@ -123,7 +123,9 @@ class AppConstants {
   // opening this link (see accounts.views.StaffLoginView), always served by
   // the web app regardless of which platform the owner shared it from.
   // Mirrors client/src/pages/StaffPage.jsx's staffLoginUrl().
-  static const String _webAppUrl = 'https://bewosai.com';
+  // The Vercel address, not bewosai.com: that domain has no DNS records yet
+  // (checked 2026-10-17), so links to it open nowhere. Switch back once it loads.
+  static const String _webAppUrl = 'https://bewosaiapp.vercel.app';
   static String staffLoginUrl(String token) => '$_webAppUrl/staff-login/$token';
 
   /// A staff invitation: opened in the browser, where the person verifies
