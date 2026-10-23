@@ -70,7 +70,7 @@ class DeleteAccountTests(TestCase):
         self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
 
     def test_the_code_comes_from_the_normal_send_otp(self):
-        with mock.patch("accounts.views.send_otp_email", return_value=True) as sent:
+        with mock.patch("accounts.views.send_otp_email_quick", return_value=True) as sent:
             res = APIClient().post("/api/auth/send-otp/", {"identifier": "ram@example.com"}, format="json")
         self.assertEqual(res.status_code, 200, res.content)
         code = sent.call_args[0][1]

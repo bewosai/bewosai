@@ -80,7 +80,7 @@ class ReferralForNewUsersTests(TestCase):
         self.assertEqual(self.referrer.effective_plan, Business.PLAN_FREE)
 
         _, code = OTPCode.generate(owner.email, owner.account_type)
-        with mock.patch("accounts.views.send_otp_email", return_value=True):
+        with mock.patch("accounts.views.send_otp_email_quick", return_value=True):
             res = APIClient().post("/api/auth/verify-otp/", {"identifier": owner.email, "code": code}, format="json")
         self.assertEqual(res.status_code, 200, res.content)
 

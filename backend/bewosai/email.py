@@ -12,6 +12,7 @@ To use SendGrid instead, set:
   SENDGRID_FROM_EMAIL=your@gmail.com
 """
 import logging
+import threading
 from html import escape
 from django.conf import settings
 from django.utils import timezone
@@ -109,6 +110,28 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
         html=_otp_html(otp_code, to_email),
         console_fallback=lambda: _fallback_console(to_email, otp_code),
     )
+
+
+def send_otp_email_quick(to_email: str, otp_code: str, wait_seconds: float = 2.0) -> bool:
+    """
+    send_otp_email, but the sign-in screen never waits more than `wait_seconds`:
+    a provider that answers in time gives its real result (so a refusal still
+    shows as "couldn't send"); one that is still busy finishes in the
+    background and the user is told the code is on its way. A late failure is
+    logged like any other, and the user can tap Resend.
+    """
+    result = {}
+
+    def run():
+        result["sent"] = send_otp_email(to_email, otp_code)
+
+    worker = threading.Thread(target=run, name="otp-email", daemon=True)
+    worker.start()
+    worker.join(wait_seconds)
+    if worker.is_alive():
+        logger.info("OTP email to %s still sending after %.1fs; continuing in the background", to_email, wait_seconds)
+        return True
+    return result.get("sent", False)
 
 
 def _fiscal_year_reminder_html(business_name: str, label: str) -> str:
@@ -265,9 +288,23 @@ def sendgrid_sender() -> str:
     return configured
 
 
+_SENDGRID_SESSION = None
+_SENDGRID_SESSION_LOCK = threading.Lock()
+
+
+def _sendgrid_http():
+    """A shared requests.Session, so connections to SendGrid are reused between emails."""
+    global _SENDGRID_SESSION
+    with _SENDGRID_SESSION_LOCK:
+        if _SENDGRID_SESSION is None:
+            import requests
+
+            _SENDGRID_SESSION = requests.Session()
+        return _SENDGRID_SESSION
+
+
 def _send_via_sendgrid(to_email: str, subject: str, text: str, html: str, api_key: str) -> bool:
     try:
-        from sendgrid import SendGridAPIClient
         from sendgrid.helpers.mail import (
             ClickTracking, Content, Mail, OpenTracking, SubscriptionTracking, To, TrackingSettings,
         )
@@ -287,15 +324,22 @@ def _send_via_sendgrid(to_email: str, subject: str, text: str, html: str, api_ke
             subscription_tracking=SubscriptionTracking(False),
         )
 
-        client = SendGridAPIClient(api_key)
-        response = client.send(message)
+        # One kept-alive HTTPS connection for every email (see _sendgrid_http):
+        # SendGridAPIClient opened a fresh TLS connection per send, a good part
+        # of the ~3-4 s each login code took.
+        response = _sendgrid_http().post(
+            "https://api.sendgrid.com/v3/mail/send",
+            json=message.get(),
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=getattr(settings, "EMAIL_TIMEOUT", 15),
+        )
 
         if response.status_code in (200, 201, 202):
             logger.info("Email sent via SendGrid to %s (status %s)", to_email, response.status_code)
             return True
         logger.error(
             "SendGrid unexpected status %s for %s: %s",
-            response.status_code, to_email, response.body,
+            response.status_code, to_email, response.text[:500],
         )
         return False
     except Exception as exc:

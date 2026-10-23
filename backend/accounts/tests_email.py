@@ -48,11 +48,26 @@ class ProviderFallbackTests(SimpleTestCase):
 
 class SendGridMessageTests(SimpleTestCase):
     def sent_message(self):
-        client = mock.Mock()
-        client.send.return_value = mock.Mock(status_code=202)
-        with mock.patch("sendgrid.SendGridAPIClient", return_value=client):
+        session = mock.Mock()
+        session.post.return_value = mock.Mock(status_code=202)
+        with mock.patch("bewosai.email._sendgrid_http", return_value=session):
             self.assertTrue(mail._send_via_sendgrid("to@example.com", "Subj", "text", "<p>h</p>", "SG.fake"))
-        return client.send.call_args[0][0].get()
+        _, kwargs = session.post.call_args
+        self.assertEqual(kwargs["headers"]["Authorization"], "Bearer SG.fake")
+        return kwargs["json"]
+
+    def test_refusal_and_network_error_are_failures(self):
+        session = mock.Mock()
+        session.post.return_value = mock.Mock(status_code=403, text="forbidden")
+        with mock.patch("bewosai.email._sendgrid_http", return_value=session):
+            self.assertFalse(mail._send_via_sendgrid("to@example.com", "S", "t", "h", "SG.fake"))
+        session.post.side_effect = OSError("down")
+        with mock.patch("bewosai.email._sendgrid_http", return_value=session):
+            self.assertFalse(mail._send_via_sendgrid("to@example.com", "S", "t", "h", "SG.fake"))
+
+    def test_connection_is_reused_between_emails(self):
+        self.assertIs(mail._sendgrid_http(), mail._sendgrid_http())
+
 
     @override_settings(SENDGRID_FROM_EMAIL="mahatok008@gmail.com")
     def test_freemail_sender_is_replaced_by_the_domain_sender(self):
@@ -69,6 +84,25 @@ class SendGridMessageTests(SimpleTestCase):
         self.assertFalse(tracking["click_tracking"]["enable"])
         self.assertFalse(tracking["open_tracking"]["enable"])
         self.assertFalse(tracking["subscription_tracking"]["enable"])
+
+
+class QuickSendTests(SimpleTestCase):
+    def test_a_fast_answer_is_passed_through(self):
+        with mock.patch("bewosai.email.send_otp_email", return_value=False):
+            self.assertFalse(mail.send_otp_email_quick("a@b.com", "123456"))
+        with mock.patch("bewosai.email.send_otp_email", return_value=True):
+            self.assertTrue(mail.send_otp_email_quick("a@b.com", "123456"))
+
+    def test_a_slow_provider_doesnt_keep_the_user_waiting(self):
+        import time
+
+        def slow(*_):
+            time.sleep(1.0)
+            return True
+        started = time.monotonic()
+        with mock.patch("bewosai.email.send_otp_email", side_effect=slow):
+            self.assertTrue(mail.send_otp_email_quick("a@b.com", "123456", wait_seconds=0.2))
+        self.assertLess(time.monotonic() - started, 0.8)
 
 
 class NoProviderTests(SimpleTestCase):

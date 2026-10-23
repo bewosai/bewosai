@@ -10,7 +10,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from datetime import date, timedelta
-from bewosai.email import send_otp_email
+from bewosai.email import send_otp_email, send_otp_email_quick
 from .admin_access import grant_platform_admin_if_listed
 # from bewosai.sms import send_otp_sms  # phone login/signup temporarily disabled (2026-09-16)
 from bewosai.permissions import (
@@ -168,7 +168,9 @@ class SendOTPView(APIView):
         # log — the client always got "success": true even when no email
         # ever went out, which made real delivery failures undebuggable from
         # the app. The extra second or two of latency is worth the honesty.
-        sent = send_otp_email(identifier, code)
+        # At most ~2 s of waiting: a provider that refuses within that still
+        # shows as "couldn't send"; a slow one finishes in the background.
+        sent = send_otp_email_quick(identifier, code)
         fail_message = "Couldn't send the verification email right now. Please try again in a moment."
 
         if not sent:
