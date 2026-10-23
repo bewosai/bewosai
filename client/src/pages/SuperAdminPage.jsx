@@ -879,11 +879,14 @@ function BusinessesTab({ onCountChange }) {
   const [viewDataBiz, setViewDataBiz] = useState(null);
   const [acting, setActing] = useState(false);
   const [inlineError, setInlineError] = useState("");
+  const [ordering, setOrdering] = useState("active");
+  const now = Date.now();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = { page, page_size: BIZ_PAGE_SIZE };
+      if (ordering === "active") params.ordering = "active";
       if (debouncedSearch) params.search = debouncedSearch;
       if (planFilter !== "ALL") params.plan = planFilter;
       if (statusFilter !== "ALL") params.status = statusFilter;
@@ -899,10 +902,10 @@ function BusinessesTab({ onCountChange }) {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, planFilter, statusFilter]);
+  }, [page, debouncedSearch, planFilter, statusFilter, ordering]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setPage(1); }, [debouncedSearch, planFilter, statusFilter]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, planFilter, statusFilter, ordering]);
 
   const doAction = async (bizId, action, label) => {
     setActing(true);
@@ -956,6 +959,11 @@ function BusinessesTab({ onCountChange }) {
             <option value="ACTIVE">Active</option>
             <option value="SUSPENDED">Suspended</option>
           </select>
+          <select className="rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-xs text-white focus:border-orange-500 focus:outline-none"
+            value={ordering} onChange={e => setOrdering(e.target.value)} aria-label="Sort businesses">
+            <option value="active">Last active first</option>
+            <option value="joined">Newest first</option>
+          </select>
         </div>
       </div>
 
@@ -976,6 +984,7 @@ function BusinessesTab({ onCountChange }) {
               <thead>
                 <tr className="border-b border-navy-800 text-left text-xs text-navy-500">
                   <th className="px-4 py-3 font-medium">Business</th>
+                  <th className="px-4 py-3 font-medium">Last active</th>
                   <th className="px-4 py-3 font-medium">Joined</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Plan</th>
@@ -995,6 +1004,12 @@ function BusinessesTab({ onCountChange }) {
                           <p className="text-xs text-navy-400">{biz.owner_name}</p>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap"
+                      title={biz.last_active_at ? formatNepalDateTime(biz.last_active_at) : "Nobody has used this business since activity tracking began"}>
+                      <span className={`text-xs ${biz.last_active_at ? "text-navy-300" : "text-navy-600"}`}>
+                        {timeAgo(biz.last_active_at, now)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-navy-400">{formatDateOnly(biz.created_at)}</td>
                     <td className="px-4 py-3"><Badge label={biz.status} color={biz.status === "ACTIVE" ? "green" : "red"} /></td>

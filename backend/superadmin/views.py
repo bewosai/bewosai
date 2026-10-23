@@ -6,7 +6,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db import models
-from django.db.models import Count, F, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, F, Max, OuterRef, Q, Subquery, Sum
 from django.utils import timezone
 
 from accounts.models import User, Business, LoginActivity
@@ -221,9 +221,19 @@ class BusinessManagementView(APIView):
                 | qs.filter(owner__name__icontains=search)
             )
 
+        # When anyone working in the business (owner or staff) last used the
+        # app — see TrackedJWTAuthentication. ?ordering=active lists the most
+        # recently used first.
+        qs = qs.annotate(last_active=Max("staff__user__last_active_at"))
+        if request.query_params.get("ordering") == "active":
+            qs = qs.order_by(F("last_active").desc(nulls_last=True), "-created_at")
+
         paginator = LargePageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
-        return paginator.get_paginated_response(BusinessSerializer(page, many=True).data)
+        rows = BusinessSerializer(page, many=True).data
+        for row, business in zip(rows, page):
+            row["last_active_at"] = business.last_active
+        return paginator.get_paginated_response(rows)
 
 
 class BusinessActionView(APIView):
