@@ -8,6 +8,15 @@ import ConfirmDialog from "../components/common/ConfirmDialog";
 import BillTemplate from "../components/invoice/BillTemplate";
 import PrintPreviewModal from "../components/invoice/PrintPreviewModal";
 import { todayStr } from "../utils/dates";
+import SortControl, { useSort } from "../components/common/SortControl";
+
+const QUOTATION_SORTS = [
+  { key: "date", label: "Date", type: "date", get: (q) => q.date },
+  { key: "number", label: "Quotation no.", type: "text", get: (q) => q.quotation_number },
+  { key: "customer", label: "Customer", type: "text", get: (q) => q.customer_name },
+  { key: "total", label: "Amount", type: "number", get: (q) => q.total },
+  { key: "expiry", label: "Expiry", type: "date", get: (q) => q.expiry_date },
+];
 
 const today = () => todayStr();
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500 transition";
@@ -284,7 +293,8 @@ export default function QuotationPage() {
   };
 
   const tabs = ["ALL", "DRAFT", "SENT", "ACCEPTED", "REJECTED"];
-  const filtered = activeTab === "ALL" ? quotations : quotations.filter(q => q.status === activeTab);
+  const sort = useSort("quotations", QUOTATION_SORTS, { key: "date", dir: "desc" });
+  const filtered = sort.apply(activeTab === "ALL" ? quotations : quotations.filter(q => q.status === activeTab));
 
   return (
     <div className="space-y-6">
@@ -311,6 +321,8 @@ export default function QuotationPage() {
           </button>
         ))}
       </div>
+
+      <div className="flex justify-end"><SortControl sort={sort} /></div>
 
       {loading ? (
         <div className="flex justify-center py-20"><Loader className="h-6 w-6 animate-spin text-orange-500" /></div>

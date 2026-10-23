@@ -76,7 +76,8 @@ class PurchaseListCreateView(_RequirePurchases, generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         biz = get_business(self.request)
-        bill_number = self.request.data.get("bill_number") or _next_bill_number(biz)
+        # The checked, space-trimmed number (see PurchaseSerializer.validate_bill_number).
+        bill_number = serializer.validated_data.get("bill_number") or _next_bill_number(biz)
         # Same collision risk as Sale.invoice_number (see sales/views.py) —
         # client-supplied, DB-unique per business, now reachable via the
         # offline outbox too. Renumber on collision instead of 500ing.

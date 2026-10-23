@@ -21,6 +21,14 @@ import {
   ShoppingCart, Package, Loader, Upload, Download,
 } from "lucide-react";
 import { todayStr } from "../utils/dates";
+import SortControl, { useSort } from "../components/common/SortControl";
+
+const PARTY_SORTS = [
+  { key: "name", label: "Name", type: "text", get: (p) => p.name },
+  { key: "balance", label: "Balance", type: "number", get: (p) => p.balance },
+  { key: "type", label: "Type", type: "text", get: (p) => p.party_type },
+  { key: "created", label: "Date added", type: "date", get: (p) => p.created_at },
+];
 
 /* ── Export current parties to .xlsx — same columns the bulk-import
    template uses, so an exported file can be edited and re-imported. ── */
@@ -400,6 +408,7 @@ export default function PartiesPage() {
     }
   };
 
+  const sort = useSort("parties", PARTY_SORTS, { key: "name", dir: "asc" });
   const filtered = useMemo(() => {
     let list = parties;
     if (typeFilter === "CUSTOMER" || typeFilter === "SUPPLIER") {
@@ -416,8 +425,9 @@ export default function PartiesPage() {
         [p.name, p.phone, p.email, p.address].filter(Boolean).join(" ").toLowerCase().includes(q)
       );
     }
-    return list;
-  }, [parties, typeFilter, search]);
+    return sort.apply(list);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parties, typeFilter, search, sort.key, sort.dir]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -521,6 +531,8 @@ export default function PartiesPage() {
           )}
         </div>
       </div>
+
+      <div className="mb-3 flex justify-end"><SortControl sort={sort} /></div>
 
       {/* Party grid */}
       {loading ? (

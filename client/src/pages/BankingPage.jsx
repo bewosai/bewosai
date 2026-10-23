@@ -7,6 +7,15 @@ import {
   Trash2, Edit2, Upload, AlertTriangle, Loader, RefreshCw, Search,
 } from "lucide-react";
 import { todayStr } from "../utils/dates";
+import SortControl, { useSort } from "../components/common/SortControl";
+
+const TRANSACTION_SORTS = [
+  { key: "date", label: "Date", type: "date", get: (t) => t.date },
+  { key: "amount", label: "Amount", type: "number", get: (t) => t.amount },
+  { key: "type", label: "Credit / Debit", type: "text", get: (t) => t.transaction_type },
+  { key: "description", label: "Description", type: "text", get: (t) => t.description },
+  { key: "created", label: "Created", type: "date", get: (t) => t.created_at },
+];
 import { prepareImage } from "../utils/image";
 
 const today = () => todayStr();
@@ -327,11 +336,12 @@ export default function BankingPage() {
     }
   };
 
-  const filteredTransactions = transactions.filter((t) => {
+  const sort = useSort("bank_transactions", TRANSACTION_SORTS, { key: "date", dir: "desc" });
+  const filteredTransactions = sort.apply(transactions.filter((t) => {
     if (!txSearch.trim()) return true;
     const q = txSearch.toLowerCase();
     return (t.description || "").toLowerCase().includes(q) || (t.reference || "").toLowerCase().includes(q);
-  });
+  }));
 
   const totalBalance = accounts.reduce((s, a) => s + Number(a.balance || 0), 0);
   const totalCredit = transactions.filter(t => t.transaction_type === "CREDIT").reduce((s, t) => s + Number(t.amount), 0);
@@ -434,6 +444,7 @@ export default function BankingPage() {
                   </div>
                 </div>
               )}
+              <div className="mb-3 flex justify-end"><SortControl sort={sort} /></div>
               {txLoading ? (
                 <div className="flex justify-center py-10"><Loader className="h-5 w-5 animate-spin text-orange-500" /></div>
               ) : transactions.length === 0 ? (

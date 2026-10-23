@@ -18,6 +18,16 @@ import LineDiscountInput, { lineDiscount } from "../components/shared/LineDiscou
 import BillTemplate from "../components/invoice/BillTemplate";
 import PrintPreviewModal from "../components/invoice/PrintPreviewModal";
 import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
+import SortControl, { useSort } from "../components/common/SortControl";
+
+const PURCHASE_SORTS = [
+  { key: "date", label: "Date", type: "date", get: (p) => p.purchase_date },
+  { key: "bill", label: "Bill no.", type: "text", get: (p) => p.bill_number || p.invoice_number },
+  { key: "supplier", label: "Supplier", type: "text", get: (p) => p.supplier_name || p.party_name },
+  { key: "total", label: "Amount", type: "number", get: (p) => p.total },
+  { key: "due", label: "Due", type: "number", get: (p) => p.due_amount },
+  { key: "created", label: "Created", type: "date", get: (p) => p.created_at },
+];
 import { prepareImage } from "../utils/image";
 
 const today = () => todayStr();
@@ -891,6 +901,7 @@ export default function PurchasesPage() {
   const [printItem, setPrintItem] = useState(null);
   const [viewBillImage, setViewBillImage] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const sort = useSort("purchases", PURCHASE_SORTS, { key: "date", dir: "desc" });
 
   // Dashboard's "New Purchase" quick action lands here as ?action=add.
   useEffect(() => {
@@ -937,7 +948,7 @@ export default function PurchasesPage() {
   const TABS = ["ALL", "DRAFT", "CONFIRMED"];
   const PAYMENT_FILTERS = ["ALL", "PAID", "PARTIAL", "UNPAID"];
 
-  const filtered = list.filter(p => {
+  const filtered = sort.apply(list.filter(p => {
     const matchTab = tab === "ALL" || p.status === tab;
     const matchPayment = paymentFilter === "ALL" || paymentStatus(p) === paymentFilter;
     const q = search.toLowerCase();
@@ -945,7 +956,7 @@ export default function PurchasesPage() {
       (p.bill_number || p.invoice_number || "").toLowerCase().includes(q) ||
       (p.supplier_name || p.party_name || "").toLowerCase().includes(q);
     return matchTab && matchPayment && matchSearch;
-  });
+  }));
 
   return (
     <div>
@@ -1007,6 +1018,8 @@ export default function PurchasesPage() {
           </button>
         ))}
       </div>
+
+      <div className="mb-3 flex justify-end"><SortControl sort={sort} /></div>
 
       {/* List */}
       <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">

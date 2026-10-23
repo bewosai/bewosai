@@ -18,6 +18,14 @@ import StatusBadge from "../components/common/StatusBadge";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import DatePicker from "../components/common/DatePicker";
 import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
+import SortControl, { useSort } from "../components/common/SortControl";
+
+const PAYMENT_SORTS = [
+  { key: "date", label: "Date", type: "date", get: (p) => p.date },
+  { key: "amount", label: "Amount", type: "number", get: (p) => p.amount },
+  { key: "party", label: "Party", type: "text", get: (p) => p.party_name },
+  { key: "created", label: "Created", type: "date", get: (p) => p.created_at },
+];
 
 const today = () => todayStr();
 const F = "w-full rounded-xl border border-navy-700 bg-navy-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-navy-500 focus:border-orange-500 transition";
@@ -327,12 +335,13 @@ export default function PaymentsPage() {
     { key: "OUT", label: "Paid Out" },
   ];
 
-  const filtered = payments.filter(p => {
+  const sort = useSort("payments", PAYMENT_SORTS, { key: "date", dir: "desc" });
+  const filtered = sort.apply(payments.filter(p => {
     const matchTab = tab === "ALL" || p.payment_type === tab;
     const q = search.toLowerCase();
     const matchSearch = !q || (p.party_name || "").toLowerCase().includes(q) || (p.note || "").toLowerCase().includes(q);
     return matchTab && matchSearch;
-  });
+  }));
 
   const handleDelete = async () => {
     setDeleteError("");
@@ -420,7 +429,10 @@ export default function PaymentsPage() {
       {/* Tabs + Search */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <TabBar tabs={TABS} active={tab} onChange={setTab} />
-        <SearchBar value={search} onChange={setSearch} placeholder="Search party, note…" className="sm:w-56" />
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchBar value={search} onChange={setSearch} placeholder="Search party, note…" className="sm:w-56" />
+          <SortControl sort={sort} />
+        </div>
       </div>
 
       {/* List */}

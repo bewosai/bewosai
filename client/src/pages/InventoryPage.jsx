@@ -13,6 +13,16 @@ import {
 } from "lucide-react";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import { todayStr } from "../utils/dates";
+import SortControl, { useSort } from "../components/common/SortControl";
+
+const PRODUCT_SORTS = [
+  { key: "name", label: "Name", type: "text", get: (p) => p.name },
+  { key: "stock", label: "Stock", type: "number", get: (p) => p.stock_quantity },
+  { key: "sale_price", label: "Sale price", type: "number", get: (p) => p.sale_price },
+  { key: "purchase_price", label: "Purchase price", type: "number", get: (p) => p.purchase_price },
+  { key: "category", label: "Category", type: "text", get: (p) => p.category_name },
+  { key: "created", label: "Date added", type: "date", get: (p) => p.created_at },
+];
 import { priceForUnit } from "../utils/calculations";
 
 /* ── Export current products to .xlsx — same columns the bulk-import
@@ -653,11 +663,12 @@ export default function InventoryPage() {
 
   useEffect(load, []);
 
-  const filtered = products.filter((p) => {
+  const sort = useSort("products", PRODUCT_SORTS, { key: "name", dir: "asc" });
+  const filtered = sort.apply(products.filter((p) => {
     const q = search.toLowerCase();
     const matchesSearch = !q || p.name.toLowerCase().includes(q) || (p.barcode || "").toLowerCase().includes(q);
     return matchesSearch && (!lowStockOnly || p.is_low_stock);
-  });
+  }));
   const lowStockCount = products.filter((p) => p.is_low_stock).length;
 
   return (
@@ -754,6 +765,7 @@ export default function InventoryPage() {
               {lowStockCount} product{lowStockCount > 1 ? "s" : ""} running low on stock
             </div>
           )}
+          <div className="mb-3 flex justify-end"><SortControl sort={sort} /></div>
           {loading ? (
             <p className="py-6 text-center text-sm text-navy-400">{t("loading")}</p>
           ) : filtered.length ? (

@@ -61,6 +61,19 @@ class PurchaseSerializer(serializers.ModelSerializer):
                             "supplier_name", "supplier_phone", "supplier_pan", "supplier_address", "is_deleted"]
         extra_kwargs = {"bill_image": {"validators": IMAGE_VALIDATORS}}
 
+    def validate_bill_number(self, value):
+        """See SaleSerializer.validate_invoice_number: unique ignoring capitals and spaces."""
+        value = (value or "").strip()
+        if not value:
+            return value
+        business = require_business(self.context["request"])
+        taken = Purchase.objects.filter(business=business, bill_number__iexact=value)
+        if self.instance is not None:
+            taken = taken.exclude(pk=self.instance.pk)
+        if taken.exists():
+            raise serializers.ValidationError(f'Bill number "{value}" already exists — please use another.')
+        return value
+
     def validate(self, data):
         business = require_business(self.context["request"])
         supplier = data.get("supplier")

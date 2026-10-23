@@ -42,6 +42,16 @@ function formatDate(dateStr, dateMode, language) {
 
 import { PAYMENT_METHODS as PM_CONSTS, SALE_STATUS } from "../constants";
 import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
+import SortControl, { useSort } from "../components/common/SortControl";
+
+const SALE_SORTS = [
+  { key: "date", label: "Date", type: "date", get: (s) => s.sale_date || s.date },
+  { key: "invoice", label: "Invoice no.", type: "text", get: (s) => s.invoice_number },
+  { key: "customer", label: "Customer", type: "text", get: (s) => s.customer_name || s.party_name || "Cash Sales" },
+  { key: "total", label: "Amount", type: "number", get: (s) => s.total ?? s.total_amount },
+  { key: "due", label: "Due", type: "number", get: (s) => s.due_amount },
+  { key: "created", label: "Created", type: "date", get: (s) => s.created_at },
+];
 
 // Sale.payment_method only accepts these values on the backend (see
 // backend/sales/models.py METHOD_CHOICES) — the other PM_CONSTS entries
@@ -1011,6 +1021,7 @@ export default function SalesPage() {
   const [notice, setNotice] = useState("");
   const [confirmSale, setConfirmSale] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const sort = useSort("sales", SALE_SORTS, { key: "date", dir: "desc" });
 
   // Shift+Q (see useKeyboardShortcuts) lands here as ?action=new.
   useEffect(() => {
@@ -1057,14 +1068,14 @@ export default function SalesPage() {
   const TABS = ["ALL", "DRAFT", "CONFIRMED", "OVERDUE"];
   const PAYMENT_FILTERS = ["ALL", "PAID", "PARTIAL", "UNPAID"];
 
-  const filtered = saleList.filter(s => {
+  const filtered = sort.apply(saleList.filter(s => {
     const matchTab = tab === "ALL" || (tab === "OVERDUE" ? isOverdue(s) : s.status === tab);
     const matchPayment = paymentFilter === "ALL" || paymentStatus(s) === paymentFilter;
     const q = search.toLowerCase();
     const matchSearch = !q || (s.invoice_number || "").toLowerCase().includes(q) ||
       (s.customer_name || s.party_name || "").toLowerCase().includes(q);
     return matchTab && matchPayment && matchSearch;
-  });
+  }));
 
   const handleDelete = async () => {
     try {
@@ -1181,6 +1192,8 @@ export default function SalesPage() {
           </button>
         ))}
       </div>
+
+      <div className="mb-3 flex justify-end"><SortControl sort={sort} /></div>
 
       {/* Invoice List */}
       <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">

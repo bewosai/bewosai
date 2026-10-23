@@ -11,6 +11,15 @@ import { adToBS, formatBS } from "../utils/nepaliDate";
 import { useEscToClose } from "../hooks/useEscToClose";
 import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
 import { prepareImage } from "../utils/image";
+import SortControl, { useSort } from "../components/common/SortControl";
+
+const EXPENSE_SORTS = [
+  { key: "date", label: "Date", type: "date", get: (e) => e.date },
+  { key: "amount", label: "Amount", type: "number", get: (e) => e.amount },
+  { key: "category", label: "Category", type: "text", get: (e) => e.category_name },
+  { key: "description", label: "Description", type: "text", get: (e) => e.description || e.notes },
+  { key: "created", label: "Created", type: "date", get: (e) => e.created_at },
+];
 
 const today = () => todayStr();
 
@@ -355,14 +364,15 @@ export default function ExpensesPage() {
   });
 
   // Filtered list
-  const filtered = list.filter(e => {
+  const sort = useSort("expenses", EXPENSE_SORTS, { key: "date", dir: "desc" });
+  const filtered = sort.apply(list.filter(e => {
     const matchCat = category === "All" || e.category_name === category;
     const q = search.toLowerCase();
     const matchSearch = !q ||
       (e.description || e.notes || "").toLowerCase().includes(q) ||
       (e.category_name || "").toLowerCase().includes(q);
     return matchCat && matchSearch;
-  });
+  }));
 
   return (
     <div>
@@ -433,6 +443,8 @@ export default function ExpensesPage() {
           />
         </div>
       </div>
+
+      <div className="mb-3 flex justify-end"><SortControl sort={sort} /></div>
 
       {/* Expense list */}
       <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">

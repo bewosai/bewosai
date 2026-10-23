@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.functions import Lower
 from accounts.models import Business, User
 
 
@@ -23,7 +24,7 @@ class ExpenseCategory(models.Model):
     class Meta:
         unique_together = ("business", "name")
         verbose_name_plural = "expense categories"
-        ordering = ["name"]
+        ordering = [Lower("name")]   # A–Z ignoring capitals ("apple" next to "Apple", before "Zebra")
 
     def __str__(self):
         return self.name

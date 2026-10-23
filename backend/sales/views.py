@@ -53,7 +53,12 @@ def _next_quotation_number(business_id):
         num = int(m.group(1)) + 1 if m else 1
     else:
         num = 1
-    return f"QUO-{num:04d}"
+    number = f"QUO-{num:04d}"
+    # Never hand out a number another quotation of this business already has.
+    while Quotation.objects.filter(business_id=business_id, quotation_number__iexact=number).exists():
+        num += 1
+        number = f"QUO-{num:04d}"
+    return number
 
 
 class SaleNextNumberView(_RequirePos, APIView):
@@ -102,7 +107,8 @@ class SaleListCreateView(_RequirePos, generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         bid = get_bid(self.request)
-        inv = self.request.data.get("invoice_number") or _next_invoice_number(bid)
+        # The checked, space-trimmed number (see SaleSerializer.validate_invoice_number).
+        inv = serializer.validated_data.get("invoice_number") or _next_invoice_number(bid)
         # invoice_number is client-supplied (the app fetches "next number"
         # ahead of time so the form can show it) and only DB-unique per
         # business — a collision is a real possibility now that Sales can be
@@ -197,8 +203,13 @@ class QuotationListCreateView(_RequirePos, generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         bid = get_bid(self.request)
-        qnum = _next_quotation_number(bid)
-        serializer.save(business_id=bid, quotation_number=qnum, created_by=self.request.user)
+        # Two quotations created at the same moment are numbered one at a time
+        # (the business row is the lock), so they can't both get the same number.
+        from accounts.models import Business
+        with transaction.atomic():
+            lock(Business.objects.filter(pk=bid)).first()
+            qnum = _next_quotation_number(bid)
+            serializer.save(business_id=bid, quotation_number=qnum, created_by=self.request.user)
 
 
 class QuotationDetailView(_RequirePos, generics.RetrieveUpdateDestroyAPIView):

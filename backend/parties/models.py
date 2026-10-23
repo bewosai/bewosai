@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.functions import Lower
 from accounts.models import Business, User
 
 
@@ -31,7 +32,7 @@ class Party(models.Model):
 
     class Meta:
         verbose_name_plural = "parties"
-        ordering = ["name"]
+        ordering = [Lower("name")]   # A–Z ignoring capitals ("apple" next to "Apple", before "Zebra")
 
     def __str__(self):
         return self.name

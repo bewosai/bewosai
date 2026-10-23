@@ -61,6 +61,20 @@ class SaleSerializer(serializers.ModelSerializer):
         # Left out → SaleListCreateView numbers it (the business's prefix + next number).
         extra_kwargs = {"invoice_number": {"required": False}}
 
+    def validate_invoice_number(self, value):
+        """Unique in the business ignoring capitals and spaces: "inv-0005 " is
+        the same invoice number as "INV-0005" (the database only blocks exact repeats)."""
+        value = (value or "").strip()
+        if not value:
+            return value
+        business = require_business(self.context["request"])
+        taken = Sale.objects.filter(business=business, invoice_number__iexact=value)
+        if self.instance is not None:
+            taken = taken.exclude(pk=self.instance.pk)
+        if taken.exists():
+            raise serializers.ValidationError(f'Invoice number "{value}" already exists — please use another.')
+        return value
+
     def validate(self, data):
         business = require_business(self.context["request"])
         customer = data.get("customer")
