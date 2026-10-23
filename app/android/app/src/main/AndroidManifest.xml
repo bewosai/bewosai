@@ -2,20 +2,22 @@
     <!-- Internet access for API calls -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Camera for barcode scanning -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Storage for PDF export and image picker -->
+    <!-- No CAMERA permission: photos are taken through the system camera app
+         (image_picker), which needs none — and declaring CAMERA without
+         requesting it makes Android refuse that camera screen.
+         No READ_MEDIA_IMAGES: image_picker uses the system photo picker,
+         which needs none, and Google Play allows that permission only for
+         apps whose core purpose is photos. -->
+    <!-- Storage for PDF export on old Android versions -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <!-- Payment due-date reminder notifications -->
+    <!-- Payment due-date reminder notifications (scheduled inexactly — see
+         NotificationService, so no exact-alarm permission is needed) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
-        android:label="bewosai_app"
+        android:label="Bewosai"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

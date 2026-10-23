@@ -55,6 +55,16 @@ class AuthService {
     }
   }
 
+  /// Permanently deletes the signed-in account and every business it owns.
+  /// [code] is a fresh one sent to the account's email by [sendOtp].
+  Future<void> deleteAccount(String code) async {
+    try {
+      await _dio.post('/auth/delete-account/', data: {'code': code});
+    } catch (e) {
+      throw ApiClient.toApiException(e);
+    }
+  }
+
   Future<VerifyOtpResult> verifyOtp(String identifier, String code, {bool remember = false, String name = ''}) async {
     try {
       final res = await _dio.post('/auth/verify-otp/', data: {

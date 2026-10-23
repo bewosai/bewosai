@@ -310,6 +310,9 @@ class RecycleBinRestoreView(APIView):
             if obj.status == "CONFIRMED":
                 stock.apply_purchase(obj.items.all())
             PurchaseSerializer._sync_bank(obj)
+        elif record_type == "expense":
+            from expenses.serializers import ExpenseSerializer
+            ExpenseSerializer._sync_bank(obj)
 
         if record_type == "payment":
             # Mirror image of _unreconcile_payment (parties.views) — re-apply

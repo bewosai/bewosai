@@ -15,6 +15,7 @@ import 'settings_account_screen.dart';
 import 'settings_advanced_screen.dart';
 import 'settings_backup_screen.dart';
 import 'settings_business_screen.dart';
+import 'settings_delete_account_screen.dart';
 import 'settings_preferences_screen.dart';
 import 'settings_tax_screen.dart';
 
@@ -182,6 +183,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 iconColor: AppColors.error,
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const SettingsAdvancedScreen()),
+                ),
+              ),
+              _MenuItem(
+                icon: Icons.person_remove_outlined,
+                label: 'Delete Account',
+                subtitle: 'Permanently delete your account and your businesses',
+                iconColor: AppColors.error,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsDeleteAccountScreen()),
                 ),
               ),
             ]),

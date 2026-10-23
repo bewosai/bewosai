@@ -143,6 +143,8 @@ export const auth = {
   setAccountType: (accountType) => api.post("/auth/set-account-type/", { account_type: accountType }),
   logout: (refresh) => api.post("/auth/logout/", { refresh }),
   me: () => api.get("/auth/me/"),
+  // Permanently deletes the signed-in account; `code` comes from sendOtp(email).
+  deleteAccount: (code) => api.post("/auth/delete-account/", { code }),
   updateMe: (d) => api.patch("/auth/me/", d),
   businesses: () => api.get("/auth/businesses/"),
   createBusiness: (d) => api.post("/auth/businesses/", d),

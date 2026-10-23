@@ -443,6 +443,50 @@ class MeView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
+class DeleteAccountView(APIView):
+    """
+    The signed-in user permanently deletes their own account (Google Play
+    requires this for any app with sign-up). Takes a fresh code sent to the
+    account's email via send-otp — a lost or borrowed phone with an open
+    session isn't enough to wipe everything.
+
+    Deletes the user and every business they own, with all its data (the same
+    cascade as Super Admin's user delete). In businesses where they're only
+    staff, just their staff membership goes.
+    """
+    throttle_scope = "otp_verify"
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if not user.email:
+            return api_response(
+                False, "This account has no email to confirm with. Please contact support to delete it.",
+                status.HTTP_400_BAD_REQUEST,
+            )
+        if settings.SUPERADMIN_EMAIL and user.email.lower() == settings.SUPERADMIN_EMAIL:
+            return api_response(False, "The Super Admin account can't be deleted from the app.",
+                                status.HTTP_400_BAD_REQUEST)
+        code = str(request.data.get("code", "")).strip()
+        if not code:
+            return api_response(False, "Enter the code we emailed you.", status.HTTP_400_BAD_REQUEST)
+        otp, error = OTPCode.verify_and_consume(user.email, code)
+        if otp is None:
+            messages = {
+                "expired": "That code has expired. Request a new one.",
+                "too_many_attempts": "Too many wrong codes. Request a new one.",
+            }
+            return api_response(False, messages.get(error, "That code is not correct."),
+                                status.HTTP_400_BAD_REQUEST)
+
+        owned = list(user.businesses.values_list("name", flat=True))
+        email = user.email
+        with transaction.atomic():
+            user.delete()
+        logger.info("User %s deleted their own account (businesses: %s)", mask_email(email), len(owned))
+        return api_response(True, "Your account and its data have been deleted.", status.HTTP_200_OK)
+
+
 # How many businesses one person may own, and staff one business may have
 # (besides its admin), by where they're being added from: the website allows
 # more than the phone app. The plan doesn't change these (owner's decision,

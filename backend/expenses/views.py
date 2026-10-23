@@ -91,3 +91,4 @@ class ExpenseDetailView(_RequireExpenses, generics.RetrieveUpdateDestroyAPIView)
         instance.is_deleted = True
         instance.deleted_at = timezone.now()
         instance.save(update_fields=["is_deleted", "deleted_at"])
+        ExpenseSerializer._sync_bank(instance)   # its money goes back to the account

@@ -87,7 +87,11 @@ class NotificationService {
         ),
         iOS: DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      // Inexact: Android may deliver it a few minutes late, which is fine for
+      // a payment follow-up. Exact alarms need SCHEDULE_EXACT_ALARM (off by
+      // default from Android 14, and zonedSchedule throws without it) or
+      // USE_EXACT_ALARM, which Google Play allows only for alarm/calendar apps.
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
     );
   }

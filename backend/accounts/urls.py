@@ -10,6 +10,7 @@ urlpatterns = [
     path("set-account-type/", views.SetAccountTypeView.as_view()),
     path("refresh/", TokenRefreshView.as_view()),
     path("me/", views.MeView.as_view()),
+    path("delete-account/", views.DeleteAccountView.as_view()),
     path("businesses/", views.BusinessListCreateView.as_view()),
     path("businesses/<int:pk>/", views.BusinessDetailView.as_view()),
     path("businesses/<int:pk>/close-fiscal-year/", views.CloseFiscalYearView.as_view()),

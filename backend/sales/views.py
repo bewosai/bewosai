@@ -26,13 +26,24 @@ class _RequirePos:
 
 
 def _next_invoice_number(business_id):
+    """The business's invoice prefix (Settings → Invoice; "INV-" by default)
+    followed by the number after its latest invoice's."""
+    from accounts.models import Business
+
+    settings_ = Business.objects.filter(pk=business_id).values_list("invoice_settings", flat=True).first() or {}
+    prefix = settings_.get("invoice_prefix") or "INV-"
     last = Sale.objects.filter(business_id=business_id).order_by("-id").first()
     if last:
         m = re.search(r"(\d+)$", last.invoice_number)
         num = int(m.group(1)) + 1 if m else 1
     else:
         num = 1
-    return f"INV-{num:04d}"
+    number = f"{prefix}{num:04d}"
+    # A prefix change can collide with an older invoice; step past any that exist.
+    while Sale.objects.filter(business_id=business_id, invoice_number=number).exists():
+        num += 1
+        number = f"{prefix}{num:04d}"
+    return number
 
 
 def _next_quotation_number(business_id):

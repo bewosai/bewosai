@@ -58,6 +58,8 @@ class SaleSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "tax_amount", "total", "due_amount", "created_at",
                             "customer_name", "party_name", "party_phone", "party_pan", "party_address")
+        # Left out → SaleListCreateView numbers it (the business's prefix + next number).
+        extra_kwargs = {"invoice_number": {"required": False}}
 
     def validate(self, data):
         business = require_business(self.context["request"])

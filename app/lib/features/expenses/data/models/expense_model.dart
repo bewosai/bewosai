@@ -57,9 +57,14 @@ class Expense {
   final DateTime? date;
   final String description;
   final String paymentMethod;
+  /// The account a Bank/eSewa/Khalti expense was paid from (its balance goes down).
+  final int? bankAccount;
   final String? receiptImage;
   final String? receiptImageUrl;
   final DateTime? createdAt;
+  /// Set on an edit when the user removed the saved receipt photo: the save
+  /// tells the backend to drop it too (otherwise it stays on the server).
+  final bool removeReceipt;
 
   const Expense({
     required this.id,
@@ -69,9 +74,11 @@ class Expense {
     this.date,
     required this.description,
     required this.paymentMethod,
+    this.bankAccount,
     this.receiptImage,
     this.receiptImageUrl,
     this.createdAt,
+    this.removeReceipt = false,
   });
 
   factory Expense.fromJson(Map<String, dynamic> json) {
@@ -83,6 +90,7 @@ class Expense {
       date: Formatters.parseDate(json['date']?.toString()),
       description: json['description']?.toString() ?? '',
       paymentMethod: json['payment_method']?.toString() ?? 'CASH',
+      bankAccount: _toIntOrNull(json['bank_account']),
       receiptImage: json['receipt_image']?.toString(),
       receiptImageUrl: json['receipt_image_url']?.toString(),
       createdAt: Formatters.parseDate(json['created_at']?.toString()),
@@ -96,6 +104,8 @@ class Expense {
         if (date != null) 'date': Formatters.apiDate(date!),
         'description': description,
         'payment_method': paymentMethod,
+        if (paymentMethod != 'CASH' && bankAccount != null) 'bank_account': bankAccount,
+        if (removeReceipt) 'receipt_image': null,
       };
 
   Expense copyWith({
@@ -106,6 +116,7 @@ class Expense {
     DateTime? date,
     String? description,
     String? paymentMethod,
+    int? bankAccount,
     String? receiptImage,
     String? receiptImageUrl,
     DateTime? createdAt,
@@ -119,6 +130,7 @@ class Expense {
       date: date ?? this.date,
       description: description ?? this.description,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      bankAccount: bankAccount ?? this.bankAccount,
       receiptImage: receiptImage ?? this.receiptImage,
       receiptImageUrl: receiptImageUrl ?? this.receiptImageUrl,
       createdAt: createdAt ?? this.createdAt,

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { auth as authApi } from "../api";
 
 const AuthContext = createContext(null);
@@ -31,6 +31,22 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(false);
 
   const isLoggedIn = !!user && !!localStorage.getItem("access");
+
+  // Invoice look & numbering are saved on the business (Settings → Invoice).
+  // The bill/print screens read them from these localStorage keys, so refresh
+  // the keys from whichever business is open — another device's or the app's
+  // changes then show here too.
+  useEffect(() => {
+    const s = currentBusiness?.invoice_settings;
+    if (!s) return;
+    const keys = {
+      header_color: "invoice_header_color", footer_text: "invoice_footer_text", invoice_prefix: "invoice_prefix",
+      terms_text: "invoice_terms_text", warranty_text: "invoice_warranty_text",
+    };
+    Object.entries(keys).forEach(([field, key]) => {
+      if (field in s) localStorage.setItem(key, s[field] ?? "");
+    });
+  }, [currentBusiness]);
 
   /** Step 1: send OTP — identifier can be an email or (for existing accounts
    * with a phone on file) a phone number; no account type needed yet */

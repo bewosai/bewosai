@@ -47,6 +47,12 @@ class Expense(models.Model):
     date = models.DateField()
     description = models.TextField(blank=True)
     payment_method = models.CharField(max_length=10, choices=METHOD_CHOICES, default=METHOD_CASH)
+    # Which account a non-cash expense was paid from: it gets a mirrored
+    # "EXPENSE-<id>" debit (ExpenseSerializer._sync_bank), so the account's
+    # balance and statement show the money leaving.
+    bank_account = models.ForeignKey(
+        "banking.BankAccount", on_delete=models.SET_NULL, null=True, blank=True, related_name="expenses",
+    )
     receipt_image = models.ImageField(upload_to="expenses/receipts/", null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)

@@ -17,6 +17,8 @@ const SelectBusinessPage = lazy(() => import("./pages/SelectBusiness"));
 const LicenseRequiredPage = lazy(() => import("./pages/LicenseRequired"));
 const StaffLoginPage = lazy(() => import("./pages/StaffLoginPage"));
 const StaffInvitePage = lazy(() => import("./pages/StaffInvitePage"));
+const DeleteAccountPage = lazy(() => import("./pages/DeleteAccountPage"));
+const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 
 // Business layout + pages — lazy-loaded so a session only downloads the
 // module(s) it actually opens instead of every page's code up front. This
@@ -76,6 +78,9 @@ export default function App() {
       <Route path="/staff-login/:token" element={<StaffLoginPage />} />
       {/* A staff invitation: email + code, then Accept or Decline. */}
       <Route path="/staff/invite/:token" element={<StaffInvitePage />} />
+      {/* Google Play's account-deletion link: public, works signed in or out. */}
+      <Route path="/delete-account" element={<DeleteAccountPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
 
       {/* Post-login setup */}
       <Route path="/create-business" element={<RequireAuth><CreateBusinessPage /></RequireAuth>} />

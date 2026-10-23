@@ -207,7 +207,17 @@ def _on_saved(sender, instance, created, **kwargs):
         del instance._activity_old
 
 
-def _on_deleted(sender, instance, **kwargs):
+def _on_deleted(sender, instance, origin=None, **kwargs):
+    # Deleting a whole business or user cascades to every sale, payment, ...
+    # in it. Logging each one would write rows pointing at the business that's
+    # about to go too, so the delete fails at commit (dangling foreign key) —
+    # and the log would vanish with the business anyway.
+    from django.db.models import QuerySet
+    from accounts.models import Business, User
+
+    origin_model = origin.model if isinstance(origin, QuerySet) else type(origin)
+    if origin_model in (Business, User):
+        return
     _log("DELETED", sender, instance)
     _staff_activity("DELETED", sender, instance)
 

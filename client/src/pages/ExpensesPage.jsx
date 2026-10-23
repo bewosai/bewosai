@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import { useTranslation } from "../utils/translations";
 import { usePrivateAmount, useAppSettings } from "../context/AppSettingsContext";
-import { expenses as expensesApi } from "../api/index.js";
+import { expenses as expensesApi, banking as bankingApi } from "../api/index.js";
 import { adToBS, formatBS } from "../utils/nepaliDate";
 import { useEscToClose } from "../hooks/useEscToClose";
 import { todayStr, monthStr, formatDateOnly } from "../utils/dates";
@@ -53,18 +53,29 @@ function ExpenseModal({ onClose, onSaved, editData, categories }) {
     category: editData.category || categories[0]?.id || "",
     description: editData.description || editData.notes || "",
     payment_method: editData.payment_method || "CASH",
+    bank_account: editData.bank_account || "",
   } : {
     amount: "",
     date: today(),
     category: categories[0]?.id || "",
     description: "",
     payment_method: "CASH",
+    bank_account: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [receiptImage, setReceiptImage] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(editData?.receipt_image_url || null);
+  const [receiptRemoved, setReceiptRemoved] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState([]);
   const receiptRef = useRef(null);
+
+  // A Bank/eSewa/Khalti expense comes out of one of these accounts (its balance and statement).
+  useEffect(() => {
+    bankingApi.accounts({ page_size: 1000 })
+      .then(r => setBankAccounts((r.data.results ?? r.data).filter(a => a.is_active !== false)))
+      .catch(() => setBankAccounts([]));
+  }, []);
 
   const handleReceiptChange = async (e) => {
     const picked = e.target.files?.[0];
@@ -83,12 +94,18 @@ function ExpenseModal({ onClose, onSaved, editData, categories }) {
   const handleSubmit = async () => {
     setError("");
     if (!form.amount || parseFloat(form.amount) <= 0) { setError("Amount is required."); return; }
+    // Only when there are accounts to pick (the personal space may have none).
+    if (form.payment_method !== "CASH" && !form.bank_account && bankAccounts.length > 0) {
+      setError("Select which account paid this expense, or switch it to Cash.");
+      return;
+    }
     setSaving(true);
     try {
       // category is optional on the backend — omit it entirely when unset
       // instead of sending an empty string, which fails FK validation.
       const fields = { ...form };
       if (!fields.category) delete fields.category;
+      if (fields.payment_method === "CASH" || !fields.bank_account) delete fields.bank_account;
       let payload;
       if (receiptImage) {
         payload = new FormData();
@@ -96,6 +113,8 @@ function ExpenseModal({ onClose, onSaved, editData, categories }) {
         payload.append("receipt_image", receiptImage);
       } else {
         payload = fields;
+        // Cleared the old photo with ✕: tell the backend to drop it too.
+        if (receiptRemoved && editData?.receipt_image_url) payload.receipt_image = null;
       }
       if (editData?.id) {
         await expensesApi.update(editData.id, payload);
@@ -104,7 +123,10 @@ function ExpenseModal({ onClose, onSaved, editData, categories }) {
       }
       onSaved();
     } catch (e) {
-      setError(e.response?.data?.detail || "Failed to save expense.");
+      const data = e.response?.data;
+      const fieldError = data && typeof data === "object"
+        ? Object.values(data).flat().find(v => typeof v === "string") : null;
+      setError(data?.detail || data?.message || fieldError || "Failed to save expense.");
     } finally {
       setSaving(false);
     }
@@ -164,6 +186,27 @@ function ExpenseModal({ onClose, onSaved, editData, categories }) {
               </select>
             </div>
           </div>
+          {form.payment_method !== "CASH" && (
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-navy-400">Paid from account *</label>
+              {bankAccounts.length === 0 ? (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                  No bank accounts yet — this expense won't come out of any account balance. Add one in Banking to track it.
+                </p>
+              ) : (
+                <select
+                  className="w-full rounded-lg bg-navy-800 border border-navy-700 px-3 py-2 text-white focus:border-orange-500 focus:outline-none"
+                  value={form.bank_account}
+                  onChange={e => setForm(f => ({ ...f, bank_account: e.target.value }))}
+                >
+                  <option value="">Select account…</option>
+                  {bankAccounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.account_name}{a.bank_name ? ` (${a.bank_name})` : ""}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-xs font-semibold text-navy-400">Description</label>
             <textarea rows={3}
@@ -181,7 +224,7 @@ function ExpenseModal({ onClose, onSaved, editData, categories }) {
                 <img src={receiptPreview} alt="Receipt" className="h-24 w-auto rounded-lg border border-navy-700 object-cover" />
                 <button
                   type="button"
-                  onClick={() => { setReceiptImage(null); setReceiptPreview(null); if (receiptRef.current) receiptRef.current.value = ""; }}
+                  onClick={() => { setReceiptImage(null); setReceiptPreview(null); setReceiptRemoved(true); if (receiptRef.current) receiptRef.current.value = ""; }}
                   className="absolute -right-2 -top-2 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
                 >
                   <X className="h-3 w-3" />

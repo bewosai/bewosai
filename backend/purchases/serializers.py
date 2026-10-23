@@ -55,8 +55,10 @@ class PurchaseSerializer(serializers.ModelSerializer):
                   "subtotal", "discount", "tax_rate", "tax_amount", "total", "paid_amount", "due_amount",
                   "payment_method", "bank_account", "cash_amount", "status", "notes", "bill_image", "bill_image_url",
                   "is_deleted", "items", "created_at"]
+        # is_deleted only changes through DELETE / Recycle Bin restore, which also
+        # put back the bill's stock and payments; setting it in an edit skipped that.
         read_only_fields = ["tax_amount", "total", "due_amount", "created_at", "bill_image_url",
-                            "supplier_name", "supplier_phone", "supplier_pan", "supplier_address"]
+                            "supplier_name", "supplier_phone", "supplier_pan", "supplier_address", "is_deleted"]
         extra_kwargs = {"bill_image": {"validators": IMAGE_VALIDATORS}}
 
     def validate(self, data):

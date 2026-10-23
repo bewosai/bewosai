@@ -93,7 +93,7 @@ class ProductListCreateView(_RequireInventory, generics.ListCreateAPIView):
     serializer_class = ProductSerializer
     pagination_class = LargePageNumberPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["category", "is_active"]
+    filterset_fields = ["category", "is_active", "item_type"]
     search_fields = ["name", "barcode"]
     ordering_fields = ["name", "stock_quantity", "sale_price", "created_at"]
 

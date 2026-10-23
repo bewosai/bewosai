@@ -296,12 +296,16 @@ export default function SettingsPage() {
   const [fiscalYears, setFiscalYears] = useState([]);
   const [fiscalYearsLoading, setFiscalYearsLoading] = useState(true);
   const [profileForm, setProfileForm] = useState({ name: user?.name || "", phone: user?.phone || "" });
+  // Saved on the business (backend); a value only this browser had before
+  // that is used until the first save uploads it.
+  const savedInvoice = currentBusiness?.invoice_settings || {};
+  const invoiceValue = (field, key, fallback) => savedInvoice[field] ?? localStorage.getItem(key) ?? fallback;
   const [invoiceForm, setInvoiceForm] = useState({
-    header_color: localStorage.getItem("invoice_header_color") || "#f97316",
-    footer_text: localStorage.getItem("invoice_footer_text") || "Thank you for your business!",
-    invoice_prefix: localStorage.getItem("invoice_prefix") || "INV-",
-    terms_text: localStorage.getItem("invoice_terms_text") || "",
-    warranty_text: localStorage.getItem("invoice_warranty_text") || "",
+    header_color: invoiceValue("header_color", "invoice_header_color", "#f97316") || "#f97316",
+    footer_text: invoiceValue("footer_text", "invoice_footer_text", "Thank you for your business!"),
+    invoice_prefix: invoiceValue("invoice_prefix", "invoice_prefix", "INV-") || "INV-",
+    terms_text: invoiceValue("terms_text", "invoice_terms_text", ""),
+    warranty_text: invoiceValue("warranty_text", "invoice_warranty_text", ""),
   });
   const [logoPreview, setLogoPreview] = useState(currentBusiness?.logo || null);
   const [logoFile, setLogoFile] = useState(null);
@@ -354,14 +358,27 @@ export default function SettingsPage() {
         }
         const { data } = await authApi.updateBusiness(currentBusiness.id, payload);
         updateBusinessInList?.(data);
-        setLogoFile(null);
         setLogoPreview(data.logo || null);
+        setLogoFile(null);
       } catch (e) {
         const data = e.response?.data;
         errors.push(
           data?.error || data?.detail ||
           (data && typeof data === "object" ? Object.values(data).flat().join(" ") : null) ||
           "Couldn't save business details."
+        );
+      }
+      // Separate JSON request: the business form may go as multipart (logo),
+      // which can't carry the settings object.
+      try {
+        const { data } = await authApi.updateBusiness(currentBusiness.id, { invoice_settings: invoiceForm });
+        updateBusinessInList?.(data);
+        setLogoPreview(data.logo || null);
+      } catch (e) {
+        const data = e.response?.data;
+        errors.push(
+          (data?.invoice_settings && [].concat(data.invoice_settings).join(" ")) || data?.detail ||
+          "Couldn't save invoice settings."
         );
       }
     }
@@ -853,7 +870,7 @@ export default function SettingsPage() {
                 placeholder="INV-"
                 className="w-full rounded-lg border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-white placeholder-navy-500 focus:border-orange-500 focus:outline-none"
               />
-              <p className="mt-1 text-xs text-navy-500">e.g. Invoice numbers will appear as {invoiceForm.invoice_prefix}001</p>
+              <p className="mt-1 text-xs text-navy-500">e.g. New invoice numbers will appear as {invoiceForm.invoice_prefix}0001</p>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-navy-400">Invoice Footer Text</label>

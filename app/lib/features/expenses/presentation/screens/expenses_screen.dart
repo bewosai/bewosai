@@ -10,6 +10,7 @@ import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
 import '../../../../shared/widgets/receipt_image_picker.dart';
+import '../../../banking/presentation/providers/banking_provider.dart';
 import '../../data/models/expense_model.dart';
 import '../providers/expense_provider.dart';
 import '../../../../core/calendar/nepal_time.dart';
@@ -289,11 +290,17 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
   bool _categoryInitialized = false;
   File? _receiptImageFile;
   String? _receiptImageUrl;
+  int? _bankAccountId;
+  bool _receiptRemoved = false;
 
   @override
   void initState() {
     super.initState();
     final e = widget.expense;
+    _bankAccountId = e?.bankAccount;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<BankingProvider>().load();
+    });
     _amountController = TextEditingController(
       text: e != null ? e.amount.toString() : '',
     );
@@ -317,6 +324,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
     setState(() {
       _receiptImageFile = null;
       _receiptImageUrl = null;
+      _receiptRemoved = widget.expense?.receiptImageUrl != null;
     });
   }
 
@@ -339,6 +347,8 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
       date: _date,
       description: _descriptionController.text.trim(),
       paymentMethod: _paymentMethod,
+      bankAccount: _paymentMethod != 'CASH' ? _bankAccountId : null,
+      removeReceipt: _receiptRemoved && _receiptImageFile == null,
     );
 
     final ok = await context.read<ExpenseProvider>().save(
@@ -438,8 +448,32 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                       ),
                     )
                     .toList(),
-                onChanged: (v) => setState(() => _paymentMethod = v ?? 'CASH'),
+                onChanged: (v) => setState(() {
+                  _paymentMethod = v ?? 'CASH';
+                  if (_paymentMethod == 'CASH') _bankAccountId = null;
+                }),
               ),
+              if (_paymentMethod != 'CASH') ...[
+                const SizedBox(height: 12),
+                Consumer<BankingProvider>(
+                  builder: (context, bp, _) {
+                    final accounts = bp.accounts;
+                    if (accounts.isEmpty) {
+                      return Text(
+                        'No bank accounts set up yet — add one from Banking so this expense comes out of its balance.',
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      );
+                    }
+                    return DropdownButtonFormField<int>(
+                      initialValue: accounts.any((a) => a.id == _bankAccountId) ? _bankAccountId : null,
+                      decoration: const InputDecoration(labelText: 'Paid From Account *'),
+                      items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text(a.accountName))).toList(),
+                      onChanged: (v) => setState(() => _bankAccountId = v),
+                      validator: (v) => v == null ? 'Select which account paid this' : null,
+                    );
+                  },
+                ),
+              ],
               const SizedBox(height: 12),
               TextFormField(
                 controller: _descriptionController,

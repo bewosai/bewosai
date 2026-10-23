@@ -227,6 +227,10 @@ class Business(models.Model):
     currency = models.CharField(max_length=5, default="NPR")
     fiscal_year_start = models.CharField(max_length=5, default="07-16", help_text="MM-DD, Nepal fiscal year starts mid-July")
     default_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=13, help_text="Default VAT % applied to new sales/purchases, e.g. 13")
+    # How this business's invoices look and are numbered: invoice_prefix (new
+    # invoice numbers), header_color, footer_text, terms_text, warranty_text.
+    # Kept here, not in one browser, so every device and the app share them.
+    invoice_settings = models.JSONField(default=dict, blank=True)
     plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default=PLAN_FREE)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
     subscription_expires = models.DateField(null=True, blank=True)

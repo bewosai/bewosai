@@ -61,7 +61,7 @@ class BusinessSerializer(serializers.ModelSerializer):
         fields = (
             "id", "name", "business_type", "address", "phone", "email",
             "logo", "pan_number", "vat_number", "currency", "fiscal_year_start", "default_tax_rate",
-            "plan", "effective_plan", "status", "subscription_expires", "staff_limit_override",
+            "invoice_settings", "plan", "effective_plan", "status", "subscription_expires", "staff_limit_override",
             "web_trial_enabled", "web_trial_start", "web_trial_end",
             "mobile_trial_enabled", "mobile_trial_start", "mobile_trial_end",
             "owner", "owner_name", "owner_business_limit_override", "staff_count", "created_at",
@@ -77,6 +77,30 @@ class BusinessSerializer(serializers.ModelSerializer):
             "mobile_trial_enabled", "mobile_trial_start", "mobile_trial_end",
         )
         extra_kwargs = {"logo": {"validators": IMAGE_VALIDATORS}}
+
+    # Allowed invoice_settings keys and their longest length.
+    INVOICE_SETTING_LIMITS = {
+        "invoice_prefix": 12, "header_color": 7, "footer_text": 300, "terms_text": 500, "warranty_text": 200,
+    }
+
+    def validate_invoice_settings(self, value):
+        import re
+
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Must be an object.")
+        clean = dict(self.instance.invoice_settings) if self.instance else {}
+        for key, raw in value.items():
+            if key not in self.INVOICE_SETTING_LIMITS:
+                raise serializers.ValidationError(f"Unknown setting “{key}”.")
+            text = str(raw if raw is not None else "").strip()
+            if len(text) > self.INVOICE_SETTING_LIMITS[key]:
+                raise serializers.ValidationError(f"{key} is too long (max {self.INVOICE_SETTING_LIMITS[key]}).")
+            if key == "header_color" and text and not re.fullmatch(r"#[0-9A-Fa-f]{6}", text):
+                raise serializers.ValidationError("header_color must look like #f97316.")
+            if key == "invoice_prefix" and text and not re.fullmatch(r"[A-Za-z0-9/_-]+", text):
+                raise serializers.ValidationError("Invoice prefix may only use letters, numbers, - / and _.")
+            clean[key] = text
+        return clean
 
     def get_staff_count(self, obj):
         return obj.staff.filter(is_active=True).count()

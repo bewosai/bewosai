@@ -117,8 +117,9 @@ class BankTransactionDetailView(_RequireBanking, generics.RetrieveUpdateDestroyA
     # from here would desync the bank balance from the source record's own
     # paid_amount (which only the source's own delete/edit flow keeps
     # correct) — point the user at the source instead.
-    _MIRROR_PREFIXES = ("SALE-", "PURCHASE-", "PARTYPAYMENT-")
-    _MIRROR_SOURCE_LABEL = {"SALE-": "Sales", "PURCHASE-": "Purchases", "PARTYPAYMENT-": "Payments"}
+    _MIRROR_PREFIXES = ("SALE-", "PURCHASE-", "PARTYPAYMENT-", "EXPENSE-")
+    _MIRROR_SOURCE_LABEL = {"SALE-": "Sales", "PURCHASE-": "Purchases", "PARTYPAYMENT-": "Payments",
+                            "EXPENSE-": "Expenses"}
 
     def destroy(self, request, *args, **kwargs):
         from django.utils import timezone

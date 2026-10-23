@@ -38,7 +38,9 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = (
-            "id", "name", "category", "category_name", "unit", "unit_name", "unit_detail",
+            # item_type: PRODUCT (has stock) or SERVICE (never stocked — Product.save
+            # zeroes its stock). The app sends and filters by it.
+            "id", "name", "item_type", "category", "category_name", "unit", "unit_name", "unit_detail",
             "description", "purchase_price", "sale_price", "selling_price",
             "secondary_purchase_price", "secondary_sale_price",
             "stock_quantity", "low_stock_threshold", "is_low_stock",
