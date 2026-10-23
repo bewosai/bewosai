@@ -861,6 +861,13 @@ function OverviewTab({ stats }) {
 /* ── Businesses Tab ────────────────────────────────────────────────────────── */
 const BIZ_PAGE_SIZE = 50;
 
+/* Where the last activity was: the phone app or the website. */
+function PlatformBadge({ platform }) {
+  if (platform === "app") return <span className="ml-1.5 align-middle"><Badge label="App" color="orange" /></span>;
+  if (platform === "web") return <span className="ml-1.5 align-middle"><Badge label="Website" color="blue" /></span>;
+  return null;
+}
+
 function BusinessesTab({ onCountChange }) {
   const [rows, setRows] = useState([]);
   const [count, setCount] = useState(0);
@@ -1010,6 +1017,7 @@ function BusinessesTab({ onCountChange }) {
                       <span className={`text-xs ${biz.last_active_at ? "text-navy-300" : "text-navy-600"}`}>
                         {timeAgo(biz.last_active_at, now)}
                       </span>
+                      <PlatformBadge platform={biz.last_active_platform} />
                     </td>
                     <td className="px-4 py-3 text-navy-400">{formatDateOnly(biz.created_at)}</td>
                     <td className="px-4 py-3"><Badge label={biz.status} color={biz.status === "ACTIVE" ? "green" : "red"} /></td>
@@ -1271,6 +1279,7 @@ function UsersTab({ onCountChange }) {
                       ) : (
                         <span className={`text-xs ${u.last_active_at ? "text-navy-300" : "text-navy-600"}`}>{timeAgo(u.last_active_at, now)}</span>
                       )}
+                      <PlatformBadge platform={u.last_active_platform} />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {u.last_login_at ? (

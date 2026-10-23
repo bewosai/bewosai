@@ -112,8 +112,8 @@ class AdminUserSerializer(UserSerializer):
 
     class Meta(UserSerializer.Meta):
         fields = UserSerializer.Meta.fields + (
-            "last_login_at", "last_active_at", "login_count", "last_login_ip", "last_login_device",
-            "last_login_platform", "is_online",
+            "last_login_at", "last_active_at", "last_active_platform", "login_count", "last_login_ip",
+            "last_login_device", "last_login_platform", "is_online",
         )
         read_only_fields = fields
 

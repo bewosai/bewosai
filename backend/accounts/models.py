@@ -64,6 +64,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     # when someone signs in, but sessions last up to 30 days — so it goes stale
     # for anyone actively using the app. This is the "really last seen" time.
     last_active_at = models.DateTimeField(null=True, blank=True)
+    # Where that activity was: "app" (the phone app) or "web" (the website),
+    # from the X-Platform header each client sends. Blank = unknown.
+    last_active_platform = models.CharField(max_length=10, blank=True, default="")
     # Platform-admin-only override of BusinessListCreateView's plan-based
     # business-count cap (FREE=2/PREMIUM=5) for this user specifically — set
     # via superadmin.UserActionView's "set_business_limit" action. Null means

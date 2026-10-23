@@ -12,6 +12,7 @@ from django.utils import timezone
 from datetime import date, timedelta
 from bewosai.email import send_otp_email, send_otp_email_quick
 from .admin_access import grant_platform_admin_if_listed
+from .authentication import request_platform
 # from bewosai.sms import send_otp_sms  # phone login/signup temporarily disabled (2026-09-16)
 from bewosai.permissions import (
     BusinessNotArchivedForWrites, HasActiveSubscription, PERMISSION_ACTIONS, PERMISSION_MODULES, get_platform,
@@ -252,8 +253,10 @@ class VerifyOTPView(APIView):
                 # Signing in is activity too: Super Admin's "Last active" never lags the sign-in.
 
                 user.last_login_at = user.last_active_at = timezone.now()
+
+                user.last_active_platform = request_platform(request) or user.last_active_platform
                 user.is_verified = True
-                user.save(update_fields=["last_login_at", "last_active_at", "is_verified"])
+                user.save(update_fields=["last_login_at", "last_active_at", "last_active_platform", "is_verified"])
                 grant_platform_admin_if_listed(user)
 
                 LoginActivity.objects.create(
@@ -328,8 +331,10 @@ class GoogleLoginView(APIView):
             # Signing in is activity too: Super Admin's "Last active" never lags the sign-in.
 
             user.last_login_at = user.last_active_at = timezone.now()
+
+            user.last_active_platform = request_platform(request) or user.last_active_platform
             user.is_verified = True
-            user.save(update_fields=["last_login_at", "last_active_at", "is_verified"])
+            user.save(update_fields=["last_login_at", "last_active_at", "last_active_platform", "is_verified"])
             grant_platform_admin_if_listed(user)
 
             LoginActivity.objects.create(
@@ -917,8 +922,10 @@ class StaffInviteAcceptView(APIView):
             # Signing in is activity too: Super Admin's "Last active" never lags the sign-in.
 
             user.last_login_at = user.last_active_at = timezone.now()
+
+            user.last_active_platform = request_platform(request) or user.last_active_platform
             user.is_verified = True
-            user.save(update_fields=["last_login_at", "last_active_at", "is_verified"])
+            user.save(update_fields=["last_login_at", "last_active_at", "last_active_platform", "is_verified"])
             LoginActivity.objects.create(
                 user=user, ip_address=client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""), platform=_login_platform(request),
@@ -1034,8 +1041,9 @@ class StaffLoginView(APIView):
         user = staff.user
         # Signing in is activity too: Super Admin's "Last active" never lags the sign-in.
         user.last_login_at = user.last_active_at = timezone.now()
+        user.last_active_platform = request_platform(request) or user.last_active_platform
         user.is_verified = True
-        user.save(update_fields=["last_login_at", "last_active_at", "is_verified"])
+        user.save(update_fields=["last_login_at", "last_active_at", "last_active_platform", "is_verified"])
 
         LoginActivity.objects.create(
             user=user,

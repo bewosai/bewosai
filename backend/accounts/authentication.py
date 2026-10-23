@@ -10,6 +10,13 @@ from .admin_access import grant_platform_admin_if_listed
 ACTIVITY_WRITE_INTERVAL = timedelta(minutes=5)
 
 
+def request_platform(request):
+    """'app' for the phone app, 'web' for the website (their X-Platform header),
+    '' for anything else (API tools, tests)."""
+    platform = (request.headers.get("X-Platform") or "").strip().lower()
+    return {"mobile": "app", "web": "web"}.get(platform, "")
+
+
 class TrackedJWTAuthentication(JWTAuthentication):
     """
     Normal JWT authentication that also records when each account was last
@@ -28,12 +35,16 @@ class TrackedJWTAuthentication(JWTAuthentication):
                 grant_platform_admin_if_listed(user)
             now = timezone.now()
             last = user.last_active_at
-            if last is None or now - last >= ACTIVITY_WRITE_INTERVAL:
+            platform = request_platform(request) or user.last_active_platform
+            # Also on a switch between website and app, so "last used on" is
+            # right straight away rather than after the next interval.
+            if last is None or now - last >= ACTIVITY_WRITE_INTERVAL or platform != user.last_active_platform:
                 # A targeted UPDATE (not user.save()) so it can't overwrite anything else,
                 # and a failure to record activity must never fail the request itself.
                 try:
-                    type(user).objects.filter(pk=user.pk).update(last_active_at=now)
+                    type(user).objects.filter(pk=user.pk).update(last_active_at=now, last_active_platform=platform)
                     user.last_active_at = now
+                    user.last_active_platform = platform
                 except Exception:
                     pass
         return result

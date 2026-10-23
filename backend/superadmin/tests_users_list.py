@@ -34,6 +34,16 @@ class LastActiveTrackingTests(TestCase):
         self.assertIsNotNone(u.last_active_at)
         self.assertEqual(u.last_active_at, u.last_login_at)
 
+    def test_records_whether_the_website_or_the_app_was_used(self):
+        bearer(self.user).get("/api/auth/me/", HTTP_X_PLATFORM="web")
+        self.assertEqual(User.objects.get(pk=self.user.pk).last_active_platform, "web")
+        # Switching to the app shows straight away, without waiting out the write interval.
+        bearer(self.user).get("/api/auth/me/", HTTP_X_PLATFORM="mobile")
+        self.assertEqual(User.objects.get(pk=self.user.pk).last_active_platform, "app")
+        # A request without the header (API tool) doesn't wipe what we know.
+        bearer(self.user).get("/api/auth/me/")
+        self.assertEqual(User.objects.get(pk=self.user.pk).last_active_platform, "app")
+
     def test_an_authenticated_request_records_last_active(self):
         self.assertIsNone(User.objects.get(pk=self.user.pk).last_active_at)
         bearer(self.user).get("/api/auth/me/")

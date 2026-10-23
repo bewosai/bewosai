@@ -224,7 +224,10 @@ class BusinessManagementView(APIView):
         # When anyone working in the business (owner or staff) last used the
         # app — see TrackedJWTAuthentication. ?ordering=active lists the most
         # recently used first.
-        qs = qs.annotate(last_active=Max("staff__user__last_active_at"))
+        latest_user = User.objects.filter(staff_roles__business=OuterRef("pk"),
+                                          last_active_at__isnull=False).order_by("-last_active_at")
+        qs = qs.annotate(last_active=Max("staff__user__last_active_at"),
+                         last_active_platform=Subquery(latest_user.values("last_active_platform")[:1]))
         if request.query_params.get("ordering") == "active":
             qs = qs.order_by(F("last_active").desc(nulls_last=True), "-created_at")
 
@@ -233,6 +236,7 @@ class BusinessManagementView(APIView):
         rows = BusinessSerializer(page, many=True).data
         for row, business in zip(rows, page):
             row["last_active_at"] = business.last_active
+            row["last_active_platform"] = business.last_active_platform or ""
         return paginator.get_paginated_response(rows)
 
 

@@ -44,6 +44,14 @@ class BusinessLastActiveTests(TestCase):
         self.assertLess(timezone.now() - busy, timedelta(minutes=10))    # the cashier, 5 min ago
         self.assertIsNone(by_name["never"]["last_active_at"])
 
+    def test_shows_where_the_latest_activity_was(self):
+        User.objects.filter(email="busy.staff@example.com").update(last_active_platform="app")
+        User.objects.filter(email="old@example.com").update(last_active_platform="web")
+        by_name = {r["name"]: r for r in self.rows()}
+        self.assertEqual(by_name["busy"]["last_active_platform"], "app")
+        self.assertEqual(by_name["old"]["last_active_platform"], "web")
+        self.assertEqual(by_name["never"]["last_active_platform"], "")
+
     def test_can_list_most_recently_used_first(self):
         names = [r["name"] for r in self.rows(ordering="active")]
         self.assertEqual(names, ["busy", "old", "never"])
