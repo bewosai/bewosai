@@ -317,6 +317,15 @@ PLATFORM_ADMIN_EMAILS = [
     e.strip().lower() for e in config("PLATFORM_ADMIN_EMAILS", default="").split(",") if e.strip()
 ]
 
+# App-store reviewer login: Google's reviewers can't receive emailed codes, so
+# this one account signs in with a fixed 6-digit code and no email is sent.
+# Off unless both are set (Render → Environment); give the pair to Google Play
+# under App content → App access, and remove them once the app is approved.
+REVIEW_LOGIN_EMAIL = config("REVIEW_LOGIN_EMAIL", default="").strip().lower()
+REVIEW_LOGIN_CODE = config("REVIEW_LOGIN_CODE", default="").strip()
+if not (REVIEW_LOGIN_EMAIL and REVIEW_LOGIN_CODE.isdigit() and len(REVIEW_LOGIN_CODE) == 6):
+    REVIEW_LOGIN_EMAIL, REVIEW_LOGIN_CODE = "", ""
+
 # Where the website lives — referral links point here (the backend has no pages).
 FRONTEND_URL = config("FRONTEND_URL", default="https://bewosai.com").rstrip("/")
 

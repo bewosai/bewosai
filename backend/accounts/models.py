@@ -125,10 +125,11 @@ class OTPCode(models.Model):
         return not self.is_used and self.expires_at > timezone.now()
 
     @classmethod
-    def generate(cls, identifier, account_type):
-        """Create a new OTP, invalidating any prior unused ones. Returns (otp, plaintext_code)."""
+    def generate(cls, identifier, account_type, code=None):
+        """Create a new OTP, invalidating any prior unused ones. Returns (otp, plaintext_code).
+        `code` is only ever given for the app-store reviewer login (settings.REVIEW_LOGIN_*)."""
         cls.objects.filter(identifier=identifier, is_used=False).update(is_used=True)
-        code = str(secrets.SystemRandom().randint(100000, 999999))
+        code = code or str(secrets.SystemRandom().randint(100000, 999999))
         otp = cls.objects.create(
             identifier=identifier,
             code_hash=make_password(code),

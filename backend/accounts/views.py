@@ -160,16 +160,21 @@ class SendOTPView(APIView):
             )
 
         account_type = existing.account_type if existing else ACCOUNT_BUSINESS
+
+        # The Google Play / App Store reviewer can't receive our emails: their
+        # one account (Render: REVIEW_LOGIN_EMAIL + REVIEW_LOGIN_CODE) signs in
+        # with that fixed code and nothing is sent. Off unless both are set.
+        if settings.REVIEW_LOGIN_EMAIL and identifier.lower() == settings.REVIEW_LOGIN_EMAIL:
+            OTPCode.generate(identifier, account_type, code=settings.REVIEW_LOGIN_CODE)
+            logger.info("Reviewer sign-in code issued for %s (no email sent)", identifier)
+            return api_response(True, f"OTP sent to {identifier}. Valid for 10 minutes.", status.HTTP_200_OK,
+                                user_exists=existing is not None)
+
         otp, code = OTPCode.generate(identifier, account_type)
 
-        # Send synchronously and report the real outcome. This used to fire
-        # on a background thread so the request returned instantly, but that
-        # meant an SMTP/SendGrid failure was only ever visible in the server
-        # log — the client always got "success": true even when no email
-        # ever went out, which made real delivery failures undebuggable from
-        # the app. The extra second or two of latency is worth the honesty.
-        # At most ~2 s of waiting: a provider that refuses within that still
-        # shows as "couldn't send"; a slow one finishes in the background.
+        # Report the real outcome, but wait at most ~2 s: a provider that
+        # refuses within that shows as "couldn't send" (a silent failure used
+        # to look like success); a slow one finishes in the background.
         sent = send_otp_email_quick(identifier, code)
         fail_message = "Couldn't send the verification email right now. Please try again in a moment."
 
