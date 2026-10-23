@@ -4,7 +4,7 @@ class AppConstants {
   static const String appName = 'Bewosai';
   // Shown in Settings so anyone can tell which build is installed. Change it
   // whenever a new APK/app bundle is built (pubspec's version code goes up too).
-  static const String buildLabel = '2026-10-23-a';
+  static const String buildLabel = '2026-10-23-b';
 
   /// Error alerts (Sentry). Empty = off. Paste the Flutter project's DSN from
   /// Sentry → Project settings → Client Keys (it's meant to be public), or pass

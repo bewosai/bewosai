@@ -9,6 +9,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/sort_menu.dart';
 import '../../../../shared/widgets/receipt_image_picker.dart';
 import '../../../banking/presentation/providers/banking_provider.dart';
 import '../../data/models/expense_model.dart';
@@ -27,6 +28,16 @@ class ExpensesScreen extends StatefulWidget {
 class _ExpensesScreenState extends State<ExpensesScreen> {
   int? _categoryFilter;
   String _search = '';
+  String _sortKey = 'date';
+  bool _ascending = false;
+
+  static final _sorts = <SortOption<Expense>>[
+    SortOption('date', 'Date', (e) => e.date),
+    SortOption('amount', 'Amount', (e) => e.amount),
+    SortOption('category', 'Category', (e) => e.categoryName),
+    SortOption('description', 'Description', (e) => e.description),
+    SortOption('created', 'Created', (e) => e.createdAt),
+  ];
 
   @override
   void initState() {
@@ -46,7 +57,10 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 
-  List<Expense> _filtered(List<Expense> expenses) {
+  List<Expense> _filtered(List<Expense> expenses) =>
+      applySort(_matching(expenses), _sorts.firstWhere((o) => o.key == _sortKey), _ascending);
+
+  List<Expense> _matching(List<Expense> expenses) {
     var list = expenses;
     if (_categoryFilter != null) {
       list = list.where((e) => e.category == _categoryFilter).toList();
@@ -126,10 +140,24 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    SearchField(
-                      hint: 'Search description or category',
-                      onChanged: (v) => setState(() => _search = v),
-                    ),
+                    Row(children: [
+                      Expanded(
+                        child: SearchField(
+                          hint: 'Search description or category',
+                          onChanged: (v) => setState(() => _search = v),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SortMenuButton<Expense>(
+                        options: _sorts,
+                        selectedKey: _sortKey,
+                        ascending: _ascending,
+                        onChanged: (k, asc) => setState(() {
+                          _sortKey = k;
+                          _ascending = asc;
+                        }),
+                      ),
+                    ]),
                     const SizedBox(height: 12),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,

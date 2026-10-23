@@ -26,7 +26,10 @@ class SupportTicketSerializer(serializers.ModelSerializer):
             "subject", "message", "status", "admin_reply",
             "created_at", "updated_at",
         )
-        read_only_fields = ("id", "created_at", "updated_at")
+        # user_email is always the sender's own (SubmitTicketView); Super Admin
+        # edits only status and admin_reply.
+        read_only_fields = ("id", "user_email", "created_at", "updated_at")
+        extra_kwargs = {"message": {"max_length": 5000}, "subject": {"max_length": 300}}
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):

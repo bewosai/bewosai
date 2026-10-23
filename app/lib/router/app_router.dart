@@ -11,6 +11,7 @@ import '../features/reports/presentation/screens/reports_screen.dart';
 import '../features/sales/data/models/sale_model.dart';
 import '../features/sales/presentation/screens/invoice_detail_screen.dart';
 import '../features/sales/presentation/screens/pos/quick_pos_screen.dart';
+import '../features/settings/presentation/screens/settings_help_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
 import '../features/shell/presentation/screens/main_shell.dart';
 import '../features/staff/presentation/screens/staff_screen.dart';
@@ -87,6 +88,7 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
       GoRoute(path: '/reports', builder: (context, state) => const FeatureGate(feature: 'reports', module: 'reports', child: ReportsScreen())),
       GoRoute(path: '/staff', builder: (context, state) => const FeatureGate(feature: 'staff_management', module: 'staff', child: StaffScreen())),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+      GoRoute(path: '/help', builder: (context, state) => const SettingsHelpScreen()),
       GoRoute(path: '/recycle-bin', builder: (context, state) => const RecycleBinScreen()),
     ],
   );

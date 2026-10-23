@@ -61,6 +61,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen> {
     if (code.isEmpty) return;
     FocusScope.of(context).unfocus();
     final billing = context.read<BillingProvider>();
+    if (billing.isApplyingCoupon) return;
     final ok = await billing.applyCoupon(code);
     if (!mounted) return;
     if (ok) {

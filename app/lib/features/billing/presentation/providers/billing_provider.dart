@@ -35,6 +35,9 @@ class BillingProvider extends ChangeNotifier {
   }
 
   Future<bool> applyCoupon(String code) async {
+    // A second tap while the first is still on its way does nothing (the
+    // server would refuse it anyway: a code works once).
+    if (isApplyingCoupon) return false;
     isApplyingCoupon = true;
     couponError = null;
     couponSuccess = null;

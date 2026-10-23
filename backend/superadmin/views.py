@@ -564,11 +564,71 @@ class SubmitTicketView(APIView):
     """Any authenticated user can submit a support ticket/comment."""
 
     def post(self, request):
-        serializer = SupportTicketSerializer(data=request.data)
+        from bewosai.utils import get_business
+
+        # Only what the user writes: the status and Super Admin's reply must
+        # not be settable by the person sending the comment.
+        serializer = SupportTicketSerializer(data={
+            "subject": request.data.get("subject", ""),
+            "message": request.data.get("message", ""),
+        })
         if serializer.is_valid():
-            serializer.save(user_email=request.user.email)
+            business = get_business(request)
+            serializer.save(
+                user_email=request.user.email,
+                business_name=business.name if business else (request.data.get("business_name") or "")[:200],
+                status=SupportTicket.STATUS_OPEN,
+                admin_reply="",
+            )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class HelpAskView(APIView):
+    """The in-app help chat: answers questions about using Bewosai only
+    (superadmin.help_guide). Every question is kept for Super Admin."""
+    throttle_scope = "otp_verify"
+
+    def post(self, request):
+        from bewosai.utils import get_business
+        from .help_guide import answer
+        from .models import HelpQuestion
+
+        question = str(request.data.get("question", "")).strip()[:1000]
+        if not question:
+            return Response({"error": "Type a question."}, status=status.HTTP_400_BAD_REQUEST)
+        text, topic, related = answer(question)
+        business = get_business(request)
+        HelpQuestion.objects.create(
+            user=request.user, user_email=request.user.email or "", business_name=business.name if business else "",
+            question=question, answer=text, topic=topic or "",
+        )
+        return Response({"answer": text, "topic": topic, "related": related})
+
+
+class HelpQuestionListView(generics.ListAPIView):
+    """Super Admin: every help-chat question, newest first; ?unanswered=1 for
+    the ones the guide couldn't answer."""
+    permission_classes = [IsPlatformAdmin]
+    pagination_class = LargePageNumberPagination
+
+    def get_serializer_class(self):
+        from rest_framework import serializers as drf
+        from .models import HelpQuestion
+
+        class HelpQuestionSerializer(drf.ModelSerializer):
+            class Meta:
+                model = HelpQuestion
+                fields = ("id", "user_email", "business_name", "question", "answer", "topic", "created_at")
+        return HelpQuestionSerializer
+
+    def get_queryset(self):
+        from .models import HelpQuestion
+
+        qs = HelpQuestion.objects.all()
+        if self.request.query_params.get("unanswered") in ("1", "true"):
+            qs = qs.filter(topic="")
+        return qs
 
 
 class MyTicketsView(generics.ListAPIView):

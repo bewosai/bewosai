@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/payment_status.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/sort_menu.dart';
 import '../../data/models/sale_model.dart';
 import '../providers/sale_provider.dart';
 
@@ -20,6 +21,17 @@ class _SalesScreenState extends State<SalesScreen> {
   String _filter = 'ALL';
   String _paymentFilter = 'ALL';
   String _search = '';
+  String _sortKey = 'date';
+  bool _ascending = false;
+
+  static final _sorts = <SortOption<Sale>>[
+    SortOption('date', 'Date', (s) => s.saleDate),
+    SortOption('invoice', 'Invoice no.', (s) => s.invoiceNumber),
+    SortOption('customer', 'Customer', (s) => s.customerName.isEmpty ? 'Cash Sales' : s.customerName),
+    SortOption('total', 'Amount', (s) => s.total),
+    SortOption('due', 'Due', (s) => s.dueAmount),
+    SortOption('created', 'Created', (s) => s.createdAt),
+  ];
 
   @override
   void initState() {
@@ -29,7 +41,10 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  List<Sale> _filtered(List<Sale> sales) {
+  List<Sale> _filtered(List<Sale> sales) =>
+      applySort(_matching(sales), _sorts.firstWhere((o) => o.key == _sortKey), _ascending);
+
+  List<Sale> _matching(List<Sale> sales) {
     var list = sales;
     if (_filter == 'OVERDUE') {
       list = list.where((s) => s.isOverdue).toList();
@@ -106,10 +121,24 @@ class _SalesScreenState extends State<SalesScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    SearchField(
-                      hint: 'Search invoice # or customer',
-                      onChanged: (v) => setState(() => _search = v),
-                    ),
+                    Row(children: [
+                      Expanded(
+                        child: SearchField(
+                          hint: 'Search invoice # or customer',
+                          onChanged: (v) => setState(() => _search = v),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SortMenuButton<Sale>(
+                        options: _sorts,
+                        selectedKey: _sortKey,
+                        ascending: _ascending,
+                        onChanged: (k, asc) => setState(() {
+                          _sortKey = k;
+                          _ascending = asc;
+                        }),
+                      ),
+                    ]),
                     const SizedBox(height: 12),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,

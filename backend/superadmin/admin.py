@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    SupportTicket, Announcement, Feature,
+    SupportTicket, Announcement, Feature, HelpQuestion,
     License, BusinessFeatureOverride, LicenseAuditLog, ActivityLog,
 )
 
@@ -17,6 +17,14 @@ class SupportTicketAdmin(admin.ModelAdmin):
     list_display = ("subject", "user_email", "status", "created_at")
     list_filter = ("status",)
     search_fields = ("user_email", "subject")
+
+
+@admin.register(HelpQuestion)
+class HelpQuestionAdmin(admin.ModelAdmin):
+    list_display = ("question", "topic", "user_email", "business_name", "created_at")
+    list_filter = ("topic",)
+    search_fields = ("question", "user_email", "business_name")
+    readonly_fields = ("created_at",)
 
 
 @admin.register(Announcement)

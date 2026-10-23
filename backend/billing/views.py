@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from accounts.models import Business, StaffMember, User
 from accounts.views import BusinessListCreateView, staff_limit_for
 from bewosai.pagination import LargePageNumberPagination
+from bewosai.locking import lock
 from bewosai.utils import require_business
 from superadmin.views import IsPlatformAdmin
 from .models import Coupon, Referral, Subscription
@@ -78,7 +79,14 @@ class ApplyCouponView(APIView):
         # the same box — for new accounts only, see process_referral.
         referrer = Business.objects.filter(referral_code=code.upper()).exclude(pk=business.pk).first()
         if referrer is not None:
-            return self._apply_referral(business, referrer)
+            # The business stays locked while the code is checked and saved: a
+            # double-tapped Apply waits, then sees "already used" — not an error.
+            with transaction.atomic():
+                business = lock(Business.objects.filter(pk=business.pk)).get()
+                response = self._apply_referral(business, referrer)
+                if response.status_code >= 400:
+                    transaction.set_rollback(True)
+                return response
 
         try:
             subscription = apply_coupon(code=code, user=request.user, business=business)

@@ -1536,6 +1536,57 @@ function FeaturesTab({ features, onRefresh }) {
   );
 }
 
+/* ── Help Chat Tab ───────────────────────────────────────────────────────── */
+/* Every question users asked the in-app help chat, and what it answered.
+   "No answer" ones are what to add to backend/superadmin/help_guide.py next. */
+function HelpChatTab() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [unansweredOnly, setUnansweredOnly] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    adminApi.helpQuestions(unansweredOnly ? { unanswered: 1, page_size: 500 } : { page_size: 500 })
+      .then((r) => setRows(r.data?.results ?? r.data ?? []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [unansweredOnly]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-navy-400">Questions users asked the help chat ({rows.length})</p>
+        <label className="flex items-center gap-2 text-xs text-navy-300">
+          <input type="checkbox" checked={unansweredOnly} onChange={(e) => setUnansweredOnly(e.target.checked)} />
+          Only questions with no answer
+        </label>
+      </div>
+      <div className="rounded-xl border border-navy-800 bg-navy-900 overflow-hidden">
+        {loading ? (
+          <p className="py-12 text-center text-sm text-navy-400">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="py-12 text-center text-sm text-navy-400">No questions yet</p>
+        ) : (
+          <div className="divide-y divide-navy-800/50">
+            {rows.map((q) => (
+              <div key={q.id} className="px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <Badge label={q.topic || "No answer"} color={q.topic ? "blue" : "yellow"} />
+                  <p className="text-sm font-medium text-white">{q.question}</p>
+                </div>
+                <p className="text-xs text-navy-400">
+                  {q.user_email || "—"}{q.business_name ? ` · ${q.business_name}` : ""} · {formatDateOnly(q.created_at)}
+                </p>
+                {q.topic && <p className="mt-1 text-xs text-navy-300 line-clamp-2">↳ {q.answer}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Tickets Tab ──────────────────────────────────────────────────────────── */
 function TicketsTab({ tickets, onRefresh }) {
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -1573,7 +1624,12 @@ function TicketsTab({ tickets, onRefresh }) {
                     <Badge label={ticket.status?.replace("_", " ").toUpperCase()} color={statusColors[ticket.status] || "gray"} />
                     <p className="text-sm font-medium text-white truncate">{ticket.subject}</p>
                   </div>
-                  <p className="text-xs text-navy-400">{ticket.user_email} · {formatDateOnly(ticket.created_at)}</p>
+                  <p className="text-xs text-navy-400">
+                    {ticket.user_email}{ticket.business_name ? ` · ${ticket.business_name}` : ""} · {formatDateOnly(ticket.created_at)}
+                  </p>
+                  {ticket.message && (
+                    <p className="mt-1 text-xs text-navy-200 whitespace-pre-line line-clamp-3">{ticket.message}</p>
+                  )}
                   {ticket.admin_reply && (
                     <p className="mt-1 text-xs text-green-400 truncate">↳ {ticket.admin_reply}</p>
                   )}
@@ -1711,7 +1767,8 @@ export default function SuperAdminPage() {
       heading: "Communication",
       items: [
         { id: "announcements", label: "Announcements", icon: Bell },
-        { id: "tickets", label: "Support Tickets", count: openTicketCount || null, icon: MessageSquare },
+        { id: "tickets", label: "Feedback & Support", count: openTicketCount || null, icon: MessageSquare },
+        { id: "help", label: "Help Chat", icon: MessageSquare },
       ],
     },
   ];
@@ -1785,6 +1842,7 @@ export default function SuperAdminPage() {
             {tab === "referrals" && <ReferralsTab />}
             {tab === "announcements" && <AnnouncementsTab announcements={announcements} onRefresh={() => load(false)} />}
             {tab === "tickets" && <TicketsTab tickets={tickets} onRefresh={() => load(false)} />}
+            {tab === "help" && <HelpChatTab />}
           </div>
         </div>
       )}

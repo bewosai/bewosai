@@ -77,6 +77,25 @@ class SupportTicket(models.Model):
         return f"{self.subject} ({self.user_email})"
 
 
+class HelpQuestion(models.Model):
+    """One question asked in the in-app help chat and the answer it got
+    (superadmin.help_guide). Super Admin reads these to see what users need —
+    `topic` is blank when the guide had no answer, which is what to add next."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    user_email = models.EmailField(blank=True)
+    business_name = models.CharField(max_length=200, blank=True)
+    question = models.TextField()
+    answer = models.TextField()
+    topic = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.question[:60]
+
+
 class Announcement(models.Model):
     title = models.CharField(max_length=300)
     body = models.TextField()

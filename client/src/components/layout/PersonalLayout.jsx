@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import HelpChat from "../common/HelpChat";
 import bewosaiLogo from "../../assessts/images/bewosai.png";
 import {
   LayoutDashboard, TrendingDown, TrendingUp, BarChart3,
@@ -112,6 +113,7 @@ export default function PersonalLayout() {
           <Outlet />
         </main>
       </div>
+      <HelpChat feedbackPath="/personal/settings?tab=support" />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import '../../../../core/utils/payment_status.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/pdf/bill_pdf.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/sort_menu.dart';
 import '../../../../shared/widgets/line_discount_field.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../banking/presentation/providers/banking_provider.dart';
@@ -33,6 +34,17 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
   String _filter = 'ALL';
   String _paymentFilter = 'ALL';
   String _search = '';
+  String _sortKey = 'date';
+  bool _ascending = false;
+
+  static final _sorts = <SortOption<Purchase>>[
+    SortOption('date', 'Date', (p) => p.purchaseDate),
+    SortOption('bill', 'Bill no.', (p) => p.billNumber),
+    SortOption('supplier', 'Supplier', (p) => p.supplierName),
+    SortOption('total', 'Amount', (p) => p.total),
+    SortOption('due', 'Due', (p) => p.dueAmount),
+    SortOption('created', 'Created', (p) => p.createdAt),
+  ];
 
   @override
   void initState() {
@@ -95,7 +107,10 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
     );
   }
 
-  List<Purchase> _filtered(List<Purchase> purchases) {
+  List<Purchase> _filtered(List<Purchase> purchases) =>
+      applySort(_matching(purchases), _sorts.firstWhere((o) => o.key == _sortKey), _ascending);
+
+  List<Purchase> _matching(List<Purchase> purchases) {
     var list = purchases;
     if (_filter != 'ALL') {
       list = list.where((p) => p.status == _filter).toList();
@@ -166,10 +181,24 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    SearchField(
-                      hint: 'Search bill # or supplier',
-                      onChanged: (v) => setState(() => _search = v),
-                    ),
+                    Row(children: [
+                      Expanded(
+                        child: SearchField(
+                          hint: 'Search bill # or supplier',
+                          onChanged: (v) => setState(() => _search = v),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SortMenuButton<Purchase>(
+                        options: _sorts,
+                        selectedKey: _sortKey,
+                        ascending: _ascending,
+                        onChanged: (k, asc) => setState(() {
+                          _sortKey = k;
+                          _ascending = asc;
+                        }),
+                      ),
+                    ]),
                     const SizedBox(height: 12),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,

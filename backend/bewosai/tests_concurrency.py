@@ -131,6 +131,30 @@ class DoubleTapTests(TransactionTestCase):
         self.assertEqual(sale.paid_amount, D(1000))
         self.assertEqual(allocated, D(1000))
 
+    def test_double_tapped_coupon_applies_once(self):
+        from datetime import timedelta
+        from billing.models import Coupon, Subscription
+        from django.utils import timezone
+
+        today = timezone.localdate()
+        coupon = Coupon.generate(user=self.owner, plan=Business.PLAN_PREMIUM,
+                                 start_date=today, end_date=today + timedelta(days=30))
+        codes = self.twice(lambda api: api.post("/api/billing/apply-coupon/", {"code": coupon.code}, format="json"))
+        self.assertEqual(codes, [200, 400])
+        self.assertEqual(Subscription.objects.filter(business=self.business).count(), 1)
+
+    def test_double_tapped_referral_code_counts_once_without_an_error(self):
+        from billing.models import Referral, Subscription
+
+        friend_owner = User.objects.create_user(email="friend@example.com", name="Friend", is_verified=True)
+        friend = Business.objects.create(owner=friend_owner, name="Friend Shop")
+        User.objects.filter(pk=self.owner.pk).update(is_verified=True)
+        codes = self.twice(lambda api: api.post("/api/billing/apply-coupon/", {"code": friend.referral_code},
+                                                format="json"))
+        self.assertEqual(codes, [200, 400])            # never a 500
+        self.assertEqual(Referral.objects.filter(referred_business=self.business).count(), 1)
+        self.assertEqual(Subscription.objects.filter(business=friend).count(), 1)
+
     def test_double_tapped_restore_applies_stock_once(self):
         sale = self.make_sale(qty=4)
         Sale.objects.filter(pk=sale.pk).update(is_deleted=True)   # deleted: stock back at 10

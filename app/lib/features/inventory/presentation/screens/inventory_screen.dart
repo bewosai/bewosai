@@ -7,6 +7,7 @@ import '../../../../core/utils/excel_import_utils.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/sort_menu.dart';
 import '../../data/models/inventory_model.dart';
 import '../providers/inventory_provider.dart';
 import 'inventory_import_screen.dart';
@@ -234,12 +235,24 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 }
 
+/// The product list's sort (name A–Z by default), kept while the app is open.
+final _productSort = ValueNotifier<(String, bool)>(('name', true));
+
 class _ProductsTab extends StatelessWidget {
   final String search;
   final bool lowStockOnly;
   final ValueChanged<String> onSearch;
   final VoidCallback onClearLowStock;
   final ValueChanged<Product> onEdit;
+
+  static final _productSorts = <SortOption<Product>>[
+    SortOption('name', 'Name', (p) => p.name),
+    SortOption('stock', 'Stock', (p) => p.stockQuantity),
+    SortOption('sale_price', 'Sale price', (p) => p.salePrice),
+    SortOption('purchase_price', 'Purchase price', (p) => p.purchasePrice),
+    SortOption('category', 'Category', (p) => p.categoryName),
+    SortOption('created', 'Date added', (p) => p.createdAt),
+  ];
 
   const _ProductsTab({
     required this.search,
@@ -252,6 +265,13 @@ class _ProductsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
+    return ValueListenableBuilder<(String, bool)>(
+      valueListenable: _productSort,
+      builder: (context, sort, _) => _build(context, inv, sort),
+    );
+  }
+
+  Widget _build(BuildContext context, InventoryProvider inv, (String, bool) sort) {
     var products = inv.products;
     if (lowStockOnly) products = products.where((p) => p.isLowStock).toList();
     if (search.isNotEmpty) {
@@ -264,6 +284,7 @@ class _ProductsTab extends StatelessWidget {
           )
           .toList();
     }
+    products = applySort(products, _productSorts.firstWhere((o) => o.key == sort.$1), sort.$2);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -271,6 +292,13 @@ class _ProductsTab extends StatelessWidget {
         Row(
           children: [
             Expanded(child: SearchField(hint: 'Search products', onChanged: onSearch)),
+            const SizedBox(width: 8),
+            SortMenuButton<Product>(
+              options: _productSorts,
+              selectedKey: sort.$1,
+              ascending: sort.$2,
+              onChanged: (k, asc) => _productSort.value = (k, asc),
+            ),
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.download_outlined),

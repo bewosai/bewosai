@@ -16,6 +16,7 @@ import 'settings_advanced_screen.dart';
 import 'settings_backup_screen.dart';
 import 'settings_business_screen.dart';
 import 'settings_delete_account_screen.dart';
+import 'settings_help_screen.dart';
 import 'settings_preferences_screen.dart';
 import 'settings_tax_screen.dart';
 
@@ -140,6 +141,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: 'PAN, VAT, currency, fiscal year',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const SettingsTaxScreen()),
+                ),
+              ),
+              _MenuItem(
+                icon: Icons.support_agent_outlined,
+                label: 'Help & Feedback',
+                subtitle: 'Ask how to use the app, or send us a message',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsHelpScreen()),
                 ),
               ),
               _MenuItem(

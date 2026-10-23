@@ -28,6 +28,7 @@ import 'features/settings/presentation/providers/settings_provider.dart';
 import 'features/settings/settings_dependencies.dart';
 import 'features/staff/presentation/providers/staff_provider.dart';
 import 'router/app_router.dart';
+import 'shared/widgets/global_help_button.dart';
 import 'shared/widgets/license_gate.dart';
 
 void main() async {
@@ -164,7 +165,12 @@ class _BewosaiAppState extends State<BewosaiApp> {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            builder: (context, child) => LicenseGate(child: child!),
+            builder: (context, child) => Stack(
+              children: [
+                Positioned.fill(child: LicenseGate(child: child!)),
+                GlobalHelpButton(router: _router),
+              ],
+            ),
             routerConfig: _router,
           );
         },

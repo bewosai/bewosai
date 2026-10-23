@@ -329,6 +329,7 @@ export const superadmin = {
 
   tickets: (p) => api.get("/superadmin/tickets/", { params: p }),
   updateTicket: (id, d) => api.patch(`/superadmin/tickets/${id}/`, d),
+  helpQuestions: (p) => api.get("/superadmin/help/questions/", { params: p }),
 
   announcements: (p) => api.get("/superadmin/announcements/", { params: p }),
   createAnnouncement: (d) => api.post("/superadmin/announcements/", d),
@@ -377,6 +378,8 @@ export const billing = {
 export const support = {
   submit: (d) => api.post("/superadmin/support/", d),
   myComments: () => api.get("/superadmin/my-tickets/"),
+  // In-app help chat: answers how-to questions about Bewosai only.
+  ask: (question) => api.post("/superadmin/help/ask/", { question }),
 };
 
 // Effective feature availability for the current business — same endpoint

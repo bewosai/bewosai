@@ -6,6 +6,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_date_picker.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/sort_menu.dart';
 import '../../data/models/banking_model.dart';
 import '../providers/banking_provider.dart';
 import '../../../../core/calendar/nepal_time.dart';
@@ -19,6 +20,16 @@ class BankingScreen extends StatefulWidget {
 
 class _BankingScreenState extends State<BankingScreen> {
   String _txSearch = '';
+  String _sortKey = 'date';
+  bool _ascending = false;
+
+  static final _sorts = <SortOption<BankTransaction>>[
+    SortOption('date', 'Date', (t) => t.date),
+    SortOption('amount', 'Amount', (t) => t.amount),
+    SortOption('type', 'Credit / Debit', (t) => t.transactionType),
+    SortOption('description', 'Description', (t) => t.description),
+    SortOption('created', 'Created', (t) => t.createdAt),
+  ];
 
   @override
   void initState() {
@@ -27,11 +38,12 @@ class _BankingScreenState extends State<BankingScreen> {
   }
 
   List<BankTransaction> _filteredTransactions(List<BankTransaction> transactions) {
-    if (_txSearch.isEmpty) return transactions;
-    final q = _txSearch.toLowerCase();
-    return transactions
-        .where((t) => t.description.toLowerCase().contains(q) || t.reference.toLowerCase().contains(q))
-        .toList();
+    var list = transactions;
+    if (_txSearch.isNotEmpty) {
+      final q = _txSearch.toLowerCase();
+      list = list.where((t) => t.description.toLowerCase().contains(q) || t.reference.toLowerCase().contains(q)).toList();
+    }
+    return applySort(list, _sorts.firstWhere((o) => o.key == _sortKey), _ascending);
   }
 
   @override
@@ -120,10 +132,24 @@ class _BankingScreenState extends State<BankingScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    SearchField(
-                      hint: 'Search description, reference',
-                      onChanged: (v) => setState(() => _txSearch = v),
-                    ),
+                    Row(children: [
+                      Expanded(
+                        child: SearchField(
+                          hint: 'Search description, reference',
+                          onChanged: (v) => setState(() => _txSearch = v),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SortMenuButton<BankTransaction>(
+                        options: _sorts,
+                        selectedKey: _sortKey,
+                        ascending: _ascending,
+                        onChanged: (k, asc) => setState(() {
+                          _sortKey = k;
+                          _ascending = asc;
+                        }),
+                      ),
+                    ]),
                     const SizedBox(height: 10),
                     if (filteredTransactions.isEmpty)
                       AppSectionCard(children: [Text(bp.transactions.isEmpty ? 'No transactions yet' : 'No matching transactions', style: TextStyle(color: AppColors.textSecondary))])

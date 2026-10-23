@@ -8,6 +8,7 @@ import '../../../../core/utils/excel_import_utils.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_widgets.dart';
+import '../../../../shared/widgets/sort_menu.dart';
 import '../../data/models/party_model.dart';
 import '../providers/party_provider.dart';
 import 'party_import_screen.dart';
@@ -47,6 +48,15 @@ class PartiesScreen extends StatefulWidget {
 class _PartiesScreenState extends State<PartiesScreen> {
   String _filter = 'ALL';
   String _search = '';
+  String _sortKey = 'name';
+  bool _ascending = true;   // A–Z by default
+
+  static final _sorts = <SortOption<Party>>[
+    SortOption('name', 'Name', (p) => p.name),
+    SortOption('balance', 'Balance', (p) => p.balance),
+    SortOption('type', 'Type', (p) => p.partyType),
+    SortOption('created', 'Date added', (p) => p.createdAt),
+  ];
 
   @override
   void initState() {
@@ -65,7 +75,10 @@ class _PartiesScreenState extends State<PartiesScreen> {
     );
   }
 
-  List<Party> _filtered(List<Party> parties) {
+  List<Party> _filtered(List<Party> parties) =>
+      applySort(_matching(parties), _sorts.firstWhere((o) => o.key == _sortKey), _ascending);
+
+  List<Party> _matching(List<Party> parties) {
     var list = parties;
     if (_filter == 'CUSTOMER' || _filter == 'SUPPLIER') {
       // A 'BOTH' party counts toward both the Customers and Suppliers KPI
@@ -164,10 +177,24 @@ class _PartiesScreenState extends State<PartiesScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    SearchField(
-                      hint: 'Search name, phone, email',
-                      onChanged: (v) => setState(() => _search = v),
-                    ),
+                    Row(children: [
+                      Expanded(
+                        child: SearchField(
+                          hint: 'Search name, phone, email',
+                          onChanged: (v) => setState(() => _search = v),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SortMenuButton<Party>(
+                        options: _sorts,
+                        selectedKey: _sortKey,
+                        ascending: _ascending,
+                        onChanged: (k, asc) => setState(() {
+                          _sortKey = k;
+                          _ascending = asc;
+                        }),
+                      ),
+                    ]),
                     const SizedBox(height: 12),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,

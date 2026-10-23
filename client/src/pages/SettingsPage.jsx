@@ -283,7 +283,11 @@ export default function SettingsPage() {
   const { currentBusiness, user, updateBusinessInList } = useAuth();
   const { isFeatureEnabled } = useFeatures();
   const navigate = useNavigate();
-  const [section, setSection] = useState("account");
+  // ?tab=support (the help chat's "Send feedback" link) opens that section.
+  const [section, setSection] = useState(() => {
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    return SECTIONS.some((s) => s.key === wanted) ? wanted : "account";
+  });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");

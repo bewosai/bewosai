@@ -5,6 +5,7 @@ import Topbar from "./Topbar";
 import TrialBanner from "./TrialBanner";
 import KeyboardShortcutsModal from "../common/KeyboardShortcutsModal";
 import HelpSupportModal from "../common/HelpSupportModal";
+import HelpChat from "../common/HelpChat";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 
 export default function AppLayout() {
@@ -35,6 +36,7 @@ export default function AppLayout() {
         </main>
       </div>
 
+      <HelpChat feedbackPath="/settings?tab=support" />
       {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
       {showHelp && (
         <HelpSupportModal
