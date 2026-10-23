@@ -245,18 +245,47 @@ def _send(to_email: str, *, subject: str, text: str, html: str, console_fallback
     return False
 
 
+FREEMAIL_DOMAINS = ("gmail.com", "googlemail.com", "yahoo.com", "outlook.com", "hotmail.com", "live.com")
+# bewosai.com is authenticated in SendGrid (DKIM/SPF records in Cloudflare).
+DOMAIN_SENDER = "noreply@bewosai.com"
+
+
+def sendgrid_sender() -> str:
+    """The From address for SendGrid mail.
+
+    A free-mail From (e.g. a gmail.com address) sent through SendGrid's servers
+    fails that provider's DMARC check, so Gmail files it as spam or drops it.
+    Such a SENDGRID_FROM_EMAIL is replaced with the authenticated domain sender.
+    """
+    configured = (settings.SENDGRID_FROM_EMAIL or "").strip()
+    if not configured or configured.lower().rsplit("@", 1)[-1] in FREEMAIL_DOMAINS:
+        if configured:
+            logger.warning("SENDGRID_FROM_EMAIL=%s is a free-mail address; sending as %s instead", configured, DOMAIN_SENDER)
+        return DOMAIN_SENDER
+    return configured
+
+
 def _send_via_sendgrid(to_email: str, subject: str, text: str, html: str, api_key: str) -> bool:
     try:
         from sendgrid import SendGridAPIClient
-        from sendgrid.helpers.mail import Mail, To, Content
+        from sendgrid.helpers.mail import (
+            ClickTracking, Content, Mail, OpenTracking, SubscriptionTracking, To, TrackingSettings,
+        )
 
         message = Mail(
-            from_email=(settings.SENDGRID_FROM_EMAIL, "Bewosai"),
+            from_email=(sendgrid_sender(), "Bewosai"),
             to_emails=To(to_email),
             subject=subject,
         )
         message.add_content(Content("text/plain", text))
         message.add_content(Content("text/html", html))
+        # SendGrid's tracking pixel, rewritten links and unsubscribe footer make
+        # a login-code email look like marketing to spam filters — all off.
+        message.tracking_settings = TrackingSettings(
+            click_tracking=ClickTracking(False, False),
+            open_tracking=OpenTracking(False),
+            subscription_tracking=SubscriptionTracking(False),
+        )
 
         client = SendGridAPIClient(api_key)
         response = client.send(message)

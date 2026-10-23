@@ -46,6 +46,31 @@ class ProviderFallbackTests(SimpleTestCase):
         smtp.assert_not_called()
 
 
+class SendGridMessageTests(SimpleTestCase):
+    def sent_message(self):
+        client = mock.Mock()
+        client.send.return_value = mock.Mock(status_code=202)
+        with mock.patch("sendgrid.SendGridAPIClient", return_value=client):
+            self.assertTrue(mail._send_via_sendgrid("to@example.com", "Subj", "text", "<p>h</p>", "SG.fake"))
+        return client.send.call_args[0][0].get()
+
+    @override_settings(SENDGRID_FROM_EMAIL="mahatok008@gmail.com")
+    def test_freemail_sender_is_replaced_by_the_domain_sender(self):
+        self.assertEqual(mail.sendgrid_sender(), "noreply@bewosai.com")
+        self.assertEqual(self.sent_message()["from"]["email"], "noreply@bewosai.com")
+
+    @override_settings(SENDGRID_FROM_EMAIL="hello@bewosai.com")
+    def test_own_domain_sender_is_kept(self):
+        self.assertEqual(self.sent_message()["from"]["email"], "hello@bewosai.com")
+
+    @override_settings(SENDGRID_FROM_EMAIL="noreply@bewosai.com")
+    def test_tracking_is_off(self):
+        tracking = self.sent_message()["tracking_settings"]
+        self.assertFalse(tracking["click_tracking"]["enable"])
+        self.assertFalse(tracking["open_tracking"]["enable"])
+        self.assertFalse(tracking["subscription_tracking"]["enable"])
+
+
 class NoProviderTests(SimpleTestCase):
     @override_settings(SENDGRID_API_KEY="", EMAIL_HOST_USER="", DEBUG=False)
     def test_no_provider_is_a_failure_outside_debug(self):

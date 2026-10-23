@@ -11,7 +11,7 @@ import os
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from bewosai.email import email_provider, send_test_email
+from bewosai.email import email_provider, send_test_email, sendgrid_sender
 
 
 class Command(BaseCommand):
@@ -43,10 +43,10 @@ class Command(BaseCommand):
                 "Only SMTP is configured and this looks like Render. Render's free plan blocks SMTP "
                 "ports 25/465/587, so codes will not send. Set SENDGRID_API_KEY (HTTPS) or upgrade."
             )
-        if provider == "sendgrid" and sg_from.lower().endswith(("@gmail.com", "@yahoo.com", "@outlook.com", "@hotmail.com")):
+        if provider == "sendgrid" and sendgrid_sender() != sg_from:
             warnings.append(
-                f"SendGrid sends as {sg_from}, a free-mail address. Mail like this often lands in spam "
-                "or is rejected. Authenticate a domain you own in SendGrid and send from that."
+                f"SENDGRID_FROM_EMAIL is {sg_from}, a free-mail address, which lands in spam when sent "
+                f"through SendGrid. Mail is sent as {sendgrid_sender()} instead; set SENDGRID_FROM_EMAIL to that."
             )
         for w in warnings:
             self.stdout.write(self.style.WARNING(f"WARNING: {w}"))
