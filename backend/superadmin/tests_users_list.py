@@ -20,6 +20,20 @@ class LastActiveTrackingTests(TestCase):
         cache.clear()
         self.user = User.objects.create_user(email="u@example.com", name="U")
 
+    def test_signing_in_counts_as_activity(self):
+        from unittest import mock
+        from accounts.models import OTPCode
+
+        User.objects.filter(pk=self.user.pk).update(last_active_at=None)
+        _, code = OTPCode.generate(self.user.email, self.user.account_type)
+        with mock.patch("accounts.views.send_otp_email_quick", return_value=True):
+            res = APIClient().post("/api/auth/verify-otp/", {"identifier": self.user.email, "code": code},
+                                   format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+        u = User.objects.get(pk=self.user.pk)
+        self.assertIsNotNone(u.last_active_at)
+        self.assertEqual(u.last_active_at, u.last_login_at)
+
     def test_an_authenticated_request_records_last_active(self):
         self.assertIsNone(User.objects.get(pk=self.user.pk).last_active_at)
         bearer(self.user).get("/api/auth/me/")

@@ -249,9 +249,11 @@ class VerifyOTPView(APIView):
                         is_verified=True,
                     )
 
-                user.last_login_at = timezone.now()
+                # Signing in is activity too: Super Admin's "Last active" never lags the sign-in.
+
+                user.last_login_at = user.last_active_at = timezone.now()
                 user.is_verified = True
-                user.save(update_fields=["last_login_at", "is_verified"])
+                user.save(update_fields=["last_login_at", "last_active_at", "is_verified"])
                 grant_platform_admin_if_listed(user)
 
                 LoginActivity.objects.create(
@@ -323,9 +325,11 @@ class GoogleLoginView(APIView):
                     is_verified=True,
                 )
 
-            user.last_login_at = timezone.now()
+            # Signing in is activity too: Super Admin's "Last active" never lags the sign-in.
+
+            user.last_login_at = user.last_active_at = timezone.now()
             user.is_verified = True
-            user.save(update_fields=["last_login_at", "is_verified"])
+            user.save(update_fields=["last_login_at", "last_active_at", "is_verified"])
             grant_platform_admin_if_listed(user)
 
             LoginActivity.objects.create(
@@ -910,9 +914,11 @@ class StaffInviteAcceptView(APIView):
             invitation.accepted_at = timezone.now()
             invitation.save(update_fields=["status", "accepted_by", "accepted_at"])
 
-            user.last_login_at = timezone.now()
+            # Signing in is activity too: Super Admin's "Last active" never lags the sign-in.
+
+            user.last_login_at = user.last_active_at = timezone.now()
             user.is_verified = True
-            user.save(update_fields=["last_login_at", "is_verified"])
+            user.save(update_fields=["last_login_at", "last_active_at", "is_verified"])
             LoginActivity.objects.create(
                 user=user, ip_address=client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""), platform=_login_platform(request),
@@ -1026,9 +1032,10 @@ class StaffLoginView(APIView):
             return api_response(False, "This business account is no longer active.", status.HTTP_403_FORBIDDEN)
 
         user = staff.user
-        user.last_login_at = timezone.now()
+        # Signing in is activity too: Super Admin's "Last active" never lags the sign-in.
+        user.last_login_at = user.last_active_at = timezone.now()
         user.is_verified = True
-        user.save(update_fields=["last_login_at", "is_verified"])
+        user.save(update_fields=["last_login_at", "last_active_at", "is_verified"])
 
         LoginActivity.objects.create(
             user=user,
