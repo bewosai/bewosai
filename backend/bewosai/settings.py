@@ -75,6 +75,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     # First, so its timing covers everything below it (see the module docstring).
     "bewosai.server_timing.ServerTimingMiddleware",
+    # Compresses what every layer below produced (bewosai/compression.py).
+    "bewosai.compression.SelectiveGZipMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",

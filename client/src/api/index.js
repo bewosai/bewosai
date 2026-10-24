@@ -1,7 +1,15 @@
 import axios from "axios";
 import { wrapWithOfflineQueue } from "../utils/offlineQueue";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+// On the live website (bewosai.com / *.vercel.app) the API is the site's own
+// /api path, which Vercel forwards to the Render backend (client/vercel.json).
+// Same address = no CORS "preflight" before every request (that was a second
+// round trip to the US server each time), and the connection ends at Vercel's
+// nearby edge instead of Oregon. Local development keeps VITE_API_URL.
+const IS_LOCAL = ["localhost", "127.0.0.1"].includes(window.location.hostname) || window.location.hostname.startsWith("192.168.");
+const API_URL = !IS_LOCAL && import.meta.env.PROD
+  ? "/api"
+  : (import.meta.env.VITE_API_URL || "http://localhost:8000/api");
 
 const api = axios.create({
   baseURL: API_URL,
